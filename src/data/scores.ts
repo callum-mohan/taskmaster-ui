@@ -123,9 +123,9 @@ const teamOrderIndex = new Map(teams.map((t, index) => [t.id, index]));
  * is deterministic. Shared by both the individual and team scoring passes.
  */
 function rankByPoints(
-  entries: { id: string; points: number }[],
+  entries: { id: string; points: number; }[],
   tieIndex: Map<string, number>,
-): { id: string; points: number; position: number }[] {
+): { id: string; points: number; position: number; }[] {
   const ranked = [...entries].sort(
     (a, b) =>
       b.points - a.points ||

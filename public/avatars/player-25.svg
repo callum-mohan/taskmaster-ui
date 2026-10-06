@@ -1,5 +1,46 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" shape-rendering="crispEdges">
-<rect width="64" height="64" fill="#080b10"/>
-<rect x="3.5" y="3.5" width="57" height="57" rx="6" fill="#0e141c" stroke="#1d2a38"/>
-<g opacity="0.95"><rect x="17" y="7" width="10" height="10" fill="#cfdae6"/><rect x="27" y="7" width="10" height="10" fill="#cfdae6"/><rect x="37" y="7" width="10" height="10" fill="#cfdae6"/><rect x="27" y="27" width="10" height="10" fill="#cfdae6"/><rect x="27" y="37" width="10" height="10" fill="#cfdae6"/><rect x="7" y="47" width="10" height="10" fill="#cfdae6"/><rect x="47" y="47" width="10" height="10" fill="#cfdae6"/></g>
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 64 64"
+     shape-rendering="crispEdges">
+
+  <rect width="64" height="64" fill="#080b10"/>
+
+  <rect x="3.5" y="3.5"
+        width="57"
+        height="57"
+        rx="6"
+        fill="#0e141c"
+        stroke="#1d2a38"/>
+
+  <g fill="#ff6ac1">
+
+    <!-- Row 1: .X.X. -->
+    <rect x="17" y="7" width="10" height="10"/>
+    <rect x="37" y="7" width="10" height="10"/>
+
+    <!-- Row 2: XXXXX -->
+    <rect x="7"  y="17" width="10" height="10"/>
+    <rect x="17" y="17" width="10" height="10"/>
+    <rect x="27" y="17" width="10" height="10"/>
+    <rect x="37" y="17" width="10" height="10"/>
+    <rect x="47" y="17" width="10" height="10"/>
+
+    <!-- Row 3: X.X.X -->
+    <rect x="7"  y="27" width="10" height="10"/>
+    <rect x="27" y="27" width="10" height="10"/>
+    <rect x="47" y="27" width="10" height="10"/>
+
+    <!-- Row 4: .XXX. -->
+    <rect x="17" y="37" width="10" height="10"/>
+    <rect x="27" y="37" width="10" height="10"/>
+    <rect x="37" y="37" width="10" height="10"/>
+
+    <!-- Row 5: XXXXX -->
+    <rect x="7"  y="47" width="10" height="10"/>
+    <rect x="17" y="47" width="10" height="10"/>
+    <rect x="27" y="47" width="10" height="10"/>
+    <rect x="37" y="47" width="10" height="10"/>
+    <rect x="47" y="47" width="10" height="10"/>
+
+  </g>
+
 </svg>

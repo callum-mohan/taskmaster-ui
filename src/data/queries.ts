@@ -759,12 +759,12 @@ export function getFollowStandings(): FollowStanding[] {
       isLeader: index === 0,
       rival: ahead
         ? {
-            id: ahead.player.id,
-            name: ahead.player.name,
-            rank: ahead.rank,
-            href: withBase(`/players/${ahead.player.id}`),
-            gap: ahead.points - row.points,
-          }
+          id: ahead.player.id,
+          name: ahead.player.name,
+          rank: ahead.rank,
+          href: withBase(`/players/${ahead.player.id}`),
+          gap: ahead.points - row.points,
+        }
         : undefined,
     };
   });
@@ -859,7 +859,7 @@ export function getAwards(): Award[] {
 
   // Biggest winning margin across completed tasks.
   const completedTasks = tasks.filter((t) => t.status === "completed");
-  let widest: { task: (typeof completedTasks)[number]; margin: number } | null =
+  let widest: { task: (typeof completedTasks)[number]; margin: number; } | null =
     null;
   let closest: {
     task: (typeof completedTasks)[number];
@@ -1147,10 +1147,10 @@ export function getWeekRecap(taskId: string): WeekRecap | undefined {
   const runnerRow = results[1];
   const winner = winnerRow
     ? {
-        player: winnerRow.player,
-        points: winnerRow.points,
-        margin: winnerRow.points - (runnerRow?.points ?? 0),
-      }
+      player: winnerRow.player,
+      points: winnerRow.points,
+      margin: winnerRow.points - (runnerRow?.points ?? 0),
+    }
     : undefined;
 
   const weekPoints = thisWeekScores.reduce((sum, s) => sum + s.points, 0);
@@ -1183,18 +1183,18 @@ export function getWeekRecap(taskId: string): WeekRecap | undefined {
   // Climbers / fallers for the week, biggest move first.
   const movers: RecapMover[] = hasPrior
     ? standings.flatMap((row) => {
-        const fromRank = beforeRankById.get(row.player.id);
-        if (fromRank === undefined) return [];
-        return [
-          {
-            player: row.player,
-            fromRank,
-            toRank: row.rank,
-            places: fromRank - row.rank,
-            weekPoints: weekPointsById.get(row.player.id) ?? 0,
-          },
-        ];
-      })
+      const fromRank = beforeRankById.get(row.player.id);
+      if (fromRank === undefined) return [];
+      return [
+        {
+          player: row.player,
+          fromRank,
+          toRank: row.rank,
+          places: fromRank - row.rank,
+          weekPoints: weekPointsById.get(row.player.id) ?? 0,
+        },
+      ];
+    })
     : [];
 
   const biggestClimber = movers
@@ -1218,8 +1218,8 @@ export function getWeekRecap(taskId: string): WeekRecap | undefined {
     : undefined;
   const bestOtherPointsBefore = topRow
     ? before
-        .filter((r) => r.player.id !== topRow.player.id)
-        .reduce((max, r) => Math.max(max, r.points), 0)
+      .filter((r) => r.player.id !== topRow.player.id)
+      .reduce((max, r) => Math.max(max, r.points), 0)
     : 0;
   const previousLead =
     hasPrior && leaderPointsBefore !== undefined
@@ -1227,15 +1227,15 @@ export function getWeekRecap(taskId: string): WeekRecap | undefined {
       : undefined;
   const titleRace: RecapTitleRace | undefined = topRow
     ? {
-        leader: topRow.player,
-        runnerUp: secondRow?.player,
-        lead,
-        previousLead,
-        swing: previousLead !== undefined ? lead - previousLead : undefined,
-        changedHands: Boolean(
-          prevTop && prevTop.player.id !== topRow.player.id,
-        ),
-      }
+      leader: topRow.player,
+      runnerUp: secondRow?.player,
+      lead,
+      previousLead,
+      swing: previousLead !== undefined ? lead - previousLead : undefined,
+      changedHands: Boolean(
+        prevTop && prevTop.player.id !== topRow.player.id,
+      ),
+    }
     : undefined;
 
   // Editorial copy, with sensible auto-generated fallbacks.
@@ -1248,9 +1248,9 @@ export function getWeekRecap(taskId: string): WeekRecap | undefined {
   if (winner) {
     summaryParts.push(
       `${winner.player.name} took ${weekLabel.toLowerCase()} with ${winner.points} ${winner.points === 1 ? "point" : "points"}` +
-        (winner.margin > 0
-          ? `, ${winner.margin} clear of the chasing pack.`
-          : `, edging a tight finish.`),
+      (winner.margin > 0
+        ? `, ${winner.margin} clear of the chasing pack.`
+        : `, edging a tight finish.`),
     );
   }
   if (biggestClimber) {

@@ -20,7 +20,7 @@ export const players: Player[] = [
   { id: "orlagh", name: "Orlagh", bio: "" },
   { id: "amelia", name: "Amelia", bio: "" },
   { id: "daire", name: "Daire", bio: "" },
-  { id: "jake", name: "Jake", bio: "" },
+  { id: "jake", name: "Jake", bio: "Tasks scatter like leaves\nJake gathers them one by one\nAutumn crowns a king" },
   { id: "ryan", name: "Ryan", bio: "" },
   { id: "caolan_t", name: "Caolan T", bio: "" },
   { id: "criostoir", name: "Criostoir", bio: "" },

@@ -185,6 +185,28 @@ export interface WhatsNewInfo {
   href: string;
 }
 
+/**
+ * How a changelog entry is tagged, driving its badge colour in the "what's
+ * new" modal: a brand-new capability, an improvement to an existing one, or a
+ * bug fix.
+ */
+export type FeatureCategory = "new" | "improved" | "fixed";
+
+/**
+ * One entry in the site changelog — a feature or change shipped to the
+ * Taskmaster UI, surfaced newest-first in the homepage "what's new" modal.
+ * Dates are ISO 8601 strings, formatted at the page level.
+ */
+export interface FeatureUpdate {
+  /** Stable id; also the change key for the trigger's unseen indicator. */
+  id: string;
+  /** ISO 8601 date the change shipped. */
+  date: string;
+  title: string;
+  description: string;
+  category: FeatureCategory;
+}
+
 /** One side of the previous/next task pager on a task detail page. */
 export interface TaskPagerLink {
   href: string;

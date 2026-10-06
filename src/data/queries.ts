@@ -29,12 +29,14 @@ import type {
   TeamTaskResultRow,
   WeekRecap,
   WhatsNewInfo,
+  FeatureUpdate,
 } from "../types";
 import { players, getPlayerById } from "./players";
 import { tasks, getTaskById, getCurrentTask, getTeamTasks } from "./tasks";
 import { scores, teamScores } from "./scores";
 import { teams, getTeamById, getTeamForPlayer } from "./teams";
 import { getRecapContent } from "./recaps";
+import { changelog } from "./changelog";
 import { withBase } from "../lib/url";
 
 // This module is the single "data layer" the UI talks to. Pages import these
@@ -1060,6 +1062,16 @@ export function getWhatsNew(): WhatsNewInfo | undefined {
     status: task.status,
     href: withBase(`/tasks/${task.id}`),
   };
+}
+
+/**
+ * The site changelog, newest-first and capped at `limit`, for the homepage
+ * "what's new" modal.
+ */
+export function getRecentFeatures(limit = 6): FeatureUpdate[] {
+  return [...changelog]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, limit);
 }
 
 /**

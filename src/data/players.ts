@@ -6,8 +6,13 @@ export const players: Player[] = [
   { id: "eva", name: "Eva", bio: "" },
   { id: "rebekah", name: "Rebekah", bio: "" },
   { id: "karen", name: "Karen", bio: "" },
+<<<<<<< HEAD
   { id: "finnbar", name: "Finnbar", bio: "Reluctantly optimistic" },
   { id: "eve", name: "Eve", bio: "" },
+=======
+  { id: "finnbar", name: "Finnbar", bio: "" },
+  { id: "eve", name: "Eve", bio: "That's the way it is" },
+>>>>>>> 3cc20c6 (Updating Eve's Bio for the taskmaster)
   { id: "luke", name: "Luke", bio: "" },
   { id: "rose", name: "Rose", bio: "" },
   { id: "emma", name: "Emma", bio: "" },

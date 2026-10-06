@@ -110,6 +110,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
     brief: "",
     releaseDate: "2026-11-06T13:00:00",
     deadline: "2026-11-13T13:00:00",
+    format: "team",
   },
   {
     id: "week-09",
@@ -146,6 +147,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
     brief: "",
     releaseDate: "2026-12-04T13:00:00",
     deadline: "2026-12-11T13:00:00",
+    format: "team",
   },
   {
     id: "week-13",
@@ -182,6 +184,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
     brief: "",
     releaseDate: "2027-01-15T13:00:00",
     deadline: "2027-01-22T13:00:00",
+    format: "team",
   },
 ];
 

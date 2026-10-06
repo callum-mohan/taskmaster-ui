@@ -55,7 +55,7 @@ export const weeklyTaskScores: Record<string, Record<string, number>> = {
     eve: 8,
     luke: 6,
     rose: 5,
-    emma: 10,
+    emma: 6,
     jack: 3,
     caolan_d: 3,
     erin: 3,

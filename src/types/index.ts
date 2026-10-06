@@ -255,8 +255,13 @@ export interface PlayerComparison {
   };
 }
 
-/** Which bucket a command-palette entry belongs to (section + icon). */
-export type CommandPaletteGroup = "page" | "task" | "team" | "player";
+/**
+ * Which bucket a command-palette entry belongs to (section + icon). `"action"`
+ * entries are synthesized on the client for dynamic commands (e.g. "jump to
+ * week N", "compare X vs Y") and are never emitted by the data layer.
+ */
+export type CommandPaletteGroup =
+  "page" | "task" | "team" | "player" | "action";
 
 /** A single searchable destination in the global command palette. */
 export interface CommandPaletteItem {

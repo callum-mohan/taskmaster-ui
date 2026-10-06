@@ -1000,7 +1000,7 @@ export function getCommandPaletteItems(): CommandPaletteItem[] {
         group: "task" as const,
         href: withBase(`/tasks/${task.id}`),
         hint: `${weekLabel} · ${task.status}`,
-        keywords: `${weekLabel} ${task.status} ${task.description}`,
+        keywords: `${weekLabel} week ${task.weekNumber} w${task.weekNumber} ${task.status} ${task.description}`,
       };
     });
 

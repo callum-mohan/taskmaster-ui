@@ -172,12 +172,16 @@ const loop: { cmd: string; text: string }[] = [
 
       <TerminalWindow title="~/whoami" meta="root@taskmaster">
         <div class="grid gap-8 lg:grid-cols-[auto_1fr] lg:items-start">
-          <div
-            class="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg border border-grid bg-term-panel-2 text-2xl font-extrabold tracking-widest text-acid text-glow sm:h-24 sm:w-24 sm:text-3xl"
-            aria-hidden="true"
-          >
-            CM
-          </div>
+          <img
+            src={withBase("/callum-pixel.svg")}
+            alt="Pixelated portrait of Callum Mohan at Niagara Falls"
+            loading="lazy"
+            decoding="async"
+            width="96"
+            height="96"
+            style="image-rendering: pixelated;"
+            class="h-20 w-20 shrink-0 rounded-lg border border-grid bg-term-panel-2 object-cover sm:h-24 sm:w-24"
+          />
 
           <div>
             <h3 class="text-2xl font-extrabold text-ink sm:text-3xl">

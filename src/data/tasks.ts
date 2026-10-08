@@ -68,7 +68,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-04",
     weekNumber: 4,
-    title: "Task Tank: Sink or Swim",
+    title: "Task Tank",
     description: "",
     brief: "",
     releaseDate: "2026-10-09T13:00:00",
@@ -87,7 +87,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-06",
     weekNumber: 6,
-    title: "???",
+    title: "New Roots",
     description: "",
     brief: "",
     releaseDate: "2026-10-23T13:00:00",
@@ -105,7 +105,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-08",
     weekNumber: 8,
-    title: "???",
+    title: "Humpty Dumpty",
     description: "",
     brief: "",
     releaseDate: "2026-11-06T13:00:00",
@@ -124,7 +124,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-10",
     weekNumber: 10,
-    title: "???",
+    title: "Whac-A-Mole",
     description: "",
     brief: "",
     releaseDate: "2026-11-20T13:00:00",

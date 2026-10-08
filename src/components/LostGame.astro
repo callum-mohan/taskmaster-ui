@@ -1,0 +1,612 @@
+---
+// 404 easter egg: the "lost" terminal turns into `lost.sh`, a tiny text
+// adventure, once the visitor idles for a while or pokes the prompt. Escape
+// /dev/null, bribe the Taskmaster's assistant with an egg, and get scored
+// Taskmaster-style on how few moves it took. Progressive enhancement: without
+// JS this renders the plain "No such file or directory" terminal.
+import TerminalWindow from "./TerminalWindow.astro";
+import type { LostArchiveEntry } from "../types";
+
+interface Props {
+  /** Released task briefs, filed in the game's archive room. */
+  archive: LostArchiveEntry[];
+  /** Where the "return home" link at the end of the game points. */
+  homeHref: string;
+  /** Build-time path shown before JS swaps in the real requested URL. */
+  path: string;
+  /** How long the visitor must idle before the game boots itself. */
+  idleMs?: number;
+  class?: string;
+}
+
+const {
+  archive,
+  homeHref,
+  path,
+  idleMs = 12_000,
+  class: className,
+} = Astro.props;
+---
+
+<div
+  id="lost-game"
+  class:list={[className]}
+  data-archive={JSON.stringify(archive)}
+  data-home={homeHref}
+  data-idle-ms={idleMs}
+>
+  <TerminalWindow title="~/taskmaster.sh" meta="exit code 404">
+    <div
+      data-lost-log
+      class="max-h-[26rem] overflow-y-auto text-sm leading-relaxed break-words whitespace-pre-wrap text-ink-dim"
+    >
+      <p>
+        <span class="text-acid">$</span> cd <span data-lost-path>{path}</span>
+      </p>
+      <p class="text-danger">
+        bash: cd: <span data-lost-path>{path}</span>: No such file or directory
+      </p>
+    </div>
+
+    <p data-lost-static class="text-sm leading-relaxed text-ink-dim">
+      <span class="text-acid">$</span>
+      <span class="caret">whereis --home</span>
+    </p>
+
+    <button
+      type="button"
+      data-lost-start
+      class="block text-left text-sm leading-relaxed text-ink-dim transition-colors hover:text-ink"
+      aria-label="whereis --home — start lost.sh, a tiny text adventure"
+      hidden
+    >
+      <span class="text-acid" aria-hidden="true">$</span>
+      <span class="caret" aria-hidden="true">whereis --home</span>
+    </button>
+
+    <form
+      data-lost-form
+      class="mt-2 flex items-center gap-2 rounded-md border border-grid bg-term-bg/60 px-3 py-2 text-sm focus-within:border-acid"
+      autocomplete="off"
+      hidden
+    >
+      <label for="lost-input" class="shrink-0 font-bold text-acid">
+        <span aria-hidden="true">$</span>
+        <span class="sr-only">Command</span>
+      </label>
+      <input
+        id="lost-input"
+        data-lost-input
+        type="text"
+        class="min-w-0 flex-1 bg-transparent text-ink caret-acid outline-none placeholder:text-ink-faint"
+        placeholder="type a command — try help"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        enterkeyhint="send"
+      />
+    </form>
+  </TerminalWindow>
+</div>
+
+<script>
+  import type { LostArchiveEntry } from "../types";
+
+  type Tone = "out" | "cmd" | "room" | "warn" | "err" | "info" | "fun" | "dim";
+  type Dir = "north" | "south" | "east" | "west";
+  type RoomId = "void" | "corridor" | "archive" | "shed" | "home";
+
+  interface Room {
+    path: string;
+    describe: () => string;
+    exits: Partial<Record<Dir, RoomId>>;
+  }
+
+  const root = document.getElementById("lost-game");
+  const log = root?.querySelector<HTMLElement>("[data-lost-log]");
+  const staticLine = root?.querySelector<HTMLElement>("[data-lost-static]");
+  const startBtn = root?.querySelector<HTMLButtonElement>("[data-lost-start]");
+  const form = root?.querySelector<HTMLFormElement>("[data-lost-form]");
+  const input = root?.querySelector<HTMLInputElement>("[data-lost-input]");
+
+  if (root && log && staticLine && startBtn && form && input) {
+    const prefersReduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const homeHref = root.dataset.home ?? "/";
+    const idleMs = Number(root.dataset.idleMs) || 12_000;
+    let archive: LostArchiveEntry[] = [];
+    try {
+      archive = JSON.parse(root.dataset.archive ?? "[]");
+    } catch {
+      /* malformed data — the archive room just looks empty */
+    }
+
+    // The page is prerendered as /404, so show the URL the visitor really hit.
+    root
+      .querySelectorAll<HTMLElement>("[data-lost-path]")
+      .forEach((el) => (el.textContent = window.location.pathname));
+
+    const eggToast = (msg: string, tone: "acid" | "magenta" | "amber") =>
+      (
+        window as unknown as {
+          __eggToast?: (m: string, t?: "acid" | "magenta" | "amber") => void;
+        }
+      ).__eggToast?.(msg, tone);
+
+    // ── Output ─────────────────────────────────────────────────────────
+    const toneClass: Record<Tone, string> = {
+      out: "text-ink-dim",
+      cmd: "text-ink",
+      room: "mt-2 font-bold text-acid",
+      warn: "text-amber",
+      err: "text-danger",
+      info: "text-cyan",
+      fun: "text-magenta",
+      dim: "text-ink-faint",
+    };
+
+    // Lines are queued so output always lands in order, with a light
+    // typewriter cadence (instant under reduced motion).
+    let queue: Promise<void> = Promise.resolve();
+    const LINE_DELAY = prefersReduced ? 0 : 35;
+    const sleep = (ms: number) =>
+      new Promise<void>((r) => window.setTimeout(r, ms));
+
+    function append(node: HTMLElement) {
+      log!.appendChild(node);
+      log!.scrollTop = log!.scrollHeight;
+    }
+
+    function print(text: string, tone: Tone = "out") {
+      queue = queue.then(async () => {
+        const p = document.createElement("p");
+        p.className = toneClass[tone];
+        if (tone === "cmd") {
+          const dollar = document.createElement("span");
+          dollar.className = "text-acid";
+          dollar.textContent = "$ ";
+          p.appendChild(dollar);
+        }
+        p.appendChild(document.createTextNode(text || "\u00a0"));
+        append(p);
+        if (LINE_DELAY) await sleep(LINE_DELAY);
+      });
+    }
+
+    function printHomeLink() {
+      queue = queue.then(() => {
+        const p = document.createElement("p");
+        p.className = "mt-2";
+        const a = document.createElement("a");
+        a.href = homeHref;
+        a.className =
+          "inline-flex rounded-md border border-acid bg-acid/10 px-3 py-1 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg";
+        a.textContent = "← RETURN HOME";
+        p.appendChild(a);
+        append(p);
+      });
+    }
+
+    // ── World ──────────────────────────────────────────────────────────
+    const DIRS: Record<string, Dir> = {
+      n: "north",
+      north: "north",
+      s: "south",
+      south: "south",
+      e: "east",
+      east: "east",
+      w: "west",
+      west: "west",
+    };
+
+    let room: RoomId = "void";
+    let hasEgg = false;
+    let eggInArchive = true;
+    let bribed = false;
+    let eggsHarmed = 0;
+    let moves = 0;
+    let over = false;
+
+    const rooms: Record<RoomId, Room> = {
+      void: {
+        path: "/dev/null",
+        describe: () =>
+          "It is pitch black. You are likely to be eaten by a 404. A faint green glow leaks in from the NORTH.",
+        exits: { north: "corridor" },
+      },
+      corridor: {
+        path: "~/broken-links",
+        describe: () =>
+          "A long corridor lined with dead hyperlinks, each one underlined and humming sadly. A door to the WEST reads 'archive'; a shed door creaks to the EAST. SOUTH is the void you crawled out of.",
+        exits: { south: "void", west: "archive", east: "shed" },
+      },
+      archive: {
+        path: "~/archive",
+        describe: () =>
+          [
+            "Rows of filing cabinets hold every task brief that has aired so far. One CABINET hangs open. The only exit is EAST.",
+            eggInArchive
+              ? "On top of the cabinet sits an EGG, suspiciously intact. Someone kept it alive."
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n"),
+        exits: { east: "corridor" },
+      },
+      shed: {
+        path: "~/shed",
+        describe: () =>
+          bribed
+            ? "The Taskmaster's shed. The assistant is cradling the egg and humming. The NORTH door, marked '/', stands wide open. The corridor is back to the WEST."
+            : "The Taskmaster's shed. A stern ASSISTANT with a clipboard guards a door to the NORTH marked '/'. They look peckish. The corridor is back to the WEST.",
+        exits: { west: "corridor", north: "home" },
+      },
+      home: {
+        path: "/",
+        describe: () => "",
+        exits: {},
+      },
+    };
+
+    function describeRoom() {
+      const r = rooms[room];
+      print(r.path, "room");
+      print(r.describe());
+    }
+
+    // ── Scoring ────────────────────────────────────────────────────────
+    function award(): { points: number; verdict: string } {
+      if (moves <= 8)
+        return { points: 5, verdict: "Flawless. Suspiciously flawless." };
+      if (moves <= 12)
+        return { points: 4, verdict: "Brisk, decisive, mildly smug." };
+      if (moves <= 18)
+        return { points: 3, verdict: "Perfectly adequate. Like a beige car." };
+      if (moves <= 26)
+        return { points: 2, verdict: "You took the scenic route. Twice." };
+      return { points: 1, verdict: "One point, for turning up." };
+    }
+
+    function win() {
+      over = true;
+      const { points, verdict } = award();
+      print("");
+      print(
+        "You step through the door. The darkness resolves into a familiar homepage.",
+      );
+      print("The Taskmaster reviews your performance…", "dim");
+      print(
+        `moves: ${moves} · eggs harmed: ${eggsHarmed}`,
+        eggsHarmed ? "warn" : "dim",
+      );
+      print(
+        `>>> The Taskmaster awards you ${points} point${points === 1 ? "" : "s"}. ${verdict}`,
+        "fun",
+      );
+
+      let best = 0;
+      try {
+        best = Number(localStorage.getItem("eayl-egg-404")) || 0;
+        if (points > best) localStorage.setItem("eayl-egg-404", String(points));
+      } catch {
+        /* storage unavailable — no personal best tracking */
+      }
+      if (best && points > best) print("New personal best!", "info");
+      else if (best) print(`Personal best: ${best} points.`, "dim");
+
+      printHomeLink();
+      print("Type `restart` to get lost all over again.", "dim");
+      eggToast("ACHIEVEMENT UNLOCKED — escaped the 404", "magenta");
+    }
+
+    // ── Commands ───────────────────────────────────────────────────────
+    function go(dir: Dir) {
+      const next = rooms[room].exits[dir];
+      if (!next) {
+        print(`You walk ${dir} into a wall. It does not 404; it just hurts.`);
+        return;
+      }
+      if (room === "shed" && next === "home" && !bribed) {
+        print(
+          "The assistant steps in front of the door. 'Nobody leaves without a gift for the Taskmaster.'",
+          "warn",
+        );
+        return;
+      }
+      room = next;
+      if (room === "home") win();
+      else describeRoom();
+    }
+
+    function breakEgg(how: string) {
+      hasEgg = false;
+      eggsHarmed++;
+      print(how, "err");
+      print(
+        "Somewhere, a filing cabinet clunks. The Taskmaster always keeps spare eggs.",
+        "dim",
+      );
+      eggInArchive = true;
+    }
+
+    function hint(): string {
+      if (room === "void") return "Darkness is overrated. Head NORTH.";
+      if (bribed) return "The NORTH door in the shed is open. Go home.";
+      if (!hasEgg) {
+        return room === "archive"
+          ? "That egg isn't going to TAKE itself."
+          : "The assistant looks peckish. Something in the archive might help.";
+      }
+      return room === "shed"
+        ? "GIVE the egg to the assistant."
+        : "You have a gift. Find someone who looks peckish.";
+    }
+
+    function readArchive() {
+      if (room !== "archive") {
+        print("There's nothing to read here. Even the 404 is unreadable.");
+        return;
+      }
+      if (archive.length === 0) {
+        print("The cabinet is empty. Nothing has aired yet. Ominous.");
+        return;
+      }
+      print("You leaf through the open cabinet:", "dim");
+      archive.forEach((t) =>
+        print(
+          `  week-${String(t.weekNumber).padStart(2, "0")}  ${t.title}${t.description ? ` — ${t.description}` : ""}`,
+          "info",
+        ),
+      );
+    }
+
+    function help() {
+      [
+        "Commands:",
+        "  look (l)            describe where you are",
+        "  north/south/east/west (n/s/e/w)",
+        "  take <item>         pick something up",
+        "  drop <item>         put something down (carefully)",
+        "  give <item>         offer something to someone",
+        "  talk                talk to whoever is here",
+        "  read                read whatever is lying about",
+        "  inventory (i)       check your pockets",
+        "  hint                ask the Taskmaster for help (costs a move)",
+        "  restart / clear / quit",
+      ].forEach((l, i) => print(l, i === 0 ? "out" : "dim"));
+    }
+
+    const FILLER = new Set(["the", "a", "an", "to", "at", "up", "with", "on"]);
+
+    function run(raw: string) {
+      const words = raw
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w && !FILLER.has(w));
+      const [verb = "", ...rest] = words;
+      const noun = rest.join(" ");
+
+      if (verb === "restart") return boot(false);
+      if (verb === "clear") {
+        queue = queue.then(() => {
+          log!.replaceChildren();
+        });
+        return;
+      }
+      if (verb === "help" || verb === "?") return help();
+      if (over) {
+        print("You're already home. Type `restart` to get lost again.", "dim");
+        return;
+      }
+
+      moves++;
+      const dir =
+        DIRS[verb] ??
+        (verb === "go" || verb === "walk" ? DIRS[noun] : undefined);
+      if (dir) return go(dir);
+
+      switch (verb) {
+        case "look":
+        case "l":
+        case "ls":
+          return describeRoom();
+        case "pwd":
+          return print(rooms[room].path);
+        case "i":
+        case "inv":
+        case "inventory":
+          return print(
+            hasEgg
+              ? "You are carrying: one (1) egg, fragile."
+              : "Your pockets contain lint and regret.",
+          );
+        case "take":
+        case "get":
+        case "grab":
+        case "pick":
+          if (!noun.includes("egg"))
+            return print(
+              noun ? `There's no ${noun} worth taking.` : "Take what?",
+            );
+          if (hasEgg)
+            return print("You're already holding the egg. One is plenty.");
+          if (room !== "archive" || !eggInArchive)
+            return print("There's no egg here. Just the memory of one.");
+          hasEgg = true;
+          eggInArchive = false;
+          return print(
+            "You pick up the egg. It feels… alive. Handle with care.",
+            "info",
+          );
+        case "drop":
+        case "throw":
+        case "smash":
+          if (!noun.includes("egg") || !hasEgg)
+            return print("You aren't holding that.");
+          return breakEgg("SPLAT. Week 1 flashbacks. The egg did not survive.");
+        case "eat":
+          if (!noun.includes("egg") || !hasEgg)
+            return print("You have nothing edible. Sad.");
+          return breakEgg(
+            "You swallow the egg raw. The Taskmaster makes a note. A long note.",
+          );
+        case "give":
+        case "offer":
+        case "bribe":
+          if (room !== "shed" || bribed)
+            return print("There's no one here who wants anything from you.");
+          if (!hasEgg)
+            return print(
+              "You pat your pockets. The assistant is unimpressed.",
+              "warn",
+            );
+          hasEgg = false;
+          bribed = true;
+          print(
+            "The assistant gasps, cradles the egg, and scribbles on the clipboard. 'Lovely. In you go.'",
+            "info",
+          );
+          return print("The NORTH door swings open.", "fun");
+        case "talk":
+        case "speak":
+        case "ask":
+          if (room !== "shed")
+            return print("You talk to yourself. The 404 doesn't answer.");
+          return print(
+            bribed
+              ? "'Go on, then. Before the Taskmaster changes their mind.'"
+              : "'The Taskmaster says nobody leaves without a gift,' they whisper. 'Something small. Oval. Fragile.'",
+            "warn",
+          );
+        case "read":
+        case "open":
+        case "search":
+          return readArchive();
+        case "hint":
+          return print(hint(), "fun");
+        case "cd":
+          return print(
+            "There is no cd here. You have to WALK, like an animal.",
+          );
+        case "sudo":
+          return print("Nice try. The Taskmaster has root here.", "err");
+        case "rm":
+          return print(
+            "Don't worry, the Taskmaster made a backup of you.",
+            "err",
+          );
+        case "whoami":
+          return print("a contestant, apparently lost");
+        case "xyzzy":
+          return print("A hollow voice says 'Fool.'", "dim");
+        case "quit":
+        case "exit":
+        case "logout":
+          over = true;
+          print(
+            "logout. The Taskmaster awards you 0 points for giving up.",
+            "warn",
+          );
+          printHomeLink();
+          return;
+        default:
+          moves--;
+          return print(
+            `lost.sh: ${verb}: command not found — try \`help\``,
+            "err",
+          );
+      }
+    }
+
+    // ── Boot ───────────────────────────────────────────────────────────
+    let started = false;
+    let idleTimer: number | undefined;
+
+    function boot(firstRun: boolean, reason?: "idle" | "poke") {
+      room = "void";
+      hasEgg = false;
+      eggInArchive = true;
+      bribed = false;
+      eggsHarmed = 0;
+      moves = 0;
+      over = false;
+
+      if (firstRun) {
+        print("whereis --home", "cmd");
+        print("whereis: home: not found", "err");
+        print(
+          reason === "idle"
+            ? "# no input detected… the Taskmaster is getting bored."
+            : "# ow. stop poking the terminal.",
+          "dim",
+        );
+      }
+      print("./lost.sh", "cmd");
+      print("lost.sh v0.404 — a very small text adventure", "fun");
+      print("Find your way home. Type `help` for commands.", "dim");
+      describeRoom();
+    }
+
+    function start(reason: "idle" | "poke") {
+      if (started) return;
+      started = true;
+      window.clearTimeout(idleTimer);
+      staticLine!.hidden = true;
+      startBtn!.hidden = true;
+      form!.hidden = false;
+      boot(true, reason);
+      queue = queue.then(() =>
+        input!.focus({ preventScroll: reason === "idle" }),
+      );
+    }
+
+    const history: string[] = [];
+    let historyIndex = 0;
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const raw = input.value.trim();
+      input.value = "";
+      if (!raw) return;
+      history.push(raw);
+      historyIndex = history.length;
+      print(raw, "cmd");
+      run(raw);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" && historyIndex > 0) {
+        e.preventDefault();
+        input.value = history[--historyIndex];
+      } else if (e.key === "ArrowDown" && historyIndex < history.length) {
+        e.preventDefault();
+        historyIndex++;
+        input.value = history[historyIndex] ?? "";
+      }
+    });
+
+    // Swap the static prompt for the pokeable one now that JS is running.
+    staticLine.hidden = true;
+    startBtn.hidden = false;
+    startBtn.addEventListener("click", () => start("poke"));
+
+    function resetIdle() {
+      if (started) return;
+      window.clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => start("idle"), idleMs);
+    }
+    [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "wheel",
+    ].forEach((ev) =>
+      window.addEventListener(ev, resetIdle, { passive: true }),
+    );
+    resetIdle();
+  }
+</script>

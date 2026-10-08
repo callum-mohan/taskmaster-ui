@@ -489,3 +489,13 @@ export interface RecapSummary {
   winningScore?: number;
   biggestClimber?: RecapMover;
 }
+
+/**
+ * A released task as filed in the 404 page's `lost.sh` text adventure, where
+ * the "archive" room lets players leaf through briefs that have aired so far.
+ */
+export interface LostArchiveEntry {
+  weekNumber: number;
+  title: string;
+  description: string;
+}

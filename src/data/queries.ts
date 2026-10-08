@@ -7,6 +7,7 @@ import type {
   CompetitionStats,
   FollowStanding,
   LeaderboardRow,
+  LostArchiveEntry,
   Player,
   PlayerCompareOptions,
   PlayerComparison,
@@ -1360,4 +1361,20 @@ export function getPlayerCompareOptions(
       .filter((row) => row.player.id !== playerId)
       .map(toOpponent),
   };
+}
+
+/**
+ * Task briefs filed in the 404 text adventure's archive room: every released
+ * (live or completed) task with a revealed title, oldest first. Upcoming and
+ * still-secret ("???") weeks stay locked away.
+ */
+export function getLostArchive(): LostArchiveEntry[] {
+  return tasks
+    .filter((t) => t.status !== "upcoming" && t.title !== "???")
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map((t) => ({
+      weekNumber: t.weekNumber,
+      title: t.title,
+      description: t.description,
+    }));
 }

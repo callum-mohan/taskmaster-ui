@@ -69,8 +69,14 @@ const schedule: (Omit<Task, "status" | "format"> & {
     id: "week-04",
     weekNumber: 4,
     title: "Task Tank",
-    description: "",
-    brief: "",
+    description:
+      "Impress the Taskmaster with a new idea, product or invention.",
+    brief: [
+      "Create a new idea, product or invention that will impress the Taskmaster.",
+      "Create a compelling presentation to showcase your idea e.g. a slide deck, a video advert, a demo, or any other format that effectively communicates your concept.",
+      "Be prepared to answer questions and defend your concept before the Taskmaster.",
+      "Remember, creativity and originality are highly valued.",
+    ],
     releaseDate: "2026-10-09T13:00:00",
     deadline: "2026-10-16T13:00:00",
     format: "team",

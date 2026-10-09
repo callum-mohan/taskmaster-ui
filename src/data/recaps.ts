@@ -28,6 +28,14 @@ export const weekRecaps: Record<string, WeekRecapContent> = {
       "Luke basing his Strava routes off photos taken in his first few weeks of the academy with a very fitting presentation.",
     momentPlayerId: "luke",
   },
+  "week-03": {
+    headline: "Rose strikes twice — the week and the overall lead",
+    summary:
+      "The Assassin brief turned the academy on itself, and Rose was the deadliest operative in the building. Survival, her initial mission and two extra eliminations added up to a competition-high 14 — enough to win the week outright and, finally, overthrow Eva to take the overall lead for the first time. Caolan D and Andrew shared second on 12, Andrew's haul dragging him off the foot of the table in the week's biggest climb. Eve, John, Sophia and Amelia tied the midfield in blood on 10 apiece. A savage, paranoid week where turning your back cost you.",
+    moment:
+      "Erin going full Sherlock Holmes to track down her mark for a detective's bonus.",
+    momentPlayerId: "erin",
+  },
 };
 
 /** Editorial recap content for a task, if any has been written. */

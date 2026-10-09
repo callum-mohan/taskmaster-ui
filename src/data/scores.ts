@@ -74,8 +74,33 @@ export const weeklyTaskScores: Record<string, Record<string, number>> = {
     adam: 1,
     andrew: 1,
   },
-  // --- Placeholders: fill in each week's points as tasks are scored. ---
-  "week-03": {},
+  "week-03": {
+    eva: 7, // Initial mission complete + 1 additional mission
+    rebekah: 3, // Wooden spoon
+    karen: 2, // Participation award
+    finnbar: 1, // Participation award
+    eve: 10, // Survived + initial mission complete
+    luke: 1, // Participation award
+    rose: 14, // Survived, initial mission complete + 2 additional missions
+    emma: 5, // Initial mission complete
+    jack: 1, // Participation award
+    caolan_d: 12, // Survived + initial mission complete + first mission complete
+    erin: 8, // Survived + Sherlock Holmes
+    john: 10, // Survived + initial mission complete
+    connor: 7, // Survived + initial mission half complete
+    sophia: 10, // Survived + initial mission complete
+    orlagh: 10, // Survived + initial mission complete
+    amelia: 10, // Survived + first mission half complete + epic fail award
+    daire: 1, // Participation award
+    jake: 5, // Initial mission complete
+    ryan: 5, // Survived
+    caolan_t: 3, // Participation award + last one out
+    criostoir: 5, // Survived
+    eimhear: 1, // Participation award
+    grace: 3, // Epic Fail Award
+    adam: 1, // Participation award
+    andrew: 12, // Survived + initial mission complete
+  },
   "week-05": {},
   "week-06": {},
   "week-07": {},

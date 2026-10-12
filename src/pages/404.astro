@@ -1,7 +1,10 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import TerminalWindow from "../components/TerminalWindow.astro";
+import LostGame from "../components/LostGame.astro";
+import { getLostArchive } from "../data/queries";
 import { withBase } from "../lib/url";
+
+const archive = getLostArchive();
 
 const btnPrimary =
   "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-5 py-2.5 text-sm font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg focus-visible:outline-none";
@@ -30,14 +33,12 @@ const links = [
       either never existed or has been disqualified.
     </p>
 
-    <div class="mt-8">
-      <TerminalWindow title="~/taskmaster.sh" meta="exit code 404">
-        <pre
-          class="overflow-x-auto text-sm leading-relaxed text-ink-dim"><span class="text-acid">$</span> cd {Astro.url.pathname}
-<span class="text-danger">bash: cd: {Astro.url.pathname}: No such file or directory</span>
-<span class="text-acid">$</span> <span class="caret">whereis --home</span></pre>
-      </TerminalWindow>
-    </div>
+    <LostGame
+      class="mt-8"
+      archive={archive}
+      homeHref={withBase("/")}
+      path={Astro.url.pathname}
+    />
 
     <div class="mt-8 flex flex-wrap items-center gap-3">
       <a href={withBase("/")} class={btnPrimary}>&larr; RETURN HOME</a>

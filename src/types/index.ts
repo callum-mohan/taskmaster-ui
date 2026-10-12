@@ -185,6 +185,28 @@ export interface WhatsNewInfo {
   href: string;
 }
 
+/**
+ * How a changelog entry is tagged, driving its badge colour in the "what's
+ * new" modal: a brand-new capability, an improvement to an existing one, or a
+ * bug fix.
+ */
+export type FeatureCategory = "new" | "improved" | "fixed";
+
+/**
+ * One entry in the site changelog — a feature or change shipped to the
+ * Taskmaster UI, surfaced newest-first in the homepage "what's new" modal.
+ * Dates are ISO 8601 strings, formatted at the page level.
+ */
+export interface FeatureUpdate {
+  /** Stable id; also the change key for the trigger's unseen indicator. */
+  id: string;
+  /** ISO 8601 date the change shipped. */
+  date: string;
+  title: string;
+  description: string;
+  category: FeatureCategory;
+}
+
 /** One side of the previous/next task pager on a task detail page. */
 export interface TaskPagerLink {
   href: string;
@@ -255,8 +277,13 @@ export interface PlayerComparison {
   };
 }
 
-/** Which bucket a command-palette entry belongs to (section + icon). */
-export type CommandPaletteGroup = "page" | "task" | "team" | "player";
+/**
+ * Which bucket a command-palette entry belongs to (section + icon). `"action"`
+ * entries are synthesized on the client for dynamic commands (e.g. "jump to
+ * week N", "compare X vs Y") and are never emitted by the data layer.
+ */
+export type CommandPaletteGroup =
+  "page" | "task" | "team" | "player" | "action";
 
 /** A single searchable destination in the global command palette. */
 export interface CommandPaletteItem {
@@ -461,4 +488,14 @@ export interface RecapSummary {
   winner?: Player;
   winningScore?: number;
   biggestClimber?: RecapMover;
+}
+
+/**
+ * A released task as filed in the 404 page's `lost.sh` text adventure, where
+ * the "archive" room lets players leaf through briefs that have aired so far.
+ */
+export interface LostArchiveEntry {
+  weekNumber: number;
+  title: string;
+  description: string;
 }

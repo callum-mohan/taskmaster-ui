@@ -57,7 +57,7 @@ const { items, class: className = "" } = Astro.props;
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        placeholder="jump to a page, task, team or player…"
+        placeholder="search, or try 'week 3' · 'rose vs luke'…"
         class="w-full bg-transparent text-sm text-ink placeholder:text-ink-faint focus:outline-none"
         role="combobox"
         aria-expanded="true"
@@ -90,6 +90,9 @@ const { items, class: className = "" } = Astro.props;
       <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
       <span><kbd>↵</kbd> open</span>
       <span><kbd>esc</kbd> close</span>
+      <span class="hidden sm:inline"
+        ><kbd>week&nbsp;3</kbd> jump · <kbd>a&nbsp;vs&nbsp;b</kbd> compare</span
+      >
     </div>
   </div>
 </div>
@@ -106,7 +109,7 @@ const { items, class: className = "" } = Astro.props;
   interface PaletteItem {
     id: string;
     label: string;
-    group: "page" | "task" | "team" | "player";
+    group: "page" | "task" | "team" | "player" | "action";
     href: string;
     hint?: string;
     keywords?: string;
@@ -127,12 +130,14 @@ const { items, class: className = "" } = Astro.props;
     const items: PaletteItem[] = JSON.parse(dataEl.textContent || "[]");
 
     const groupGlyph: Record<PaletteItem["group"], string> = {
+      action: "»",
       page: "./",
       task: "#",
       team: "&",
       player: "@",
     };
     const groupLabel: Record<PaletteItem["group"], string> = {
+      action: "actions",
       page: "pages",
       task: "tasks",
       team: "teams",
@@ -144,6 +149,129 @@ const { items, class: className = "" } = Astro.props;
       "team",
       "player",
     ];
+
+    // ── Dynamic commands (keyboard-first navigation) ───────────────────────
+    // A few typed queries synthesize navigation shortcuts on the fly instead
+    // of plain search hits: "week 3" jumps to that task, "rose vs luke" opens
+    // the head-to-head. Everything is derived from the shipped index, so no
+    // extra data is imported here — just reshaped on the client.
+    const playerItems = items.filter((i) => i.group === "player");
+
+    // Derive the site's base path from a real link so synthesized hrefs work
+    // under a sub-path deploy (e.g. GitHub Pages) as well as at the root.
+    const siteBase = (() => {
+      const href = (playerItems[0] ?? items[0])?.href ?? "";
+      const match = href.match(/^(.*)\/players\/[^/]+\/?$/);
+      return match ? match[1] : "";
+    })();
+
+    const idFromHref = (href: string) =>
+      href.split(/[?#]/)[0].replace(/\/+$/, "").split("/").pop() ?? "";
+
+    // Week number → task item, parsed from the `week-NN` slug in the href/id.
+    const tasksByWeek = new Map<number, PaletteItem>();
+    for (const item of items) {
+      if (item.group !== "task") continue;
+      const m = item.href.match(/week-(\d+)/) ?? item.id.match(/week-(\d+)/);
+      if (m) tasksByWeek.set(parseInt(m[1], 10), item);
+    }
+
+    const rankOf = (item: PaletteItem) => {
+      const m = (item.hint ?? "").match(/#(\d+)/);
+      return m ? parseInt(m[1], 10) : Infinity;
+    };
+    const leaderItem = playerItems
+      .slice()
+      .sort((a, b) => rankOf(a) - rankOf(b))[0];
+
+    // Best fuzzy player match for a loose term (reuses the shared scorer).
+    function findPlayer(term: string): PaletteItem | null {
+      const t = term.trim().toLowerCase();
+      if (!t) return null;
+      let best: PaletteItem | null = null;
+      let bestScore = Infinity;
+      for (const item of playerItems) {
+        const s = score(item, t);
+        if (s === null) continue;
+        if (s < bestScore) {
+          bestScore = s;
+          best = item;
+        }
+      }
+      return best;
+    }
+
+    function makeAction(
+      id: string,
+      label: string,
+      href: string,
+      hint?: string,
+    ): PaletteItem {
+      return { id, label, group: "action", href, hint };
+    }
+
+    function resolveCommands(query: string): PaletteItem[] {
+      const lower = query.trim().toLowerCase();
+      if (!lower) return [];
+      const actions: PaletteItem[] = [];
+
+      // Compare: "compare X vs Y", "diff X / Y", or just "X vs Y".
+      const hasVerb = /^(compare|cmp|diff)\b/.test(lower);
+      const body = lower.replace(/^(compare|cmp|diff|versus|vs)\s+/, "");
+      const sides = body.split(/\s+(?:vs\.?|versus|v|x|\/)\s+/);
+      if (sides.length === 2) {
+        const a = findPlayer(sides[0]);
+        const b = findPlayer(sides[1]);
+        if (a && b && a !== b) {
+          const aid = idFromHref(a.href);
+          const bid = idFromHref(b.href);
+          actions.push(
+            makeAction(
+              `cmp-${aid}-${bid}`,
+              `Compare ${a.label} vs ${b.label}`,
+              `${siteBase}/compare/${aid}/${bid}`,
+              "head-to-head",
+            ),
+          );
+        }
+      } else if (hasVerb && leaderItem) {
+        // "compare X" with no opponent → pit them against the current leader.
+        const a = findPlayer(body);
+        if (a && a !== leaderItem) {
+          const aid = idFromHref(a.href);
+          const bid = idFromHref(leaderItem.href);
+          actions.push(
+            makeAction(
+              `cmp-${aid}-${bid}`,
+              `Compare ${a.label} vs ${leaderItem.label}`,
+              `${siteBase}/compare/${aid}/${bid}`,
+              "vs leader",
+            ),
+          );
+        }
+      }
+
+      // Jump to week N: "week 3", "wk 3", "w3", "task 7", or a bare "3".
+      const weekMatch =
+        lower.match(/^(?:jump\s+to\s+)?(?:week|wk|w|task|t)\s*0*(\d{1,2})$/) ??
+        lower.match(/^0*(\d{1,2})$/);
+      if (weekMatch) {
+        const n = parseInt(weekMatch[1], 10);
+        const task = tasksByWeek.get(n);
+        if (task) {
+          actions.push(
+            makeAction(
+              `jump-week-${n}`,
+              `Jump to Week ${String(n).padStart(2, "0")} — ${task.label}`,
+              task.href,
+              task.hint,
+            ),
+          );
+        }
+      }
+
+      return actions;
+    }
 
     let options: HTMLLIElement[] = [];
     let activeIndex = 0;
@@ -538,6 +666,58 @@ const { items, class: className = "" } = Astro.props;
       active.scrollIntoView({ block: "nearest" });
     }
 
+    function createOption(item: PaletteItem): HTMLLIElement {
+      const li = document.createElement("li");
+      li.id = `palette-opt-${item.id}`;
+      li.setAttribute("role", "option");
+      li.dataset.href = item.href;
+      li.className =
+        "mx-2 flex cursor-pointer items-center gap-3 rounded border-l-2 border-transparent px-3 py-2 text-sm text-ink-dim transition-colors hover:bg-acid/10 hover:text-ink";
+
+      const glyph = document.createElement("span");
+      glyph.className =
+        item.group === "action"
+          ? "w-5 shrink-0 text-acid"
+          : "w-5 shrink-0 text-cyan";
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.textContent = groupGlyph[item.group];
+      li.appendChild(glyph);
+
+      const label = document.createElement("span");
+      label.className = "flex-1 truncate font-semibold";
+      label.textContent = item.label;
+      li.appendChild(label);
+
+      if (item.hint) {
+        const hint = document.createElement("span");
+        hint.className =
+          "shrink-0 text-[11px] tracking-wide text-ink-faint tabular-nums";
+        hint.textContent = item.hint;
+        li.appendChild(hint);
+      }
+
+      li.addEventListener("mouseenter", () => setActive(options.indexOf(li)));
+      li.addEventListener("click", () => go(li));
+      return li;
+    }
+
+    function appendGroup(group: PaletteItem["group"], entries: PaletteItem[]) {
+      if (entries.length === 0) return;
+
+      const header = document.createElement("li");
+      header.setAttribute("role", "presentation");
+      header.className =
+        "px-4 pt-3 pb-1 text-[10px] tracking-[0.25em] text-ink-faint uppercase";
+      header.textContent = groupLabel[group];
+      list!.appendChild(header);
+
+      for (const item of entries) {
+        const li = createOption(item);
+        list!.appendChild(li);
+        options.push(li);
+      }
+    }
+
     function render(query: string) {
       currentSecret = resolveSecret(query);
       if (currentSecret) {
@@ -548,63 +728,27 @@ const { items, class: className = "" } = Astro.props;
       list!.innerHTML = "";
       options = [];
 
+      // Synthesized shortcuts (jump to week / compare) always sit on top.
+      const actions = resolveCommands(query);
+
       const matches = items
         .map((item) => ({ item, s: score(item, query) }))
         .filter((m): m is { item: PaletteItem; s: number } => m.s !== null)
         .sort((a, b) => a.s - b.s);
 
-      if (matches.length === 0) {
+      if (actions.length === 0 && matches.length === 0) {
         empty?.classList.remove("hidden");
         input?.setAttribute("aria-activedescendant", "");
         return;
       }
       empty?.classList.add("hidden");
 
+      appendGroup("action", actions);
       for (const group of groupOrder) {
-        const inGroup = matches.filter((m) => m.item.group === group);
-        if (inGroup.length === 0) continue;
-
-        const header = document.createElement("li");
-        header.setAttribute("role", "presentation");
-        header.className =
-          "px-4 pt-3 pb-1 text-[10px] tracking-[0.25em] text-ink-faint uppercase";
-        header.textContent = groupLabel[group];
-        list!.appendChild(header);
-
-        for (const { item } of inGroup) {
-          const li = document.createElement("li");
-          li.id = `palette-opt-${item.id}`;
-          li.setAttribute("role", "option");
-          li.dataset.href = item.href;
-          li.className =
-            "mx-2 flex cursor-pointer items-center gap-3 rounded border-l-2 border-transparent px-3 py-2 text-sm text-ink-dim transition-colors hover:bg-acid/10 hover:text-ink";
-
-          const glyph = document.createElement("span");
-          glyph.className = "w-5 shrink-0 text-cyan";
-          glyph.setAttribute("aria-hidden", "true");
-          glyph.textContent = groupGlyph[item.group];
-          li.appendChild(glyph);
-
-          const label = document.createElement("span");
-          label.className = "flex-1 truncate font-semibold";
-          label.textContent = item.label;
-          li.appendChild(label);
-
-          if (item.hint) {
-            const hint = document.createElement("span");
-            hint.className =
-              "shrink-0 text-[11px] tracking-wide text-ink-faint tabular-nums";
-            hint.textContent = item.hint;
-            li.appendChild(hint);
-          }
-
-          li.addEventListener("mouseenter", () =>
-            setActive(options.indexOf(li)),
-          );
-          li.addEventListener("click", () => go(li));
-          list!.appendChild(li);
-          options.push(li);
-        }
+        appendGroup(
+          group,
+          matches.filter((m) => m.item.group === group).map((m) => m.item),
+        );
       }
 
       setActive(0);

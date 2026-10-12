@@ -8,17 +8,20 @@ import LeaderboardTable from "../components/LeaderboardTable.astro";
 import ScoreBadge from "../components/ScoreBadge.astro";
 import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
+import WhatsNewModal from "../components/WhatsNewModal.astro";
 import { getCurrentTask } from "../data/tasks";
 import {
   getTopPlayers,
   getRecentResults,
   getCompetitionStats,
+  getRecentFeatures,
 } from "../data/queries";
 
 const currentTask = getCurrentTask();
 const topPlayers = getTopPlayers(5);
 const recentResults = getRecentResults(3);
 const stats = getCompetitionStats();
+const recentFeatures = getRecentFeatures();
 
 const dayFmt = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -100,6 +103,19 @@ const btnGhost =
       <div class="mt-7 flex flex-wrap gap-3">
         <a href="#current-task" class={btnPrimary}>&gt; VIEW CURRENT TASK</a>
         <a href={withBase("/leaderboard")} class={btnGhost}>LEADERBOARD</a>
+        <button
+          type="button"
+          data-whats-new-trigger
+          aria-haspopup="dialog"
+          aria-controls="whats-new-modal"
+          class={`${btnGhost} relative`}
+        >
+          WHAT&apos;S NEW
+          <span
+            data-whats-new-dot
+            class="live-dot absolute -top-1 -right-1 hidden h-2 w-2 rounded-full bg-acid"
+            aria-hidden="true"></span>
+        </button>
       </div>
     </section>
 
@@ -280,4 +296,5 @@ const btnGhost =
     </section>
   </div>
   <WalkingEgg />
+  <WhatsNewModal entries={recentFeatures} />
 </Layout>

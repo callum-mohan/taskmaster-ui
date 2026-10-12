@@ -1,0 +1,202 @@
+---
+import type { FeatureCategory, FeatureUpdate } from "../types";
+
+interface Props {
+  /** Changelog entries to list, newest-first. */
+  entries: FeatureUpdate[];
+  class?: string;
+}
+
+const { entries, class: className = "" } = Astro.props;
+
+const dateFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+// Badge treatment per category. Exhaustive over the union so the mapping stays
+// type-safe as new tags are added.
+const categoryConfig: Record<
+  FeatureCategory,
+  { label: string; classes: string }
+> = {
+  new: { label: "NEW", classes: "border-acid/40 bg-acid/10 text-acid" },
+  improved: {
+    label: "IMPROVED",
+    classes: "border-cyan/40 bg-cyan/10 text-cyan",
+  },
+  fixed: { label: "FIXED", classes: "border-amber/40 bg-amber/10 text-amber" },
+};
+
+// The newest entry id is the change key the trigger's unseen dot compares
+// against the visitor's last acknowledged changelog entry.
+const latestId = entries[0]?.id ?? "";
+---
+
+<div
+  id="whats-new-modal"
+  data-latest-id={latestId}
+  class:list={[
+    "fixed inset-0 z-[80] hidden items-start justify-center px-4 pt-[10vh]",
+    className,
+  ]}
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="whats-new-modal-title"
+>
+  <div
+    data-whats-new-backdrop
+    class="absolute inset-0 bg-term-bg/80 backdrop-blur-sm"
+    aria-hidden="true"
+  >
+  </div>
+
+  <div
+    class="relative flex max-h-[80vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-grid bg-term-panel shadow-[0_0_40px_-12px] shadow-acid/20"
+  >
+    <!-- Title bar -->
+    <div
+      class="flex items-center gap-3 border-b border-grid bg-term-panel-2 px-4 py-2.5"
+    >
+      <span class="flex items-center gap-1.5" aria-hidden="true">
+        <span class="h-3 w-3 rounded-full bg-dot-red"></span>
+        <span class="h-3 w-3 rounded-full bg-dot-amber"></span>
+        <span class="h-3 w-3 rounded-full bg-dot-green"></span>
+      </span>
+      <span class="text-xs tracking-[0.2em] text-ink-faint">~/CHANGELOG.md</span
+      >
+      <button
+        type="button"
+        data-whats-new-close
+        aria-label="Close what's new"
+        class="ml-auto rounded px-1.5 py-1 text-ink-faint transition-colors hover:text-ink"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+
+    <!-- Heading -->
+    <div class="border-b border-grid px-4 py-3">
+      <h2
+        id="whats-new-modal-title"
+        class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+      >
+        whats-new --latest
+      </h2>
+    </div>
+
+    <!-- Entries -->
+    <ul class="flex-1 divide-y divide-grid overflow-y-auto">
+      {
+        entries.map((entry) => {
+          const cat = categoryConfig[entry.category];
+          return (
+            <li class="px-4 py-4">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class:list={[
+                    "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-[0.15em]",
+                    cat.classes,
+                  ]}
+                >
+                  {cat.label}
+                </span>
+                <time
+                  datetime={entry.date}
+                  class="text-[10px] tracking-[0.15em] text-ink-faint uppercase tabular-nums"
+                >
+                  {dateFmt.format(new Date(entry.date))}
+                </time>
+              </div>
+              <h3 class="mt-2 text-sm font-bold text-ink">{entry.title}</h3>
+              <p class="mt-1 text-sm leading-relaxed text-ink-dim">
+                {entry.description}
+              </p>
+            </li>
+          );
+        })
+      }
+    </ul>
+
+    <!-- Footer hint -->
+    <div
+      class="flex items-center gap-2 border-t border-grid bg-term-panel-2 px-4 py-2 text-[10px] tracking-[0.15em] text-ink-faint uppercase"
+    >
+      <span class="text-acid" aria-hidden="true">$</span>
+      <span>more shipping every week</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = "tm:last-seen-feature";
+  const modal = document.getElementById("whats-new-modal");
+
+  if (modal) {
+    const latestId = modal.dataset.latestId ?? "";
+    const backdrop = modal.querySelector<HTMLElement>(
+      "[data-whats-new-backdrop]",
+    );
+    const triggers = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-whats-new-trigger]"),
+    );
+    const dots = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-whats-new-dot]"),
+    );
+
+    let lastFocused: HTMLElement | null = null;
+
+    const readSeen = (): string | null => {
+      try {
+        return localStorage.getItem(STORAGE_KEY);
+      } catch {
+        return null;
+      }
+    };
+
+    const markSeen = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, latestId);
+      } catch {
+        // Ignore storage being unavailable (private mode, blocked, etc).
+      }
+      dots.forEach((dot) => dot.classList.add("hidden"));
+    };
+
+    // Surface the unseen indicator only when a newer entry has shipped since
+    // the visitor last opened the changelog.
+    if (latestId && readSeen() !== latestId) {
+      dots.forEach((dot) => dot.classList.remove("hidden"));
+    }
+
+    const open = () => {
+      if (!modal.classList.contains("hidden")) return;
+      lastFocused = document.activeElement as HTMLElement | null;
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      document.body.style.overflow = "hidden";
+      markSeen();
+      modal.querySelector<HTMLButtonElement>("[data-whats-new-close]")?.focus();
+    };
+
+    const close = () => {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+      document.body.style.overflow = "";
+      lastFocused?.focus();
+    };
+
+    triggers.forEach((trigger) => trigger.addEventListener("click", open));
+    modal
+      .querySelector<HTMLButtonElement>("[data-whats-new-close]")
+      ?.addEventListener("click", close);
+    backdrop?.addEventListener("click", close);
+    modal.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    });
+  }
+</script>

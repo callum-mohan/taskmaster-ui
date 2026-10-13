@@ -19,15 +19,22 @@
   /* Ink ramp tuned so every step meets WCAG AA (>=4.5:1) on the dark
      surfaces above, while keeping a clear primary > secondary > faint
      hierarchy. ink-faint in particular was previously ~3:1 and failed. */
-  --color-ink: #dbe4ee; /* primary text   — ~15:1 on term-bg */
-  --color-ink-dim: #a3afc0; /* secondary/body — ~8.9:1 on term-bg */
-  --color-ink-faint: #8491a3; /* captions/meta  — ~6.2:1 on term-bg */
+  --color-ink: #dbe4ee;
+  /* primary text   — ~15:1 on term-bg */
+  --color-ink-dim: #a3afc0;
+  /* secondary/body — ~8.9:1 on term-bg */
+  --color-ink-faint: #8491a3;
+  /* captions/meta  — ~6.2:1 on term-bg */
 
-  --color-acid: #3ef08b; /* primary terminal green  */
+  --color-acid: #3ef08b;
+  /* primary terminal green  */
   --color-acid-dim: #1f7f4c;
-  --color-amber: #ffb454; /* warnings / live         */
-  --color-magenta: #ff6ac1; /* accents / titles        */
-  --color-cyan: #5bd6ff; /* links / info            */
+  --color-amber: #ffb454;
+  /* warnings / live         */
+  --color-magenta: #ff6ac1;
+  /* accents / titles        */
+  --color-cyan: #5bd6ff;
+  /* links / info            */
   --color-danger: #ff5f56;
 
   --color-dot-red: #ff5f56;
@@ -54,17 +61,24 @@
 
   /* Ink ramp inverted for dark-on-light, keeping AA contrast and the
      primary > secondary > faint hierarchy. */
-  --color-ink: #11181d; /* primary text   — ~16:1 on term-bg */
-  --color-ink-dim: #41505b; /* secondary/body — ~8.5:1 on term-bg */
-  --color-ink-faint: #5d6b74; /* captions/meta  — ~5.4:1 on term-bg */
+  --color-ink: #11181d;
+  /* primary text   — ~16:1 on term-bg */
+  --color-ink-dim: #41505b;
+  /* secondary/body — ~8.5:1 on term-bg */
+  --color-ink-faint: #5d6b74;
+  /* captions/meta  — ~5.4:1 on term-bg */
 
   /* Accents darkened so coloured text/borders stay legible on light
      surfaces while reading as the same hues. */
-  --color-acid: #0a8f4d; /* primary terminal green */
+  --color-acid: #0a8f4d;
+  /* primary terminal green */
   --color-acid-dim: #0b7a42;
-  --color-amber: #b26a00; /* warnings / live */
-  --color-magenta: #c21f98; /* accents / titles */
-  --color-cyan: #0b7aa8; /* links / info */
+  --color-amber: #b26a00;
+  /* warnings / live */
+  --color-magenta: #c21f98;
+  /* accents / titles */
+  --color-cyan: #0b7aa8;
+  /* links / info */
   --color-danger: #d4352b;
 
   --color-scanline: rgba(16, 24, 32, 0.02);
@@ -90,15 +104,22 @@
   --color-grid: #3a2c14;
   --color-grid-soft: #241a0c;
 
-  --color-ink: #f2e3c6; /* warm white — ~14:1 on term-bg */
-  --color-ink-dim: #cbb488; /* ~8.3:1 */
-  --color-ink-faint: #a68a5a; /* ~5.2:1 */
+  --color-ink: #f2e3c6;
+  /* warm white — ~14:1 on term-bg */
+  --color-ink-dim: #cbb488;
+  /* ~8.3:1 */
+  --color-ink-faint: #a68a5a;
+  /* ~5.2:1 */
 
-  --color-acid: #ffc265; /* primary phosphor — amber */
+  --color-acid: #ffc265;
+  /* primary phosphor — amber */
   --color-acid-dim: #8a5a1b;
-  --color-amber: #ff8a3d; /* live/warning — hotter orange */
-  --color-magenta: #ff7a9c; /* accents — warm rose */
-  --color-cyan: #6fd0c4; /* links/info — cool teal for contrast */
+  --color-amber: #ff8a3d;
+  /* live/warning — hotter orange */
+  --color-magenta: #ff7a9c;
+  /* accents — warm rose */
+  --color-cyan: #6fd0c4;
+  /* links/info — cool teal for contrast */
   --color-danger: #ff5f56;
 
   --color-scanline: rgba(255, 180, 84, 0.04);
@@ -114,15 +135,22 @@
   --color-grid: #1a3344;
   --color-grid-soft: #122533;
 
-  --color-ink: #d8edf6; /* ~14:1 on term-bg */
-  --color-ink-dim: #a2c4d4; /* ~8.4:1 */
-  --color-ink-faint: #7ba6ba; /* ~5.3:1 */
+  --color-ink: #d8edf6;
+  /* ~14:1 on term-bg */
+  --color-ink-dim: #a2c4d4;
+  /* ~8.4:1 */
+  --color-ink-faint: #7ba6ba;
+  /* ~5.3:1 */
 
-  --color-acid: #54d6ff; /* primary phosphor — cyan */
+  --color-acid: #54d6ff;
+  /* primary phosphor — cyan */
   --color-acid-dim: #1f6f8f;
-  --color-amber: #ffc24d; /* live/warning — keeps warmth */
-  --color-magenta: #b58cff; /* accents — violet */
-  --color-cyan: #86c5ff; /* links/info — azure, distinct from primary */
+  --color-amber: #ffc24d;
+  /* live/warning — keeps warmth */
+  --color-magenta: #b58cff;
+  /* accents — violet */
+  --color-cyan: #86c5ff;
+  /* links/info — azure, distinct from primary */
   --color-danger: #ff6b62;
 
   --color-scanline: rgba(84, 214, 255, 0.045);
@@ -138,15 +166,22 @@
   --color-grid: #331a44;
   --color-grid-soft: #241333;
 
-  --color-ink: #f1dcff; /* ~13:1 on term-bg */
-  --color-ink-dim: #c9a6df; /* ~8.1:1 */
-  --color-ink-faint: #aa86c0; /* ~5.4:1 */
+  --color-ink: #f1dcff;
+  /* ~13:1 on term-bg */
+  --color-ink-dim: #c9a6df;
+  /* ~8.1:1 */
+  --color-ink-faint: #aa86c0;
+  /* ~5.4:1 */
 
-  --color-acid: #ff6ac1; /* primary phosphor — pink */
+  --color-acid: #ff6ac1;
+  /* primary phosphor — pink */
   --color-acid-dim: #8a2f66;
-  --color-amber: #ffb454; /* live/warning */
-  --color-magenta: #c79bff; /* accents — violet, distinct from primary */
-  --color-cyan: #5bd6ff; /* links/info — synthwave cyan */
+  --color-amber: #ffb454;
+  /* live/warning */
+  --color-magenta: #c79bff;
+  /* accents — violet, distinct from primary */
+  --color-cyan: #5bd6ff;
+  /* links/info — synthwave cyan */
   --color-danger: #ff5f56;
 
   --color-scanline: rgba(255, 106, 193, 0.05);
@@ -165,11 +200,9 @@ body {
   font-family: var(--font-mono);
   /* Subtle CRT-style background: grid + vignette, drawn once, fixed. */
   background-image:
-    radial-gradient(
-      ellipse at 50% -10%,
+    radial-gradient(ellipse at 50% -10%,
       rgba(62, 240, 139, 0.08),
-      transparent 55%
-    ),
+      transparent 55%),
     linear-gradient(var(--color-grid-soft) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid-soft) 1px, transparent 1px);
   background-size:
@@ -188,13 +221,11 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 60;
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--color-scanline) 0px,
-    var(--color-scanline) 1px,
-    transparent 1px,
-    transparent 3px
-  );
+  background: repeating-linear-gradient(to bottom,
+      var(--color-scanline) 0px,
+      var(--color-scanline) 1px,
+      transparent 1px,
+      transparent 3px);
 }
 
 /* ----------------------------- helpers ---------------------------- */
@@ -226,10 +257,12 @@ body::before {
 }
 
 @keyframes term-blink {
+
   0%,
   50% {
     opacity: 1;
   }
+
   50.01%,
   100% {
     opacity: 0;
@@ -238,11 +271,13 @@ body::before {
 
 /* Soft pulse used to draw attention to the live task badge. */
 @keyframes live-pulse {
+
   0%,
   100% {
     opacity: 1;
     box-shadow: 0 0 0 0 rgba(255, 180, 84, 0.45);
   }
+
   50% {
     opacity: 0.85;
     box-shadow: 0 0 0 6px rgba(255, 180, 84, 0);
@@ -260,9 +295,11 @@ body::before {
 .theme-icon-sun {
   display: none;
 }
+
 :root[data-theme="light"] .theme-icon-moon {
   display: none;
 }
+
 :root[data-theme="light"] .theme-icon-sun {
   display: inline-flex;
 }
@@ -274,10 +311,12 @@ body::before {
   color: var(--color-amber);
   text-shadow: 0 0 14px rgba(255, 180, 84, 0.5);
 }
+
 .countdown.is-urgent .cd-cell {
   border-color: color-mix(in srgb, var(--color-amber) 45%, transparent);
   background-color: color-mix(in srgb, var(--color-amber) 7%, transparent);
 }
+
 .countdown.is-urgent .cd-warn {
   color: var(--color-amber);
 }
@@ -286,20 +325,24 @@ body::before {
   color: var(--color-danger);
   text-shadow: 0 0 16px rgba(255, 95, 86, 0.55);
 }
+
 .countdown.is-critical .cd-cell {
   border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
   background-color: color-mix(in srgb, var(--color-danger) 8%, transparent);
   animation: cd-urgent-pulse 1.3s ease-in-out infinite;
 }
+
 .countdown.is-critical .cd-warn {
   color: var(--color-danger);
 }
 
 @keyframes cd-urgent-pulse {
+
   0%,
   100% {
     box-shadow: 0 0 0 0 rgba(255, 95, 86, 0.4);
   }
+
   50% {
     box-shadow: 0 0 0 5px rgba(255, 95, 86, 0);
   }
@@ -312,18 +355,14 @@ body::before {
   color: var(--color-ink-faint);
   opacity: 0.6;
 }
+
 [data-sortable-standings] th[aria-sort="ascending"] button[data-sort-key],
 [data-sortable-standings] th[aria-sort="descending"] button[data-sort-key] {
   color: var(--color-acid);
 }
-[data-sortable-standings]
-  th[aria-sort="ascending"]
-  button[data-sort-key]
-  .cd-sort-arrow,
-[data-sortable-standings]
-  th[aria-sort="descending"]
-  button[data-sort-key]
-  .cd-sort-arrow {
+
+[data-sortable-standings] th[aria-sort="ascending"] button[data-sort-key] .cd-sort-arrow,
+[data-sortable-standings] th[aria-sort="descending"] button[data-sort-key] .cd-sort-arrow {
   color: inherit;
   opacity: 1;
 }
@@ -334,6 +373,7 @@ body::before {
 [data-task-filter] button[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px currentColor;
 }
+
 [data-task-filter] button:not(:disabled):hover {
   filter: brightness(1.2);
 }
@@ -345,6 +385,7 @@ body::before {
 .me-badge {
   display: none;
 }
+
 .is-me .me-badge {
   display: inline-flex;
 }
@@ -353,6 +394,7 @@ tr[data-me-row].is-me {
   background-color: color-mix(in srgb, var(--color-acid) 9%, transparent);
   box-shadow: inset 3px 0 0 0 var(--color-acid);
 }
+
 a[data-me-row].is-me {
   border-color: var(--color-acid);
   background-color: color-mix(in srgb, var(--color-acid) 9%, transparent);
@@ -360,13 +402,16 @@ a[data-me-row].is-me {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .caret::after,
   .live-dot {
     animation: none;
   }
+
   html {
     scroll-behavior: auto;
   }
+
   /* Safety net: neutralise any remaining motion (hover transitions, future
      animations) for users who ask for reduced motion. */
   *,
@@ -398,38 +443,40 @@ a[data-me-row].is-me {
 :root[data-turbo] {
   --color-scanline: rgba(62, 240, 139, 0.05);
 }
+
 :root[data-turbo] body {
   background-image:
-    radial-gradient(
-      ellipse at 50% -10%,
+    radial-gradient(ellipse at 50% -10%,
       rgba(62, 240, 139, 0.16),
-      transparent 55%
-    ),
+      transparent 55%),
     linear-gradient(var(--color-grid-soft) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid-soft) 1px, transparent 1px);
 }
+
 :root[data-turbo] body::before {
-  background: repeating-linear-gradient(
-    to bottom,
-    var(--color-scanline) 0px,
-    var(--color-scanline) 1px,
-    transparent 1px,
-    transparent 2px
-  );
+  background: repeating-linear-gradient(to bottom,
+      var(--color-scanline) 0px,
+      var(--color-scanline) 1px,
+      transparent 1px,
+      transparent 2px);
   animation: turbo-scan 6s linear infinite;
 }
+
 :root[data-turbo] .text-glow {
   text-shadow:
     0 0 6px rgba(62, 240, 139, 0.65),
     0 0 18px rgba(62, 240, 139, 0.55);
 }
+
 :root[data-turbo] .text-acid {
   text-shadow: 0 0 10px rgba(62, 240, 139, 0.4);
 }
+
 @keyframes turbo-scan {
   from {
     background-position-y: 0;
   }
+
   to {
     background-position-y: 120px;
   }
@@ -444,6 +491,7 @@ a[data-me-row].is-me {
   background: color-mix(in srgb, var(--color-term-bg) 88%, transparent);
   backdrop-filter: blur(2px);
 }
+
 #egg-screensaver .egg-drop {
   position: absolute;
   top: 0;
@@ -454,6 +502,7 @@ a[data-me-row].is-me {
   will-change: transform;
   animation: egg-fall var(--egg-dur, 7s) linear var(--egg-delay, 0s) infinite;
 }
+
 #egg-screensaver .egg-hint {
   position: absolute;
   inset-inline: 0;
@@ -463,10 +512,12 @@ a[data-me-row].is-me {
   letter-spacing: 0.25em;
   color: var(--color-ink-faint);
 }
+
 @keyframes egg-fall {
   from {
     transform: translateY(-20vh) rotate(0deg);
   }
+
   to {
     transform: translateY(120vh) rotate(var(--egg-spin, 180deg));
   }
@@ -476,6 +527,7 @@ a[data-me-row].is-me {
 .score-egg-pop {
   animation: score-shake 0.5s ease-in-out;
 }
+
 .score-floater {
   position: absolute;
   left: 50%;
@@ -486,32 +538,41 @@ a[data-me-row].is-me {
   color: var(--color-magenta);
   animation: score-float 0.9s ease-out forwards;
 }
+
 @keyframes score-shake {
+
   0%,
   100% {
     transform: translateX(0) rotate(0);
   }
+
   20% {
     transform: translateX(-2px) rotate(-3deg);
   }
+
   40% {
     transform: translateX(2px) rotate(3deg);
   }
+
   60% {
     transform: translateX(-2px) rotate(-2deg);
   }
+
   80% {
     transform: translateX(2px) rotate(2deg);
   }
 }
+
 @keyframes score-float {
   0% {
     opacity: 0;
     transform: translate(-50%, 0);
   }
+
   25% {
     opacity: 1;
   }
+
   100% {
     opacity: 0;
     transform: translate(-50%, -22px);
@@ -529,6 +590,7 @@ a[data-me-row].is-me {
   width: 56px;
   height: 56px;
 }
+
 .walking-egg__btn {
   display: block;
   width: 100%;
@@ -539,6 +601,7 @@ a[data-me-row].is-me {
   cursor: pointer;
   line-height: 0;
 }
+
 .walking-egg__img {
   width: 40px;
   height: 40px;
@@ -548,15 +611,18 @@ a[data-me-row].is-me {
   transform-origin: 50% 90%;
   transform: scaleX(var(--egg-face, 1));
 }
+
 .walking-egg.is-walking .walking-egg__img {
   animation: egg-waddle 0.46s ease-in-out infinite;
 }
+
 /* Two little legs that peek out below the shell and step while walking. */
 .walking-egg__legs,
 .walking-egg__legs::before,
 .walking-egg__legs::after {
   position: absolute;
 }
+
 .walking-egg__legs {
   left: 50%;
   bottom: 6px;
@@ -564,6 +630,7 @@ a[data-me-row].is-me {
   height: 8px;
   transform: translateX(-50%);
 }
+
 .walking-egg__legs::before,
 .walking-egg__legs::after {
   content: "";
@@ -572,21 +639,74 @@ a[data-me-row].is-me {
   height: 7px;
   background: var(--color-ink-faint);
 }
+
 .walking-egg__legs::before {
   left: 2px;
 }
+
 .walking-egg__legs::after {
   right: 2px;
 }
+
 .walking-egg.is-walking .walking-egg__legs::before {
   animation: egg-step 0.46s ease-in-out infinite;
 }
+
 .walking-egg.is-walking .walking-egg__legs::after {
   animation: egg-step 0.46s ease-in-out 0.23s infinite;
 }
+
 .walking-egg.is-cracked .walking-egg__img {
   animation: egg-crack-shake 0.5s ease-in-out;
 }
+
+.walking-egg.is-punishment {
+  left: 50vw;
+  top: 50vh;
+  z-index: 200;
+  transform: translate(-50%, -50%) !important;
+  pointer-events: none;
+}
+
+.walking-egg.is-punishment .walking-egg__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.walking-egg.is-punishment .walking-egg__img {
+  flex: none;
+  max-width: none;
+  transform: none;
+  animation: egg-punishment-grow 2s linear forwards;
+}
+
+.walking-egg.is-punishment .walking-egg__legs,
+.walking-egg.is-punishment .walking-egg__bubble {
+  display: none;
+}
+
+@keyframes egg-punishment-grow {
+  from {
+    width: 40px;
+    height: 40px;
+  }
+
+  to {
+    width: 220vmax;
+    height: 220vmax;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .walking-egg.is-punishment .walking-egg__img {
+    animation: none;
+    width: 220vmax;
+    height: 220vmax;
+  }
+}
+
 /* "EGGY!" pain bubble, shown only while cracked. */
 .walking-egg__bubble {
   position: absolute;
@@ -608,42 +728,146 @@ a[data-me-row].is-me {
     opacity 0.15s ease,
     transform 0.15s ease;
 }
+
 .walking-egg.is-cracked .walking-egg__bubble {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+#egg-toast-layer.is-urgent {
+  z-index: 220;
+}
+
+.egg-toast-siren {
+  position: relative;
+  display: block;
+  width: 32px;
+  height: 30px;
+  margin: 0 auto 5px;
+  image-rendering: pixelated;
+  animation: egg-siren-flash 0.24s steps(2, end) infinite;
+}
+
+.egg-toast-siren::before {
+  position: absolute;
+  top: 3px;
+  left: 12px;
+  width: 8px;
+  height: 4px;
+  background: var(--color-danger);
+  box-shadow:
+    -4px 4px 0 var(--color-danger),
+    0 4px 0 var(--color-danger),
+    4px 4px 0 var(--color-danger),
+    -8px 8px 0 var(--color-amber),
+    -4px 8px 0 var(--color-danger),
+    0 8px 0 var(--color-amber),
+    4px 8px 0 var(--color-danger),
+    8px 8px 0 var(--color-amber),
+    -8px 12px 0 var(--color-danger),
+    -4px 12px 0 var(--color-danger),
+    0 12px 0 var(--color-danger),
+    4px 12px 0 var(--color-danger),
+    8px 12px 0 var(--color-danger);
+  content: "";
+}
+
+.egg-toast-siren::after {
+  position: absolute;
+  top: 21px;
+  left: 6px;
+  width: 20px;
+  height: 4px;
+  background: var(--color-ink-dim);
+  box-shadow: 0 4px 0 var(--color-grid);
+  content: "";
+}
+
+@keyframes egg-siren-flash {
+
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.8);
+  }
+}
+
+30% {
+  width: 72px;
+  height: 72px;
+}
+
+58% {
+  width: 160px;
+  height: 160px;
+}
+
+78% {
+  width: 320px;
+  height: 320px;
+}
+
+92% {
+  width: 800px;
+  height: 800px;
+}
+
+97.5% {
+  width: 140vmax;
+  height: 140vmax;
+}
+
+99% {
+  width: 180vmax;
+  height: 180vmax;
+}
+
 @keyframes egg-waddle {
+
   0%,
   100% {
     transform: scaleX(var(--egg-face, 1)) rotate(-7deg) translateY(0);
   }
+
   50% {
     transform: scaleX(var(--egg-face, 1)) rotate(7deg) translateY(-3px);
   }
 }
+
 @keyframes egg-step {
+
   0%,
   100% {
     transform: translateY(0) scaleY(1);
   }
+
   50% {
     transform: translateY(-3px) scaleY(0.7);
   }
 }
+
 @keyframes egg-crack-shake {
+
   0%,
   100% {
     transform: translateX(0) rotate(0);
   }
+
   20% {
     transform: translateX(-3px) rotate(-6deg);
   }
+
   40% {
     transform: translateX(3px) rotate(6deg);
   }
+
   60% {
     transform: translateX(-2px) rotate(-4deg);
   }
+
   80% {
     transform: translateX(2px) rotate(4deg);
   }
@@ -653,20 +877,26 @@ a[data-me-row].is-me {
 .cd-zero-glitch {
   animation: cd-glitch 0.4s steps(2) 3;
 }
+
 @keyframes cd-glitch {
+
   0%,
   100% {
     transform: translate(0, 0);
   }
+
   20% {
     transform: translate(-2px, 1px);
   }
+
   40% {
     transform: translate(2px, -1px);
   }
+
   60% {
     transform: translate(-1px, -1px);
   }
+
   80% {
     transform: translate(1px, 1px);
   }

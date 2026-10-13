@@ -15,6 +15,8 @@ const { class: className } = Astro.props;
 
 const eggSrc = withBase("/favicon.svg");
 const crackedSrc = withBase("/egg-cracked.svg");
+const pongHref = withBase("/pong");
+const activateAudioSrc = withBase("/audio/rage-activate.ogg");
 ---
 
 <div
@@ -22,6 +24,8 @@ const crackedSrc = withBase("/egg-cracked.svg");
   class:list={["walking-egg", className]}
   data-egg-src={eggSrc}
   data-cracked-src={crackedSrc}
+  data-pong-href={pongHref}
+  data-activate-audio-src={activateAudioSrc}
   hidden
 >
   <button
@@ -53,6 +57,30 @@ const crackedSrc = withBase("/egg-cracked.svg");
     ).matches;
     const eggSrc = root.dataset.eggSrc ?? "/favicon.svg";
     const crackedSrc = root.dataset.crackedSrc ?? eggSrc;
+    const pongHref = root.dataset.pongHref ?? "/pong";
+    const activateAudioSrc = root.dataset.activateAudioSrc ?? "/audio/rage-activate.ogg";
+    const BREAKS_KEY = "eayl-egg-breaks";
+    const PUNISHMENT_KEY = "eayl-pong-punishment";
+
+    function readStorage(key: string, fallback: string) {
+      try {
+        return localStorage.getItem(key) ?? fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
+    function writeStorage(key: string, value: string) {
+      try {
+        localStorage.setItem(key, value);
+      } catch {
+        /* The interaction still works for this page load. */
+      }
+    }
+
+    if (readStorage(PUNISHMENT_KEY, "0") === "1") {
+      window.location.replace(pongHref);
+    }
 
     const SIZE = 56; // hit-area footprint in px
     const SPEED = 70; // px per second while walking
@@ -125,16 +153,44 @@ const crackedSrc = withBase("/egg-cracked.svg");
       }
     }
 
+    function playActivateSound() {
+      try {
+        const audio = new Audio(activateAudioSrc);
+        audio.playbackRate = 2;
+        void audio.play().catch(() => {});
+      } catch {
+        /* The visual escalation still works if audio is unavailable. */
+      }
+    }
+
     function crack() {
       if (cracked) return;
       cracked = true;
+      const breaks = Number.parseInt(readStorage(BREAKS_KEY, "0"), 10) + 1;
+      writeStorage(BREAKS_KEY, String(breaks));
       root!.classList.remove("is-walking");
       root!.classList.add("is-cracked");
       img!.src = crackedSrc;
-      scream();
       (
-        window as unknown as { __eggToast?: (m: string, t?: string) => void }
-      ).__eggToast?.("you broke Eggy :(", "magenta");
+        window as unknown as {
+          __eggToast?: (m: string, t?: string, siren?: boolean) => void;
+        }
+      ).__eggToast?.(
+        breaks >= 5 ? "Eggy has had enough. pong penalty incoming." : "Eggy is not amused.",
+        breaks >= 5 ? "amber" : "magenta",
+        breaks >= 5,
+      );
+
+      if (breaks >= 5) {
+        writeStorage(PUNISHMENT_KEY, "1");
+        btn!.disabled = true;
+        root!.classList.add("is-punishment");
+        playActivateSound();
+        window.setTimeout(() => window.location.replace(pongHref), 2000);
+        return;
+      }
+
+      scream();
 
       window.setTimeout(() => {
         cracked = false;

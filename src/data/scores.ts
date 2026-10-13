@@ -157,8 +157,8 @@ export const weeklyBonusPoints: Record<
   { playerId: string; points: number; reason: string }[]
 > = {
   "week-03": [
-    { playerId: "jake", points: 2, reason: "Turbo CRT easter egg" },
-    { playerId: "eve", points: 2, reason: "Terminal-related easter eggs" },
+    { playerId: "jake", points: 2, reason: "Terminal-related easter eggs" },
+    { playerId: "eve", points: 2, reason: "Turbo CRT easter egg" },
     { playerId: "finnbar", points: 2, reason: "Traffic light easter egg" },
   ],
 };

@@ -1,4 +1,4 @@
-import type { Score, TeamScore } from "../types";
+import type { BonusPoint, Score, TeamScore } from "../types";
 import { tasks } from "./tasks";
 import { players } from "./players";
 import { teams } from "./teams";
@@ -134,6 +134,35 @@ export const weeklyTeamScores: Record<string, Record<string, number>> = {
   "week-04": {},
 };
 
+/**
+ * Static weekly bonus points and deductions — one-off adjustments on top of a
+ * week's task points. Each key is the task id (`week-NN`) of the week the
+ * adjustment was given in, mapping to a list of `{ playerId, points, reason }`
+ * entries. Use a positive `points` value for a bonus and a negative one for a
+ * deduction; `reason` is shown on the player's profile and the task page.
+ *
+ * Adjustments count toward a player's overall leaderboard total but do NOT
+ * change that week's finishing positions or winner. A player can receive more
+ * than one adjustment in the same week. Example:
+ *
+ *   "week-03": [
+ *     { playerId: "eva", points: 2, reason: "Best costume" },
+ *     { playerId: "jack", points: -1, reason: "Late submission" },
+ *   ],
+ *
+ * This becomes a Supabase table/query later; keep the exported shapes stable.
+ */
+export const weeklyBonusPoints: Record<
+  string,
+  { playerId: string; points: number; reason: string }[]
+> = {
+  "week-03": [
+    { playerId: "jake", points: 2, reason: "Turbo CRT easter egg" },
+    { playerId: "eve", points: 2, reason: "Terminal-related easter eggs" },
+    { playerId: "finnbar", points: 2, reason: "Traffic light easter egg" },
+  ],
+};
+
 // Roster order, used only as a deterministic tie-breaker when two players
 // earn the same points on a task so finishing positions stay stable.
 const rosterIndex = new Map(players.map((p, index) => [p.id, index]));
@@ -254,12 +283,42 @@ function buildScores(): Score[] {
   return result;
 }
 
+/**
+ * Flattens the weekly bonus entries into `BonusPoint` records, in week order.
+ * Entries for unknown tasks or players are skipped so a typo can't create a
+ * phantom player or week.
+ */
+function buildBonusPoints(): BonusPoint[] {
+  const result: BonusPoint[] = [];
+  const sortedTasks = [...tasks].sort((a, b) => a.weekNumber - b.weekNumber);
+
+  for (const task of sortedTasks) {
+    for (const entry of weeklyBonusPoints[task.id] ?? []) {
+      if (!rosterIndex.has(entry.playerId) || entry.points === 0) continue;
+      result.push({ taskId: task.id, ...entry });
+    }
+  }
+
+  return result;
+}
+
 // All team results for scored team tasks. Later this becomes a Supabase query.
 export const teamScores: TeamScore[] = buildTeamScores();
 
 // All individual scores (team-task points expanded to members included).
 // Later this becomes a Supabase query.
 export const scores: Score[] = buildScores();
+
+// All bonus points and deductions. Later this becomes a Supabase query.
+export const bonusPoints: BonusPoint[] = buildBonusPoints();
+
+export function getBonusPointsForPlayer(playerId: string): BonusPoint[] {
+  return bonusPoints.filter((b) => b.playerId === playerId);
+}
+
+export function getBonusPointsForTask(taskId: string): BonusPoint[] {
+  return bonusPoints.filter((b) => b.taskId === taskId);
+}
 
 export function getScoresForTask(taskId: string): Score[] {
   return scores.filter((s) => s.taskId === taskId);

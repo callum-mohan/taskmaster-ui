@@ -10,6 +10,7 @@ import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
+import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import { tasks } from "../../data/tasks";
 import {
   getTaskSummary,
@@ -17,6 +18,7 @@ import {
   getTaskPager,
   getRecapTaskIds,
   getTeamResults,
+  getTaskBonuses,
 } from "../../data/queries";
 import { teams } from "../../data/teams";
 
@@ -39,6 +41,7 @@ const teamResults =
   isTeam && task.status === "completed" ? getTeamResults(task.id) : [];
 const pager = getTaskPager(task.id);
 const hasRecap = getRecapTaskIds().includes(task.id);
+const bonuses = getTaskBonuses(task.id);
 
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const isLocked = task.status === "upcoming";
@@ -481,6 +484,35 @@ const medal = (position: number) =>
               </tbody>
             </table>
           </div>
+        </section>
+      )
+    }
+
+    <!-- Bonus points & deductions given this week -->
+    {
+      bonuses.length > 0 && (
+        <section class="mt-10" aria-labelledby="bonus-heading">
+          <h2
+            id="bonus-heading"
+            class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            bonus --week {String(task.weekNumber).padStart(2, "0")}
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}.bonus`}
+            meta={`${bonuses.length} ${bonuses.length === 1 ? "adjustment" : "adjustments"}`}
+            bodyClass="p-0 sm:p-0"
+          >
+            <BonusPointsLedger
+              entries={bonuses}
+              subject="player"
+              caption={`Bonus points and deductions for ${weekLabel}: ${task.title}`}
+            />
+          </TerminalWindow>
+          <p class="mt-3 text-[11px] text-ink-faint">
+            <span class="text-acid">//</span> Added to each player's overall
+            total. They don't change this week's finishing positions.
+          </p>
         </section>
       )
     }

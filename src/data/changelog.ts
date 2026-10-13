@@ -5,6 +5,14 @@ import type { FeatureUpdate } from "../types";
 // keep the shape stable and add new entries at the top.
 export const changelog: FeatureUpdate[] = [
   {
+    id: "bonus-points",
+    date: "2026-10-13",
+    title: "Bonus points & deductions",
+    description:
+      "The Taskmaster can now award bonus points or dock points in any week, with a reason. See them on player profiles and task pages — they count toward the overall leaderboard.",
+    category: "new",
+  },
+  {
     id: "command-palette",
     date: "2026-10-06",
     title: "Command palette",

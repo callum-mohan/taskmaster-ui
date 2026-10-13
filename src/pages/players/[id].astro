@@ -9,6 +9,7 @@ import BackLink from "../../components/BackLink.astro";
 import PointsChart from "../../components/PointsChart.astro";
 import AchievementBadge from "../../components/AchievementBadge.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
+import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import { withBase } from "../../lib/url";
 import { players } from "../../data/players";
 import { getTeamForPlayer } from "../../data/teams";
@@ -18,6 +19,7 @@ import {
   getPlayerCompareOptions,
   getPlayerAchievements,
   getPlayerProgressionChart,
+  getPlayerBonusSummary,
 } from "../../data/queries";
 
 export const getStaticPaths = (() => {
@@ -43,6 +45,11 @@ const bestFinish = hasPlayed ? Math.min(...results.map((r) => r.position)) : 0;
 const compareOptions = getPlayerCompareOptions(player.id);
 const achievements = getPlayerAchievements(player.id);
 const progressionChart = getPlayerProgressionChart(player.id);
+const bonusSummary = getPlayerBonusSummary(player.id);
+
+// Signed points with a true minus sign, e.g. "+3" / "−2" / "0".
+const signed = (n: number) =>
+  n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0";
 
 const pageDescription = hasPlayed
   ? `${player.name} is #${rank} in the EAYL Taskmaster with ${standing.points} pts and ${standing.wins} win${standing.wins === 1 ? "" : "s"} across ${standing.tasksCompleted} task${standing.tasksCompleted === 1 ? "" : "s"}.`
@@ -165,7 +172,9 @@ const positionClasses = (position: number) => {
         <StatCard
           value={standing.points}
           label="Total points"
-          command="sum scores"
+          command={bonusSummary.net !== 0
+            ? `sum scores ${signed(bonusSummary.net)} bonus`
+            : "sum scores"}
           accent="magenta"
         />
         <StatCard
@@ -350,9 +359,63 @@ const positionClasses = (position: number) => {
           )
         }
       </TerminalWindow>
+    </section>
+
+    <!-- Bonus points & deductions -->
+    <section class="mt-12" aria-labelledby="bonus-heading">
+      <div
+        class="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2"
+      >
+        <h2
+          id="bonus-heading"
+          class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+        >
+          bonus --ledger
+        </h2>
+        {
+          bonusSummary.entries.length > 0 && (
+            <p class="flex flex-wrap gap-x-3 text-[11px] text-ink-faint">
+              <span>
+                bonuses{" "}
+                <span class="font-bold tabular-nums text-acid">
+                  {signed(bonusSummary.awarded)}
+                </span>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                deductions{" "}
+                <span class="font-bold tabular-nums text-danger">
+                  {signed(bonusSummary.deducted)}
+                </span>
+              </span>
+              <span aria-hidden="true">·</span>
+              <span>
+                net{" "}
+                <span class="font-bold tabular-nums text-ink">
+                  {signed(bonusSummary.net)}
+                </span>
+              </span>
+            </p>
+          )
+        }
+      </div>
+
+      <TerminalWindow
+        title={`~/players/${player.id}.bonus`}
+        meta={`net ${signed(bonusSummary.net)} pts`}
+        bodyClass="p-0 sm:p-0"
+      >
+        <BonusPointsLedger
+          entries={bonusSummary.entries}
+          subject="week"
+          caption={`${player.name}'s bonus points and deductions, week by week`}
+          emptyMessage="No bonus points or deductions so far."
+        />
+      </TerminalWindow>
 
       <p class="mt-4 text-[11px] text-ink-faint">
-        <span class="text-acid">//</span> See the
+        <span class="text-acid">//</span> Bonuses and deductions count toward the
+        overall total but don't change a week's finishing positions. See the
         <a href={withBase("/leaderboard")} class="text-cyan hover:text-ink">
           {" "}full leaderboard{" "}
         </a>

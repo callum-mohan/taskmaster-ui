@@ -31,7 +31,7 @@ src/
 ├── data/              # Mock data + the data-access layer
 │   ├── players.ts     # raw records ─┐
 │   ├── tasks.ts       # raw records  ├─ become Supabase queries later
-│   ├── scores.ts      # raw records ─┘
+│   ├── scores.ts      # raw records ─┘  (weekly scores + bonus points/deductions)
 │   └── queries.ts     # derived selectors / view models (the UI's single API)
 ├── pages/
 │   ├── index.astro            # homepage

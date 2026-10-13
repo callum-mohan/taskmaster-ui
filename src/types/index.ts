@@ -69,6 +69,21 @@ export interface Score {
 }
 
 /**
+ * A one-off points adjustment for a player, tied to the task week it was
+ * given in. Positive values are bonuses, negative values are deductions.
+ * Adjustments count toward the player's overall total but never change that
+ * week's finishing positions. Becomes a Supabase row later.
+ */
+export interface BonusPoint {
+  taskId: string;
+  playerId: string;
+  /** Points added (positive) or deducted (negative). */
+  points: number;
+  /** Why the bonus or deduction was given. */
+  reason: string;
+}
+
+/**
  * A team's result on a single team-format task. The raw record the team
  * leaderboard is derived from; becomes a Supabase row later.
  */
@@ -87,7 +102,10 @@ export interface TeamScore {
 export interface LeaderboardRow {
   rank: number;
   player: Player;
+  /** Overall total: task points plus net bonus points. */
   points: number;
+  /** Net bonus points (bonuses less deductions) included in `points`. */
+  bonusPoints: number;
   tasksCompleted: number;
   wins: number;
   averagePosition: number;
@@ -115,6 +133,27 @@ export interface TaskSummary {
   winningScore?: number;
   /** Winning squad of a completed team task, if any. */
   winningTeam?: Team;
+}
+
+/** A bonus or deduction with its task and player resolved, for display. */
+export interface BonusEntry {
+  task: Task;
+  player: Player;
+  /** Points added (positive) or deducted (negative). */
+  points: number;
+  reason: string;
+}
+
+/** A player's bonus/deduction ledger with running totals. */
+export interface PlayerBonusSummary {
+  /** Every adjustment for the player, oldest week first. */
+  entries: BonusEntry[];
+  /** Sum of all bonuses (positive adjustments). */
+  awarded: number;
+  /** Sum of all deductions (a negative number, or 0). */
+  deducted: number;
+  /** Net effect on the player's overall total. */
+  net: number;
 }
 
 /** One row of a completed task's full results table. */

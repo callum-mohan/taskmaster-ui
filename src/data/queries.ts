@@ -1,6 +1,8 @@
 import type {
   Achievement,
   Award,
+  BonusEntry,
+  BonusPoint,
   ChartSeries,
   CommandPaletteItem,
   CompareOpponent,
@@ -10,6 +12,7 @@ import type {
   LostArchiveEntry,
   Player,
   PlayerCompareOptions,
+  PlayerBonusSummary,
   PlayerComparison,
   PlayerTaskResult,
   PointsChartData,
@@ -34,7 +37,13 @@ import type {
 } from "../types";
 import { players, getPlayerById } from "./players";
 import { tasks, getTaskById, getCurrentTask, getTeamTasks } from "./tasks";
-import { scores, teamScores } from "./scores";
+import {
+  scores,
+  teamScores,
+  bonusPoints,
+  getBonusPointsForPlayer,
+  getBonusPointsForTask,
+} from "./scores";
 import { teams, getTeamById, getTeamForPlayer } from "./teams";
 import { getRecapContent } from "./recaps";
 import { changelog } from "./changelog";
@@ -47,10 +56,15 @@ import { withBase } from "../lib/url";
 const completedWeekByTask = new Map(tasks.map((t) => [t.id, t.weekNumber]));
 
 /**
- * Builds and ranks the standings from an arbitrary set of scores. Used both
- * for the current table and for historical snapshots (rank movement).
+ * Builds and ranks the standings from an arbitrary set of scores plus bonus
+ * points/deductions. Used both for the current table and for historical
+ * snapshots (rank movement). Bonuses only affect `points`; wins, positions and
+ * form come from task scores alone.
  */
-function computeStandings(scoreSet: Score[]): LeaderboardRow[] {
+function computeStandings(
+  scoreSet: Score[],
+  bonusSet: BonusPoint[],
+): LeaderboardRow[] {
   const rows = players.map((player) => {
     const playerScores = scoreSet
       .filter((s) => s.playerId === player.id)
@@ -60,7 +74,11 @@ function computeStandings(scoreSet: Score[]): LeaderboardRow[] {
           (completedWeekByTask.get(b.taskId) ?? 0),
       );
 
-    const points = playerScores.reduce((sum, s) => sum + s.points, 0);
+    const bonusPoints = bonusSet
+      .filter((b) => b.playerId === player.id)
+      .reduce((sum, b) => sum + b.points, 0);
+    const points =
+      playerScores.reduce((sum, s) => sum + s.points, 0) + bonusPoints;
     const wins = playerScores.filter((s) => s.position === 1).length;
     const tasksCompleted = playerScores.length;
     const averagePosition =
@@ -72,6 +90,7 @@ function computeStandings(scoreSet: Score[]): LeaderboardRow[] {
     return {
       player,
       points,
+      bonusPoints,
       wins,
       tasksCompleted,
       averagePosition,
@@ -101,10 +120,11 @@ function computeStandings(scoreSet: Score[]): LeaderboardRow[] {
 
 /**
  * Full leaderboard, sorted by points (then wins, then average position).
- * Every player appears even if they have not scored yet.
+ * Points include bonuses and deductions. Every player appears even if they
+ * have not scored yet.
  */
 export function getLeaderboard(): LeaderboardRow[] {
-  return computeStandings(scores);
+  return computeStandings(scores, bonusPoints);
 }
 
 /**
@@ -121,11 +141,13 @@ export function getLeaderboardWithMovement(): LeaderboardRow[] {
   if (completedWeeks.length < 2) return current;
 
   const latestWeek = Math.max(...completedWeeks);
-  const previousScores = scores.filter(
-    (s) => (completedWeekByTask.get(s.taskId) ?? Infinity) < latestWeek,
-  );
+  const isBeforeLatest = (taskId: string) =>
+    (completedWeekByTask.get(taskId) ?? Infinity) < latestWeek;
   const previousRankByPlayer = new Map(
-    computeStandings(previousScores).map((row) => [row.player.id, row.rank]),
+    computeStandings(
+      scores.filter((s) => isBeforeLatest(s.taskId)),
+      bonusPoints.filter((b) => isBeforeLatest(b.taskId)),
+    ).map((row) => [row.player.id, row.rank]),
   );
 
   return current.map((row) => {
@@ -168,6 +190,41 @@ export function getPlayerResults(playerId: string): PlayerTaskResult[] {
     });
   }
   return results.sort((a, b) => a.task.weekNumber - b.task.weekNumber);
+}
+
+// ─── Bonus points & deductions ──────────────────────────────────────────
+// One-off adjustments tied to a task week. They feed the overall standings
+// (see `computeStandings`) but never the week's own finishing positions.
+
+function toBonusEntries(records: BonusPoint[]): BonusEntry[] {
+  return records
+    .flatMap((b) => {
+      const task = getTaskById(b.taskId);
+      const player = getPlayerById(b.playerId);
+      if (!task || !player) return [];
+      return [{ task, player, points: b.points, reason: b.reason }];
+    })
+    .sort((a, b) => a.task.weekNumber - b.task.weekNumber);
+}
+
+/** A player's bonuses and deductions, oldest week first, with totals. */
+export function getPlayerBonusSummary(playerId: string): PlayerBonusSummary {
+  const entries = toBonusEntries(getBonusPointsForPlayer(playerId));
+  const awarded = entries
+    .filter((e) => e.points > 0)
+    .reduce((sum, e) => sum + e.points, 0);
+  const deducted = entries
+    .filter((e) => e.points < 0)
+    .reduce((sum, e) => sum + e.points, 0);
+  return { entries, awarded, deducted, net: awarded + deducted };
+}
+
+/**
+ * Bonuses and deductions given during a task week, in the order they were
+ * recorded. Empty if there were none.
+ */
+export function getTaskBonuses(taskId: string): BonusEntry[] {
+  return toBonusEntries(getBonusPointsForTask(taskId));
 }
 
 /** Most recent completed tasks with their winner, newest first. */
@@ -456,7 +513,9 @@ export function getCompetitionStats(): CompetitionStats {
   const winners = new Set(
     scores.filter((s) => s.position === 1).map((s) => s.playerId),
   );
-  const pointsAwarded = scores.reduce((sum, s) => sum + s.points, 0);
+  const pointsAwarded =
+    scores.reduce((sum, s) => sum + s.points, 0) +
+    bonusPoints.reduce((sum, b) => sum + b.points, 0);
 
   return {
     totalPlayers: players.length,
@@ -514,10 +573,13 @@ export function getPlayerIcon(player: Player): string {
   return `/avatars/player-${String(index + 1).padStart(2, "0")}.svg`;
 }
 
-// Tasks that have at least one recorded score, ascending by week number.
-// This is the shared x-axis for every points-over-time chart.
+// Tasks that have at least one recorded score or bonus, ascending by week
+// number. This is the shared x-axis for every points-over-time chart.
 function getScoredTasks(): Task[] {
-  const scoredIds = new Set(scores.map((s) => s.taskId));
+  const scoredIds = new Set([
+    ...scores.map((s) => s.taskId),
+    ...bonusPoints.map((b) => b.taskId),
+  ]);
   return [...tasks]
     .filter((t) => scoredIds.has(t.id))
     .sort((a, b) => a.weekNumber - b.weekNumber);
@@ -534,14 +596,17 @@ const CHART_SERIES_ACCENTS = [
 const weekAxisLabel = (weekNumber: number) =>
   `W${String(weekNumber).padStart(2, "0")}`;
 
-// A player's running points total across every scored week (weeks they
-// weren't scored on carry the previous total forward).
+// A player's running points total (task points plus bonuses/deductions)
+// across every scored week (weeks they weren't scored on carry the previous
+// total forward).
 function cumulativeFor(playerId: string, scoredTasks: Task[]): number[] {
-  const pointsByTask = new Map(
-    scores
-      .filter((s) => s.playerId === playerId)
-      .map((s) => [s.taskId, s.points] as const),
-  );
+  const pointsByTask = new Map<string, number>();
+  for (const s of scores.filter((s) => s.playerId === playerId)) {
+    pointsByTask.set(s.taskId, (pointsByTask.get(s.taskId) ?? 0) + s.points);
+  }
+  for (const b of getBonusPointsForPlayer(playerId)) {
+    pointsByTask.set(b.taskId, (pointsByTask.get(b.taskId) ?? 0) + b.points);
+  }
   let running = 0;
   return scoredTasks.map((t) => {
     running += pointsByTask.get(t.id) ?? 0;
@@ -1120,12 +1185,16 @@ function getRecapTasks(): Task[] {
     .sort((a, b) => a.weekNumber - b.weekNumber);
 }
 
-/** Standings from every score up to and including the given week number. */
+/**
+ * Standings from every score and bonus up to and including the given week
+ * number.
+ */
 function standingsUpToWeek(weekNumber: number): LeaderboardRow[] {
+  const isUpToWeek = (taskId: string) =>
+    (completedWeekByTask.get(taskId) ?? Infinity) <= weekNumber;
   return computeStandings(
-    scores.filter(
-      (s) => (completedWeekByTask.get(s.taskId) ?? Infinity) <= weekNumber,
-    ),
+    scores.filter((s) => isUpToWeek(s.taskId)),
+    bonusPoints.filter((b) => isUpToWeek(b.taskId)),
   );
 }
 

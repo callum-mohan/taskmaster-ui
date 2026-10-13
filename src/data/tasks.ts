@@ -68,9 +68,15 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-04",
     weekNumber: 4,
-    title: "Task Tank: Sink or Swim",
-    description: "",
-    brief: "",
+    title: "Task Tank",
+    description:
+      "Impress the Taskmaster with a new idea, product or invention.",
+    brief: [
+      "Create a new idea, product or invention that will impress the Taskmaster.",
+      "Create a compelling presentation to showcase your idea e.g. a slide deck, a video advert, a demo, or any other format that effectively communicates your concept.",
+      "Be prepared to answer questions and defend your concept before the Taskmaster.",
+      "Remember, creativity and originality are highly valued.",
+    ],
     releaseDate: "2026-10-09T13:00:00",
     deadline: "2026-10-16T13:00:00",
     format: "team",
@@ -87,7 +93,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-06",
     weekNumber: 6,
-    title: "???",
+    title: "New Roots",
     description: "",
     brief: "",
     releaseDate: "2026-10-23T13:00:00",
@@ -105,11 +111,12 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-08",
     weekNumber: 8,
-    title: "???",
+    title: "Humpty Dumpty",
     description: "",
     brief: "",
     releaseDate: "2026-11-06T13:00:00",
     deadline: "2026-11-13T13:00:00",
+    format: "team",
   },
   {
     id: "week-09",
@@ -123,7 +130,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
   {
     id: "week-10",
     weekNumber: 10,
-    title: "???",
+    title: "Whac-A-Mole",
     description: "",
     brief: "",
     releaseDate: "2026-11-20T13:00:00",
@@ -146,6 +153,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
     brief: "",
     releaseDate: "2026-12-04T13:00:00",
     deadline: "2026-12-11T13:00:00",
+    format: "team",
   },
   {
     id: "week-13",
@@ -182,6 +190,7 @@ const schedule: (Omit<Task, "status" | "format"> & {
     brief: "",
     releaseDate: "2027-01-15T13:00:00",
     deadline: "2027-01-22T13:00:00",
+    format: "team",
   },
 ];
 

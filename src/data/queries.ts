@@ -7,6 +7,7 @@ import type {
   CompetitionStats,
   FollowStanding,
   LeaderboardRow,
+  LostArchiveEntry,
   Player,
   PlayerCompareOptions,
   PlayerComparison,
@@ -29,12 +30,14 @@ import type {
   TeamTaskResultRow,
   WeekRecap,
   WhatsNewInfo,
+  FeatureUpdate,
 } from "../types";
 import { players, getPlayerById } from "./players";
 import { tasks, getTaskById, getCurrentTask, getTeamTasks } from "./tasks";
 import { scores, teamScores } from "./scores";
 import { teams, getTeamById, getTeamForPlayer } from "./teams";
 import { getRecapContent } from "./recaps";
+import { changelog } from "./changelog";
 import { withBase } from "../lib/url";
 
 // This module is the single "data layer" the UI talks to. Pages import these
@@ -1000,7 +1003,7 @@ export function getCommandPaletteItems(): CommandPaletteItem[] {
         group: "task" as const,
         href: withBase(`/tasks/${task.id}`),
         hint: `${weekLabel} · ${task.status}`,
-        keywords: `${weekLabel} ${task.status} ${task.description}`,
+        keywords: `${weekLabel} week ${task.weekNumber} w${task.weekNumber} ${task.status} ${task.description}`,
       };
     });
 
@@ -1060,6 +1063,16 @@ export function getWhatsNew(): WhatsNewInfo | undefined {
     status: task.status,
     href: withBase(`/tasks/${task.id}`),
   };
+}
+
+/**
+ * The site changelog, newest-first and capped at `limit`, for the homepage
+ * "what's new" modal.
+ */
+export function getRecentFeatures(limit = 6): FeatureUpdate[] {
+  return [...changelog]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, limit);
 }
 
 /**
@@ -1348,4 +1361,20 @@ export function getPlayerCompareOptions(
       .filter((row) => row.player.id !== playerId)
       .map(toOpponent),
   };
+}
+
+/**
+ * Task briefs filed in the 404 text adventure's archive room: every released
+ * (live or completed) task with a revealed title, oldest first. Upcoming and
+ * still-secret ("???") weeks stay locked away.
+ */
+export function getLostArchive(): LostArchiveEntry[] {
+  return tasks
+    .filter((t) => t.status !== "upcoming" && t.title !== "???")
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map((t) => ({
+      weekNumber: t.weekNumber,
+      title: t.title,
+      description: t.description,
+    }));
 }

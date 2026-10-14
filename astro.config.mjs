@@ -6,7 +6,7 @@ import cloudflare from "@astrojs/cloudflare";
 
 // https://astro.build/config
 export default defineConfig({
-  site: "https://www.eayltaskmaster.com",
+  site: "https://www.eayltaskmaster.co.uk",
   // Every page is rendered on request so admin edits show up immediately.
   output: "server",
   // No Astro sessions or image transforms are used, so skip provisioning the

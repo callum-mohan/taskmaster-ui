@@ -174,12 +174,12 @@ secrets:
 The last three are synced to the Worker as secrets on each deploy (the site
 fails closed if any is missing). Then, once:
 
-1. In Cloudflare, add `www.eayltaskmaster.com` as a **Custom Domain** on the
+1. In Cloudflare, add `www.eayltaskmaster.co.uk` as a **Custom Domain** on the
    `taskmaster-ui` Worker, and point DNS away from GitHub Pages.
 2. Disable GitHub Pages for the repository.
 3. If you also use the `*.workers.dev` URL, add it as a trusted domain:
    `neon neon-auth domain add https://<name>.workers.dev --branch production`
-   (`https://www.eayltaskmaster.com` is already trusted).
+   (`https://www.eayltaskmaster.co.uk` is already trusted).
 
 To test the built Worker locally, put the three secrets in
 `dist/server/.dev.vars` (git-ignored) after `npm run build`, then run

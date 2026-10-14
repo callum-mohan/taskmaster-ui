@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://www.eayltaskmaster.co.uk/sitemap-index.xml
+Sitemap: https://eayltaskmaster.co.uk/sitemap-index.xml

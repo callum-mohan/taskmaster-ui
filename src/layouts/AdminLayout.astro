@@ -108,7 +108,7 @@ const isActive = (href: string) =>
             admin && (
               <form
                 method="post"
-                action={withBase("/admin/login")}
+                action={withBase("/logout")}
                 class="flex items-center gap-3"
               >
                 <span
@@ -117,7 +117,7 @@ const isActive = (href: string) =>
                 >
                   {admin.name || admin.email}
                 </span>
-                <input type="hidden" name="intent" value="sign-out" />
+                <input type="hidden" name="portal" value="admin" />
                 <button
                   type="submit"
                   class="rounded-md border border-grid px-2.5 py-1 text-ink-dim transition-colors hover:border-ink-faint hover:text-ink"

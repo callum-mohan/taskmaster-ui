@@ -108,6 +108,47 @@ export interface AdminUser {
 }
 
 /**
+ * Where a player's sign-in account is up to:
+ *   "none"    → no email set, so no account can be made.
+ *   "invited" → email set; waiting for `npm run players:accounts`.
+ *   "pending" → account created; still on the temporary password.
+ *   "active"  → the player has set their own password.
+ */
+export type PlayerAccountStatus = "none" | "invited" | "pending" | "active";
+
+/** A player's sign-in account (`player_accounts`), as the admin sees it. */
+export interface PlayerAccount {
+  playerId: string;
+  email: string;
+  userId?: string;
+  mustChangePassword: boolean;
+}
+
+/** The signed-in player behind an `/account` request. */
+export interface SessionPlayer {
+  userId: string;
+  email: string;
+  playerId: string;
+  playerName: string;
+  bio?: string;
+  avatarUrl?: string;
+  mustChangePassword: boolean;
+  /** Also holds the `admin` role, so `/admin` is available too. */
+  isAdmin: boolean;
+}
+
+/**
+ * Whoever is signed in on a public page, for the navbar: players get a
+ * profile link, admins an admin link, and everyone signed in a logout.
+ */
+export interface Viewer {
+  name: string;
+  isAdmin: boolean;
+  /** Set when the account is linked to a player profile. */
+  playerId?: string;
+}
+
+/**
  * Every raw record for one request, loaded from Postgres in a single batch
  * (see `data/competition.ts`). The selectors in `data/queries.ts` are pure
  * computation over this snapshot.

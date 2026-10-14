@@ -3,18 +3,23 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../components/TerminalWindow.astro";
 import Notice from "../../../components/admin/Notice.astro";
 import PlayerAvatar from "../../../components/PlayerAvatar.astro";
+import AccountStatusBadge from "../../../components/admin/AccountStatusBadge.astro";
 import {
   btnPrimary,
   tableCell,
   tableHead,
 } from "../../../components/admin/styles";
 import { listPlayers } from "../../../data/admin";
+import { getAccountStatuses } from "../../../data/accounts";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
 
-const rows = await listPlayers();
+const [rows, accounts] = await Promise.all([
+  listPlayers(),
+  getAccountStatuses(),
+]);
 const done = Astro.url.searchParams.get("done");
 const subject = Astro.url.searchParams.get("name");
 ---
@@ -50,6 +55,7 @@ const subject = Astro.url.searchParams.get("name");
             <th scope="col" class:list={[tableHead, "hidden sm:table-cell"]}>
               id
             </th>
+            <th scope="col" class={tableHead}>account</th>
             <th scope="col" class={tableHead}
               ><span class="sr-only">actions</span></th
             >
@@ -78,6 +84,9 @@ const subject = Astro.url.searchParams.get("name");
                   ]}
                 >
                   {row.id}
+                </td>
+                <td class={tableCell}>
+                  <AccountStatusBadge status={accounts[row.id] ?? "none"} />
                 </td>
                 <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
                   <a

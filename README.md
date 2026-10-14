@@ -26,7 +26,7 @@ on request on **Cloudflare Workers**.
   the site uses Neon's HTTP driver (`@neondatabase/serverless`); scripts and
   migrations use `pg` (node-postgres) and `drizzle-kit`
 - [Neon Auth](https://neon.com/docs/auth/overview) (Managed Better Auth) for
-  admin sign-in, via `@neondatabase/auth`
+  admin and player sign-in, via `@neondatabase/auth`
 - Prettier (with `prettier-plugin-astro`)
 
 ## 📁 Project structure
@@ -37,9 +37,10 @@ db/
 └── seed-data.ts       # initial data (generated from the original mock data)
 drizzle/               # generated SQL migrations (`npm run db:generate`)
 scripts/
-└── create-admin.mjs   # `npm run admin:create` — bootstrap an admin account
+├── create-admin.mjs   # `npm run admin:create` — bootstrap an admin account
+└── create-player-accounts.mjs  # `npm run players:accounts` — player sign-ins
 src/
-├── middleware.ts      # per-request data loader + /admin auth guard
+├── middleware.ts      # per-request data loader + /admin and /account guards
 ├── components/        # Reusable, prop-driven .astro components
 │   └── admin/         # admin form controls (fields, score grid, delete confirm)
 ├── layouts/
@@ -57,12 +58,17 @@ src/
 │   ├── scores.ts      # rows → Score  ─┘  (points → positions; bonus points)
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
+│   ├── accounts.ts    # player sign-in accounts + self-service profile edits
 │   └── recaps.ts      # editorial recap copy (TypeScript)
 ├── lib/
 │   ├── auth.ts        # Neon Auth adapter for Astro (sign in/out, session)
-│   └── admin-forms.ts # admin form parsing + validation (zod)
+│   ├── admin-forms.ts # admin form parsing + validation (zod)
+│   └── account-forms.ts # player profile + password form validation
 ├── pages/
-│   ├── admin/                 # /admin — sign-in, dashboard, CRUD, scores
+│   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
+│   ├── login.astro            # /login — the player portal
+│   ├── logout.ts              # POST /logout — signs out (either portal)
+│   ├── account/               # /account — edit own profile, change password
 │   ├── index.astro            # homepage
 │   ├── tasks/                 # /tasks and /tasks/[id]
 │   ├── players/               # /players and /players/[id]
@@ -107,7 +113,7 @@ git-ignored `.env.local`:
 
 - `DATABASE_URL` — **pooled**; read by the site on every request.
 - `DATABASE_URL_UNPOOLED` — **direct**; used for migrations and seeding.
-- `NEON_AUTH_BASE_URL` — the branch's Neon Auth URL (admin sign-in).
+- `NEON_AUTH_BASE_URL` — the branch's Neon Auth URL (admin and player sign-in).
 
 Also add `NEON_AUTH_COOKIE_SECRET` to `.env.local` yourself (32+ random
 characters: `openssl rand -base64 32`); it signs the cached session cookie.
@@ -137,8 +143,10 @@ their members) and tasks, enter a week's scores in one grid, and record bonus
 points or deductions. Deletes ask for confirmation and list what else will be
 removed. Forms are plain HTML posts, so they work without JavaScript.
 
-- Sign-in uses Neon Auth (email + password). Only users with the `admin` role
-  get in; others are signed in but shown "no access".
+- Admins sign in at the **admin portal**, `/admin/login` (email + password
+  via Neon Auth). Only users with the `admin` role get in; anyone else (e.g.
+  a player at the wrong portal) is told so and, if they're a player, pointed
+  to their profile.
 - Public sign-up is **disabled** on the Neon Auth branch. Create admins with:
 
   ```sh
@@ -156,6 +164,52 @@ removed. Forms are plain HTML posts, so they work without JavaScript.
   `noindex`.
 - Each Neon branch has its own users: develop against `dev`, and create
   production admins with `--branch production`.
+
+## 👤 Player accounts
+
+Players sign in at the **player portal**, `/login`, with an email and
+password and edit **their own bio and avatar URL** at `/account`; changes are
+live immediately. Name, id, roster position, team and scores stay admin-only.
+There is no public sign-up: admins invite players. An admin account without
+a player profile is turned away from `/login` with a link to `/admin`; an
+admin who also plays can use either portal.
+
+The navbar shows `login` to visitors. Once signed in it becomes an
+`account` dropdown (a flat list in the mobile menu) with `profile` for
+players, `admin` for admins, and `logout`. Logging out is a `POST` to
+`/logout`. The session is only looked up when the request carries a Neon Auth
+session cookie, so anonymous page views make no auth call, and signed-in
+pages are sent `Cache-Control: private, no-store`.
+
+1. In `/admin/players/<id>`, fill in the **sign-in account** email. Emails
+   live in a separate `player_accounts` table and are never shown publicly.
+2. Create the accounts (on the linked branch, or add `--branch production`):
+
+   ```sh
+   npm run players:accounts -- --dry-run   # preview
+   npm run players:accounts
+   ```
+
+   This creates a Neon Auth user for every invited player without an
+   account, with a random temporary password, and prints a table of
+   temporary passwords **once** (they're stored nowhere). Like
+   `admin:create`, it briefly re-enables sign-up and always disables it
+   again. Re-running it only handles new invites. If an auth user already
+   exists with that email (e.g. an admin who also plays), it is linked and
+   keeps its password.
+
+3. Send each player their temporary password privately. On first sign-in
+   they must choose a new password before they can do anything else.
+
+**Forgotten password / changing a player's email:**
+`npm run players:accounts -- --reset <player-id> [--email new@example.com]`
+deletes the player's auth user and issues a new temporary password
+(optionally under a new email). Accounts that also hold the `admin` role are
+never deleted by the script.
+
+The admin player list shows each player's account status: no email,
+invited, temporary password or active. `/account` and `/login` are `no-store`
+and `noindex`, and a player-only account can't reach `/admin`.
 
 ## ☁️ Deployment (Cloudflare Workers)
 
@@ -198,22 +252,23 @@ Tailwind turns into utilities (`text-acid`, `bg-term-panel`, `border-grid`, …)
 
 Run from the project root:
 
-| Command                | Action                                   |
-| :--------------------- | :--------------------------------------- |
-| `npm install`          | Install dependencies                     |
-| `npm run dev`          | Start the dev server at `localhost:4321` |
-| `npm run build`        | Build the production site to `./dist/`   |
-| `npm run preview`      | Preview the production build locally     |
-| `npm run deploy`       | Build and deploy to Cloudflare Workers   |
-| `npm run admin:create` | Create an admin account (see Admin)      |
-| `npm run check`        | Type-check + diagnostics (`astro check`) |
-| `npm run format`       | Format the codebase with Prettier        |
-| `npm run format:check` | Check formatting without writing changes |
-| `npm run db:check`     | Run a test query against `DATABASE_URL`  |
-| `npm run db:generate`  | Generate a SQL migration from the schema |
-| `npm run db:migrate`   | Apply pending migrations (direct URL)    |
-| `npm run db:seed`      | Insert missing initial data (idempotent) |
-| `npm run db:studio`    | Browse and edit data in Drizzle Studio   |
+| Command                    | Action                                                 |
+| :------------------------- | :----------------------------------------------------- |
+| `npm install`              | Install dependencies                                   |
+| `npm run dev`              | Start the dev server at `localhost:4321`               |
+| `npm run build`            | Build the production site to `./dist/`                 |
+| `npm run preview`          | Preview the production build locally                   |
+| `npm run deploy`           | Build and deploy to Cloudflare Workers                 |
+| `npm run admin:create`     | Create an admin account (see Admin)                    |
+| `npm run players:accounts` | Create invited players' accounts (see Player accounts) |
+| `npm run check`            | Type-check + diagnostics (`astro check`)               |
+| `npm run format`           | Format the codebase with Prettier                      |
+| `npm run format:check`     | Check formatting without writing changes               |
+| `npm run db:check`         | Run a test query against `DATABASE_URL`                |
+| `npm run db:generate`      | Generate a SQL migration from the schema               |
+| `npm run db:migrate`       | Apply pending migrations (direct URL)                  |
+| `npm run db:seed`          | Insert missing initial data (idempotent)               |
+| `npm run db:studio`        | Browse and edit data in Drizzle Studio                 |
 
 Before committing, keep `npm run check` and `npm run format:check` clean.
 

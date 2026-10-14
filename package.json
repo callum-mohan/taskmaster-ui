@@ -19,6 +19,7 @@
     "db:seed": "tsx --env-file=.env.local db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "admin:create": "node scripts/create-admin.mjs",
+    "players:accounts": "node scripts/create-player-accounts.mjs",
     "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {

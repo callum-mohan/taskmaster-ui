@@ -21,7 +21,7 @@ export function formValues(form: FormData): FormValues {
   return values;
 }
 
-function parseWith<T>(
+export function parseWith<T>(
   schema: z.ZodType<T>,
   input: unknown,
   values: FormValues,
@@ -102,14 +102,18 @@ const integer = (message = "Enter a whole number.") =>
 
 // ── Players ───────────────────────────────────────────────────────────
 
+// Shared with the player self-service form (`account-forms.ts`).
+export const bioField = optionalText(500);
+export const avatarUrlField = optionalText(500).refine(
+  (v) => v === null || /^(https:\/\/|\/)\S+$/.test(v),
+  "Use an https:// URL or a site path starting with /.",
+);
+
 const playerSchema = z.object({
   id: slug,
   name: requiredText(80),
-  bio: optionalText(500),
-  avatarUrl: optionalText(500).refine(
-    (v) => v === null || /^(https:\/\/|\/)\S+$/.test(v),
-    "Use an https:// URL or a site path starting with /.",
-  ),
+  bio: bioField,
+  avatarUrl: avatarUrlField,
   sortOrder: optionalOrder,
 });
 
@@ -128,6 +132,28 @@ export function parsePlayerForm(form: FormData): ParseResult<PlayerInput> {
     },
     values,
   );
+}
+
+const playerEmailSchema = z.object({
+  // Blank withdraws the invite.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(254, "Keep it under 254 characters.")
+    .refine((v) => v === "" || z.email().safeParse(v).success, {
+      message: "Enter a valid email address.",
+    })
+    .transform((v) => (v === "" ? null : v)),
+});
+
+export type PlayerEmailInput = z.output<typeof playerEmailSchema>;
+
+export function parsePlayerEmailForm(
+  form: FormData,
+): ParseResult<PlayerEmailInput> {
+  const values = formValues(form);
+  return parseWith(playerEmailSchema, { email: values.email ?? "" }, values);
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────

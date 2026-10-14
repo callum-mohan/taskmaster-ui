@@ -3,7 +3,10 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../components/TerminalWindow.astro";
 import PlayerForm from "../../../components/admin/PlayerForm.astro";
 import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
-import { btnGhost } from "../../../components/admin/styles";
+import AdminField from "../../../components/admin/AdminField.astro";
+import AccountStatusBadge from "../../../components/admin/AccountStatusBadge.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost, btnPrimary } from "../../../components/admin/styles";
 import {
   deletePlayer,
   describeWriteError,
@@ -12,6 +15,12 @@ import {
   updatePlayer,
 } from "../../../data/admin";
 import {
+  accountStatus,
+  getPlayerAccount,
+  setPlayerEmail,
+} from "../../../data/accounts";
+import {
+  parsePlayerEmailForm,
   parsePlayerForm,
   type FieldErrors,
   type FormValues,
@@ -25,6 +34,8 @@ const id = Astro.params.id!;
 const player = await getPlayer(id);
 if (!player) return Astro.rewrite("/404");
 
+let account = await getPlayerAccount(id);
+
 let values: FormValues = {
   id: player.id,
   name: player.name,
@@ -34,36 +45,74 @@ let values: FormValues = {
 };
 let errors: FieldErrors = {};
 let formError: string | undefined;
+let accountEmail = account?.email ?? "";
+let accountError: string | undefined;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  if (form.get("intent") === "delete") {
+  const intent = form.get("intent");
+  if (intent === "delete") {
     await deletePlayer(id);
     const query = new URLSearchParams({ done: "deleted", name: player.name });
     return Astro.redirect(withBase(`/admin/players?${query}`));
   }
-  // The id is immutable; ignore whatever was posted for it.
-  form.set("id", id);
-  const parsed = parsePlayerForm(form);
-  values = parsed.values;
-  if (!parsed.ok) {
-    errors = parsed.errors;
+  if (intent === "account") {
+    const parsed = parsePlayerEmailForm(form);
+    accountEmail = parsed.values.email ?? "";
+    if (!parsed.ok) {
+      accountError = parsed.errors.email;
+    } else {
+      try {
+        const saved = await setPlayerEmail(id, parsed.data.email);
+        if (saved) {
+          return Astro.redirect(
+            withBase(`/admin/players/${id}?done=account#account`),
+          );
+        }
+        accountError =
+          "This player already has an account; reset it with the script below.";
+        account = await getPlayerAccount(id);
+      } catch (error) {
+        accountError = describeWriteError(error);
+        if (!accountError) throw error;
+      }
+    }
   } else {
-    try {
-      await updatePlayer(id, parsed.data);
-      const query = new URLSearchParams({
-        done: "saved",
-        name: parsed.data.name,
-      });
-      return Astro.redirect(withBase(`/admin/players?${query}`));
-    } catch (error) {
-      formError = describeWriteError(error);
-      if (!formError) throw error;
+    // The id is immutable; ignore whatever was posted for it.
+    form.set("id", id);
+    const parsed = parsePlayerForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updatePlayer(id, parsed.data);
+        const query = new URLSearchParams({
+          done: "saved",
+          name: parsed.data.name,
+        });
+        return Astro.redirect(withBase(`/admin/players?${query}`));
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
     }
   }
 }
 
 const impact = await getPlayerDeleteImpact(id);
+const status = accountStatus(account);
+const linked = Boolean(account?.userId);
+const accountSaved = Astro.url.searchParams.get("done") === "account";
+const resetCommand = `npm run players:accounts -- --reset ${player.id} [--email new@example.com]`;
+const statusHelp: Record<typeof status, string> = {
+  none: "Add the player's email to invite them, then run the provisioning script.",
+  invited:
+    "Waiting for an account. Run the script below to create it with a temporary password.",
+  pending:
+    "Account created. The player must change their temporary password on first sign-in.",
+  active: "The player has signed in and set their own password.",
+};
 ---
 
 <AdminLayout title={`Edit ${player.name}`}>
@@ -87,6 +136,74 @@ const impact = await getPlayerDeleteImpact(id);
       formError={formError}
     />
   </TerminalWindow>
+  <section id="account" aria-labelledby="account-heading" class="mt-8">
+    <h2
+      id="account-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      sign-in account
+    </h2>
+    <TerminalWindow title={`~/players/${player.id}/account`}>
+      {
+        accountSaved && !accountError && (
+          <Notice tone="success" class="mb-5">
+            Account email saved.
+          </Notice>
+        )
+      }
+      <div class="flex flex-wrap items-center gap-3">
+        <AccountStatusBadge status={status} />
+        <p class="text-sm text-ink-dim">{statusHelp[status]}</p>
+      </div>
+      {
+        linked ? (
+          <div class="mt-5 space-y-3 text-sm">
+            <p class="text-ink">
+              <span class="text-ink-faint">email:</span> {account?.email}
+            </p>
+            <p class="text-ink-dim">
+              To reset the password (or change the email), run:
+            </p>
+            <p class="overflow-x-auto whitespace-nowrap rounded-md border border-grid bg-term-bg px-3 py-2 text-xs text-ink">
+              <span class="text-acid" aria-hidden="true">
+                ${" "}
+              </span>
+              <code>{resetCommand}</code>
+            </p>
+          </div>
+        ) : (
+          <form method="post" class="mt-5 space-y-4" novalidate>
+            <input type="hidden" name="intent" value="account" />
+            <AdminField
+              label="email"
+              name="email"
+              type="email"
+              value={accountEmail}
+              error={accountError}
+              autocomplete="off"
+              hint="Private: used only for sign-in. Leave blank to withdraw the invite."
+            />
+            <button type="submit" class={btnPrimary}>
+              save email
+            </button>
+            {status === "invited" && (
+              <p class="text-xs text-ink-faint">
+                Then run <code class="text-ink">npm run players:accounts</code>{" "}
+                to create the account.
+              </p>
+            )}
+          </form>
+        )
+      }
+      {
+        linked && accountError && (
+          <Notice tone="error" class="mt-5">
+            {accountError}
+          </Notice>
+        )
+      }
+    </TerminalWindow>
+  </section>
   <section aria-labelledby="danger-heading" class="mt-8">
     <h2
       id="danger-heading"

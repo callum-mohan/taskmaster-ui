@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -128,5 +129,29 @@ export const bonusPoints = pgTable(
   (t) => [
     index("bonus_points_task_id_idx").on(t.taskId),
     index("bonus_points_player_id_idx").on(t.playerId),
+  ],
+);
+
+/**
+ * A player's sign-in account. An admin sets `email` (the invite); the
+ * `players:accounts` script creates the Neon Auth user with a temporary
+ * password and records its id in `userId`. Kept out of `players` so emails
+ * never reach the public competition snapshot.
+ */
+export const playerAccounts = pgTable(
+  "player_accounts",
+  {
+    playerId: text()
+      .primaryKey()
+      .references(() => players.id, { onDelete: "cascade" }),
+    // Stored lower-cased so it matches Better Auth's normalised emails.
+    email: text().notNull().unique("player_accounts_email_unique"),
+    // The Neon Auth user id; null until the account is provisioned.
+    userId: text().unique("player_accounts_user_id_unique"),
+    mustChangePassword: boolean().notNull().default(true),
+    createdAt: timestamp({ mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("player_accounts_email_lower", sql`${t.email} = lower(${t.email})`),
   ],
 );

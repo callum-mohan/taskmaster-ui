@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bonusPoints,
+  playerAccounts,
   players,
   taskScores,
   tasks,
@@ -99,7 +100,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m]] = await db.batch([
+  const [[s], [b], [m], [a]] = await db.batch([
     db
       .select({ n: count() })
       .from(taskScores)
@@ -112,11 +113,16 @@ export async function getPlayerDeleteImpact(
       .select({ n: count() })
       .from(teamMembers)
       .where(eq(teamMembers.playerId, id)),
+    db
+      .select({ n: count() })
+      .from(playerAccounts)
+      .where(eq(playerAccounts.playerId, id)),
   ]);
   return [
     { label: "individual score", count: s.n },
     { label: "bonus / deduction", count: b.n },
     { label: "team membership", count: m.n },
+    { label: "sign-in account link", count: a.n },
   ];
 }
 
@@ -392,6 +398,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   tasks_week_number_unique: "Another task already uses that week number.",
   tasks_deadline_after_release: "The deadline must be after the release date.",
   team_members_player_id_unique: "A player can only be in one team.",
+  player_accounts_email_unique: "Another player already uses that email.",
+  player_accounts_email_lower: "Use a lower-case email address.",
 };
 
 /**

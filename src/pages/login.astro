@@ -1,0 +1,171 @@
+---
+import Layout from "../layouts/Layout.astro";
+import TerminalWindow from "../components/TerminalWindow.astro";
+import AdminField from "../components/admin/AdminField.astro";
+import Notice from "../components/admin/Notice.astro";
+import { btnPrimary, btnGhost } from "../components/admin/styles";
+import { getSessionPlayer } from "../data/accounts";
+import { createAuth, hasAdminRole, isAuthNetworkError } from "../lib/auth";
+import { withBase } from "../lib/url";
+
+// The player portal. Admins have their own at /admin/login; an admin who is
+// also a player can use either.
+
+// Only same-site account paths are allowed as a post-sign-in destination, so
+// `next` can't be used as an open redirect.
+const safeNext = (value: string | null | undefined) =>
+  value && /^\/account(?:[/?#]|$)/.test(value) && !value.startsWith("//")
+    ? value
+    : undefined;
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+let email = "";
+let error: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  email = String(form.get("email") ?? "").trim();
+  const password = String(form.get("password") ?? "");
+  if (!email || !password) {
+    error = "Enter your email and password.";
+  } else {
+    const result = await createAuth(Astro).signIn.email({ email, password });
+    const signedIn = result.data?.user;
+    if (!result.error && signedIn) {
+      const player = await getSessionPlayer({
+        id: signedIn.id,
+        name: signedIn.name,
+        email: signedIn.email,
+        isAdmin: hasAdminRole((signedIn as { role?: string | null }).role),
+      });
+      const target = player
+        ? (safeNext(String(form.get("next") ?? "")) ?? "/account")
+        : // Signed in, but not as a player: the GET explains what to do.
+          "/login";
+      return Astro.redirect(withBase(target));
+    }
+    error = isAuthNetworkError(result.error?.code)
+      ? "The sign-in service is unreachable. Try again in a moment."
+      : "Incorrect email or password.";
+  }
+}
+
+const viewer = await Astro.locals.getViewer();
+if (viewer?.playerId && Astro.request.method === "GET") {
+  return Astro.redirect(withBase(next ?? "/account"));
+}
+
+// Signed in, but with an account that has no player profile.
+const wrongPortal = viewer && !viewer.playerId ? viewer : undefined;
+const signedOut = Astro.url.searchParams.has("signedOut");
+---
+
+<Layout
+  title="Player sign in"
+  description="Player sign-in for EAYL Taskmaster."
+>
+  <div class="mx-auto max-w-md px-4 py-12 sm:px-6 sm:py-16">
+    <p class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim">
+      ssh player@taskmaster
+    </p>
+    <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-ink">
+      PLAYER <span class="text-acid text-glow">LOGIN</span>
+    </h1>
+    <p class="mt-2 text-sm text-ink-dim">
+      <span class="text-acid">// </span>sign in to edit your player profile. No
+      account yet? Ask the Taskmaster for an invite.
+    </p>
+
+    {
+      signedOut && !error && !wrongPortal && (
+        <Notice tone="success" class="mt-6">
+          Signed out.
+        </Notice>
+      )
+    }
+
+    {
+      wrongPortal ? (
+        <TerminalWindow title="~/login/access.log" class="mt-6">
+          {wrongPortal.isAdmin ? (
+            <>
+              <Notice tone="error">
+                {wrongPortal.name} is an admin account without a player profile.
+              </Notice>
+              <p class="mt-4 text-sm text-ink-dim">
+                This is the player portal. Head to the admin area, or sign out
+                and sign in as a player.
+              </p>
+            </>
+          ) : (
+            <>
+              <Notice tone="error">
+                {wrongPortal.name}'s account isn't linked to a player profile.
+              </Notice>
+              <p class="mt-4 text-sm text-ink-dim">
+                Ask an admin to check the email on your player profile, or sign
+                in with a different account.
+              </p>
+            </>
+          )}
+          <div class="mt-6 flex flex-wrap gap-3">
+            {wrongPortal.isAdmin && (
+              <a href={withBase("/admin")} class={btnPrimary}>
+                go to admin
+              </a>
+            )}
+            <form method="post" action={withBase("/logout")}>
+              <button
+                type="submit"
+                class={wrongPortal.isAdmin ? btnGhost : btnPrimary}
+              >
+                sign out
+              </button>
+            </form>
+          </div>
+        </TerminalWindow>
+      ) : (
+        <TerminalWindow title="~/login.sh" meta="players" class="mt-6">
+          {error && (
+            <Notice tone="error" class="mb-5">
+              {error}
+            </Notice>
+          )}
+          <form method="post" class="space-y-5">
+            {next && <input type="hidden" name="next" value={next} />}
+            <AdminField
+              label="email"
+              name="email"
+              type="email"
+              value={email}
+              autocomplete="username"
+              required
+            />
+            <AdminField
+              label="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <button type="submit" class:list={[btnPrimary, "w-full"]}>
+              sign in
+            </button>
+          </form>
+          <div class="mt-5 space-y-1 text-xs text-ink-faint">
+            <p>Forgotten your password? Ask an admin to reset it.</p>
+            <p>
+              Admin?{" "}
+              <a
+                href={withBase("/admin/login")}
+                class="text-cyan hover:underline"
+              >
+                use the admin portal
+              </a>
+            </p>
+          </div>
+        </TerminalWindow>
+      )
+    }
+  </div>
+</Layout>

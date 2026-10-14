@@ -1,0 +1,73 @@
+---
+import type { DeleteImpact } from "../../data/admin";
+import { btnDanger, btnGhost } from "./styles";
+
+interface Props {
+  /** What is being deleted, e.g. `player "Eva"`. */
+  subject: string;
+  /** Rows that will also be removed (zero counts are omitted). */
+  impact?: DeleteImpact[];
+  /** `intent` value posted with the confirmed delete. */
+  intent?: string;
+  /** Extra hidden fields, e.g. the id of a bonus row. */
+  fields?: Record<string, string | number>;
+  /** Summary button label. */
+  label?: string;
+  class?: string;
+}
+
+const {
+  subject,
+  impact = [],
+  intent = "delete",
+  fields = {},
+  label = "delete",
+  class: className,
+} = Astro.props;
+
+const effects = impact.filter((i) => i.count > 0);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+---
+
+<!-- A no-JS confirmation step: the destructive button only appears once the
+     admin opens the disclosure and reads what will be removed. -->
+<details class:list={["group", className]}>
+  <summary
+    class:list={[
+      btnGhost,
+      "cursor-pointer list-none hover:border-danger/60 hover:text-danger",
+    ]}
+  >
+    {label}
+  </summary>
+  <div
+    class="mt-3 space-y-3 rounded-md border border-danger/50 bg-danger/5 p-4 text-sm"
+  >
+    <p class="text-ink">
+      <span class="font-bold text-danger">rm</span>{` ${subject}?`}
+    </p>
+    {
+      effects.length > 0 ? (
+        <p class="text-ink-dim">
+          This also removes{" "}
+          {effects
+            .map((e) => plural(e.count, e.label))
+            .join(", ")
+            .replace(/, ([^,]*)$/, " and $1")}
+          . This can't be undone.
+        </p>
+      ) : (
+        <p class="text-ink-dim">This can't be undone.</p>
+      )
+    }
+    <form method="post">
+      <input type="hidden" name="intent" value={intent} />
+      {
+        Object.entries(fields).map(([name, value]) => (
+          <input type="hidden" name={name} value={String(value)} />
+        ))
+      }
+      <button type="submit" class={btnDanger}>confirm delete</button>
+    </form>
+  </div>
+</details>

@@ -2,7 +2,8 @@
 import Layout from "../../layouts/Layout.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
 import StatCard from "../../components/StatCard.astro";
-import { getLeaderboard, getCompetitionStats } from "../../data/queries";
+
+const { getLeaderboard, getCompetitionStats } = await Astro.locals.getQueries();
 
 const roster = getLeaderboard();
 const stats = getCompetitionStats();

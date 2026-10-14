@@ -96,6 +96,32 @@ export interface TeamScore {
   comment?: string;
 }
 
+/**
+ * The signed-in user behind an admin request (from Neon Auth). Only users with
+ * the `admin` role may use the admin area.
+ */
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+/**
+ * Every raw record for one request, loaded from Postgres in a single batch
+ * (see `data/competition.ts`). The selectors in `data/queries.ts` are pure
+ * computation over this snapshot.
+ */
+export interface CompetitionData {
+  players: Player[];
+  teams: Team[];
+  /** Ascending by week number, with status derived at load time. */
+  tasks: Task[];
+  scores: Score[];
+  teamScores: TeamScore[];
+  bonusPoints: BonusPoint[];
+}
+
 // Derived view models used by the UI. Keeping these separate from the
 // raw records means pages receive ready-to-render data.
 

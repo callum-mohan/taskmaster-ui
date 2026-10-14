@@ -9,13 +9,14 @@ import ScoreBadge from "../components/ScoreBadge.astro";
 import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
 import WhatsNewModal from "../components/WhatsNewModal.astro";
-import { getCurrentTask } from "../data/tasks";
-import {
+
+const {
+  getCurrentTask,
   getTopPlayers,
   getRecentResults,
   getCompetitionStats,
   getRecentFeatures,
-} from "../data/queries";
+} = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
 const topPlayers = getTopPlayers(5);

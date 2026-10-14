@@ -1,7 +1,8 @@
 ---
 import type { Player } from "../types";
-import { getPlayerIcon } from "../data/queries";
 import { withBase } from "../lib/url";
+
+const { getPlayerIcon } = await Astro.locals.getQueries();
 
 interface Props {
   player: Player;

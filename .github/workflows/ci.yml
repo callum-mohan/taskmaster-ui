@@ -34,12 +34,10 @@ jobs:
       - name: Type-check (astro check)
         run: npm run check
 
+      # Pages render on request (Cloudflare Workers), so the build needs no
+      # database access or secrets.
       - name: Build
         run: npm run build
-        env:
-          # Pooled Neon connection string (production branch); the data
-          # layer reads players, tasks and scores from it at build time.
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

@@ -1,0 +1,25 @@
+---
+interface Props {
+  tone: "success" | "error";
+  class?: string;
+}
+
+const { tone, class: className } = Astro.props;
+
+const config: Record<Props["tone"], { prefix: string; classes: string }> = {
+  success: { prefix: "ok", classes: "border-acid-dim bg-acid/10 text-acid" },
+  error: {
+    prefix: "error",
+    classes: "border-danger/60 bg-danger/10 text-danger",
+  },
+};
+const { prefix, classes } = config[tone];
+---
+
+<div
+  role={tone === "error" ? "alert" : "status"}
+  class:list={["rounded-md border px-4 py-3 text-sm", classes, className]}
+>
+  <span class="font-bold">[{prefix}]</span>
+  <slot />
+</div>

@@ -4,9 +4,9 @@ import * as schema from "./schema";
 import { withVerifiedSsl } from "./url";
 
 /**
- * Creates a Drizzle client over a node-postgres pool. Shared by the Astro
- * build (`./index.ts`) and the Node scripts in `db/`, which each supply
- * their own connection string.
+ * Creates a Drizzle client over a node-postgres pool for the Node scripts in
+ * `db/` (seeding, checks), which each supply their own connection string. The
+ * site itself uses the Workers-friendly HTTP client in `./index.ts`.
  */
 export function createDb(connectionString: string) {
   const pool = new pg.Pool({

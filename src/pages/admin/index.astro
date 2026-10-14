@@ -1,0 +1,121 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import StatCard from "../../components/StatCard.astro";
+import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
+import { btnPrimary, btnGhost } from "../../components/admin/styles";
+import { getAdminCounts } from "../../data/admin";
+import { withBase } from "../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+const [counts, { getCurrentTask }] = await Promise.all([
+  getAdminCounts(),
+  Astro.locals.getQueries(),
+]);
+const current = getCurrentTask();
+const admin = Astro.locals.admin;
+
+const sections = [
+  {
+    href: "/admin/scores",
+    label: "record scores",
+    hint: "per-week grid + bonus points",
+  },
+  {
+    href: "/admin/tasks",
+    label: "manage tasks",
+    hint: "briefs, dates and formats",
+  },
+  {
+    href: "/admin/players",
+    label: "manage players",
+    hint: "roster, bios and avatars",
+  },
+  { href: "/admin/teams", label: "manage teams", hint: "squads and members" },
+];
+---
+
+<AdminLayout title="Dashboard">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+    <span class="text-acid">$</span> whoami
+  </h1>
+  <p class="mt-2 text-sm text-ink-dim">
+    Signed in as <span class="text-ink">{admin?.email}</span>. Changes go live
+    on the public site as soon as you save.
+  </p>
+
+  <section aria-labelledby="counts-heading" class="mt-8">
+    <h2 id="counts-heading" class="sr-only">Totals</h2>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <StatCard label="players" value={counts.players} />
+      <StatCard label="teams" value={counts.teams} />
+      <StatCard label="tasks" value={counts.tasks} />
+      <StatCard label="scores" value={counts.scores} />
+      <StatCard label="bonuses" value={counts.bonuses} />
+    </div>
+  </section>
+
+  <div class="mt-8 grid gap-6 lg:grid-cols-2">
+    <TerminalWindow title="~/tasks/current" meta="now">
+      <h2 class="sr-only">Current task</h2>
+      {
+        current ? (
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-bold tracking-widest text-magenta">
+                WEEK {String(current.weekNumber).padStart(2, "0")}
+              </span>
+              <TaskStatusBadge status={current.status} />
+            </div>
+            <p class="text-lg font-bold text-ink">{current.title}</p>
+            <div class="flex flex-wrap gap-3 pt-2">
+              <a
+                href={withBase(`/admin/scores/${current.id}`)}
+                class={btnPrimary}
+              >
+                score this week
+              </a>
+              <a href={withBase(`/admin/tasks/${current.id}`)} class={btnGhost}>
+                edit task
+              </a>
+            </div>
+          </div>
+        ) : (
+          <p class="text-sm text-ink-dim">
+            No live or upcoming task.{" "}
+            <a
+              href={withBase("/admin/tasks/new")}
+              class="text-cyan hover:underline"
+            >
+              Add one
+            </a>
+            .
+          </p>
+        )
+      }
+    </TerminalWindow>
+
+    <TerminalWindow title="~/admin/commands" meta="shortcuts">
+      <h2 class="sr-only">Sections</h2>
+      <ul class="space-y-2">
+        {
+          sections.map((s) => (
+            <li>
+              <a
+                href={withBase(s.href)}
+                class="group flex items-baseline justify-between gap-4 rounded-md border border-grid px-3 py-2 transition-colors hover:border-acid-dim"
+              >
+                <span class="text-sm text-ink group-hover:text-acid">
+                  <span class="text-acid">&gt;</span> {s.label}
+                </span>
+                <span class="text-xs text-ink-faint">{s.hint}</span>
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </TerminalWindow>
+  </div>
+</AdminLayout>

@@ -1,8 +1,9 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import TaskCard from "../../components/TaskCard.astro";
-import { getTaskSummaries } from "../../data/queries";
 import type { TaskStatus } from "../../types";
+
+const { getTaskSummaries } = await Astro.locals.getQueries();
 
 const summaries = getTaskSummaries();
 

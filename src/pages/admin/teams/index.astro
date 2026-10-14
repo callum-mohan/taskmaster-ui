@@ -1,0 +1,107 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import {
+  btnPrimary,
+  tableCell,
+  tableHead,
+} from "../../../components/admin/styles";
+import { listPlayers, listTeams } from "../../../data/admin";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+const [rows, playerRows] = await Promise.all([listTeams(), listPlayers()]);
+const playerName = new Map(playerRows.map((p) => [p.id, p.name]));
+const unassigned = playerRows.filter(
+  (p) => !rows.some((t) => t.memberIds.includes(p.id)),
+);
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+---
+
+<AdminLayout title="Teams">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+        <span class="text-acid">$</span> ls ~/teams
+      </h1>
+      <p class="mt-1 text-sm text-ink-dim">
+        {rows.length} squads ·{" "}
+        {
+          unassigned.length === 0
+            ? "every player is in a team"
+            : `${unassigned.length} player${unassigned.length === 1 ? "" : "s"} without a team`
+        }
+      </p>
+    </div>
+    <a href={withBase("/admin/teams/new")} class={btnPrimary}>+ new team</a>
+  </div>
+
+  {
+    done && subject && (
+      <Notice tone="success" class="mt-6">
+        {done === "deleted" ? `Deleted ${subject}.` : `Saved ${subject}.`}
+      </Notice>
+    )
+  }
+
+  <TerminalWindow title="~/teams" class="mt-6" bodyClass="p-0 sm:p-0">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class={tableHead}>#</th>
+            <th scope="col" class={tableHead}>team</th>
+            <th scope="col" class={tableHead}>members</th>
+            <th scope="col" class={tableHead}
+              ><span class="sr-only">actions</span></th
+            >
+          </tr>
+        </thead>
+        <tbody>
+          {
+            rows.map((row) => (
+              <tr class="transition-colors hover:bg-term-panel-2">
+                <td class:list={[tableCell, "tabular-nums text-ink-faint"]}>
+                  {row.sortOrder}
+                </td>
+                <td class={tableCell}>
+                  <span class="text-ink">{row.name}</span>
+                  {row.tagline && (
+                    <span class="block text-xs text-ink-faint">
+                      {row.tagline}
+                    </span>
+                  )}
+                </td>
+                <td class:list={[tableCell, "text-xs text-ink-dim"]}>
+                  {row.memberIds.length === 0
+                    ? "—"
+                    : row.memberIds
+                        .map((id) => playerName.get(id) ?? id)
+                        .join(", ")}
+                </td>
+                <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
+                  <a
+                    href={withBase(`/admin/teams/${row.id}`)}
+                    class="text-cyan hover:underline"
+                    aria-label={`Edit ${row.name}`}
+                  >
+                    edit
+                  </a>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+      {
+        rows.length === 0 && (
+          <p class="p-6 text-sm text-ink-dim">No teams yet.</p>
+        )
+      }
+    </div>
+  </TerminalWindow>
+</AdminLayout>

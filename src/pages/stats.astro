@@ -3,7 +3,8 @@ import Layout from "../layouts/Layout.astro";
 import StatCard from "../components/StatCard.astro";
 import AwardCard from "../components/AwardCard.astro";
 import { withBase } from "../lib/url";
-import { getCompetitionStats, getAwards } from "../data/queries";
+
+const { getCompetitionStats, getAwards } = await Astro.locals.getQueries();
 
 const stats = getCompetitionStats();
 const awards = getAwards();

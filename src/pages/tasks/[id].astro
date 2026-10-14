@@ -1,5 +1,4 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import { withBase } from "../../lib/url";
 import TerminalWindow from "../../components/TerminalWindow.astro";
@@ -11,27 +10,23 @@ import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
-import { tasks } from "../../data/tasks";
-import {
+
+const {
   getTaskSummary,
   getTaskResults,
   getTaskPager,
   getRecapTaskIds,
   getTeamResults,
   getTaskBonuses,
-} from "../../data/queries";
-import { teams } from "../../data/teams";
-
-export const getStaticPaths = (() => {
-  return tasks.map((task) => ({ params: { id: task.id } }));
-}) satisfies GetStaticPaths;
+  teams,
+} = await Astro.locals.getQueries();
 
 const { id } = Astro.params;
 const summary = getTaskSummary(id!);
 
 // Unknown id → 404 rather than a broken page.
 if (!summary) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const { task, winner, winningScore, winningTeam } = summary;

@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "taskmaster-ui",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  // Secrets (set with `npx wrangler secret put <NAME>`): DATABASE_URL,
+  // NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET. Locally they come from
+  // `.env.local`.
+}

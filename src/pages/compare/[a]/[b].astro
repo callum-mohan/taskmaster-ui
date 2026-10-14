@@ -1,26 +1,15 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../../layouts/Layout.astro";
 import ComparisonView from "../../../components/ComparisonView.astro";
-import { players } from "../../../data/players";
-import { getPlayerComparison } from "../../../data/queries";
 
-export const getStaticPaths = (() => {
-  // Every ordered pair of distinct players, so the pickers can land on the
-  // exact left/right combination the user chose.
-  return players.flatMap((a) =>
-    players
-      .filter((b) => b.id !== a.id)
-      .map((b) => ({ params: { a: a.id, b: b.id } })),
-  );
-}) satisfies GetStaticPaths;
+const { players, getPlayerComparison } = await Astro.locals.getQueries();
 
 const { a, b } = Astro.params;
 const comparison = getPlayerComparison(a!, b!);
 
 // Unknown or identical ids → 404 rather than a broken page.
 if (!comparison) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 ---
 

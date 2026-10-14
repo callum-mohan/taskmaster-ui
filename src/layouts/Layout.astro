@@ -5,8 +5,9 @@ import Footer from "../components/Footer.astro";
 import CommandPalette from "../components/CommandPalette.astro";
 import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
-import { getCommandPaletteItems, getWhatsNew } from "../data/queries";
 import { withBase } from "../lib/url";
+
+const { getCommandPaletteItems, getWhatsNew } = await Astro.locals.getQueries();
 
 interface Props {
   /** Page-specific title segment; the site name is appended automatically. */

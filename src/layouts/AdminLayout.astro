@@ -1,0 +1,137 @@
+---
+import "../styles/global.css";
+import { withBase } from "../lib/url";
+
+interface Props {
+  /** Page-specific title segment. */
+  title: string;
+  /** Hide the admin nav (e.g. on the sign-in page). */
+  bare?: boolean;
+}
+
+const { title, bare = false } = Astro.props;
+const admin = Astro.locals.admin;
+const { pathname } = Astro.url;
+
+const nav = [
+  { href: "/admin", label: "dashboard" },
+  { href: "/admin/players", label: "players" },
+  { href: "/admin/teams", label: "teams" },
+  { href: "/admin/tasks", label: "tasks" },
+  { href: "/admin/scores", label: "scores" },
+];
+
+const isActive = (href: string) =>
+  href === "/admin"
+    ? pathname.replace(/\/$/, "") === "/admin"
+    : pathname === href || pathname.startsWith(`${href}/`);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <script is:inline>
+      (function () {
+        var valid = ["dark", "light", "amber", "cyan", "magenta"];
+        try {
+          var saved = localStorage.getItem("eayl-theme");
+          var theme = valid.indexOf(saved) >= 0 ? saved : "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
+    <meta name="theme-color" content="#080b10" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>{`${title} · admin · EAYL Taskmaster`}</title>
+  </head>
+  <body class="flex min-h-screen flex-col antialiased">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[70] focus:bg-acid focus:text-term-bg focus:px-3 focus:py-1 focus:font-bold"
+      >Skip to content</a
+    >
+    <header class="border-b border-grid bg-term-bg/80">
+      <div
+        class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6"
+      >
+        <a href={withBase("/admin")} class="text-sm font-extrabold text-ink">
+          <span class="text-acid">root@</span>taskmaster<span
+            class="text-ink-faint">:~/admin</span
+          >
+        </a>
+        {
+          !bare && (
+            <nav
+              aria-label="Admin"
+              class="order-last w-full sm:order-none sm:w-auto"
+            >
+              <ul class="flex flex-wrap gap-1 text-xs">
+                {nav.map((item) => (
+                  <li>
+                    <a
+                      href={withBase(item.href)}
+                      aria-current={isActive(item.href) ? "page" : undefined}
+                      class:list={[
+                        "block rounded-md px-2.5 py-1.5 transition-colors",
+                        isActive(item.href)
+                          ? "bg-acid/10 text-acid"
+                          : "text-ink-dim hover:text-ink",
+                      ]}
+                    >
+                      {item.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )
+        }
+        <div class="ml-auto flex items-center gap-3 text-xs">
+          <a
+            href={withBase("/")}
+            class="text-cyan hover:underline"
+            target="_blank"
+            rel="noopener">view site ↗</a
+          >
+          {
+            admin && (
+              <form
+                method="post"
+                action={withBase("/admin/login")}
+                class="flex items-center gap-3"
+              >
+                <span
+                  class="hidden text-ink-faint md:inline"
+                  title={admin.email}
+                >
+                  {admin.name || admin.email}
+                </span>
+                <input type="hidden" name="intent" value="sign-out" />
+                <button
+                  type="submit"
+                  class="rounded-md border border-grid px-2.5 py-1 text-ink-dim transition-colors hover:border-ink-faint hover:text-ink"
+                >
+                  sign out
+                </button>
+              </form>
+            )
+          }
+        </div>
+      </div>
+    </header>
+    <main id="main" class="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">
+      <slot />
+    </main>
+  </body>
+</html>

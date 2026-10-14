@@ -2,23 +2,31 @@
 import { defineConfig, envField } from "astro/config";
 
 import tailwindcss from "@tailwindcss/vite";
-import sitemap from "@astrojs/sitemap";
+import cloudflare from "@astrojs/cloudflare";
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://www.eayltaskmaster.com",
-  integrations: [
-    sitemap({
-      // The head-to-head pages are every ordered pair of players (~600 URLs).
-      // Keep them crawlable but out of the sitemap so it stays focused on the
-      // canonical pages; the /compare/ landing page is retained.
-      filter: (page) => !/\/compare\/[^/]+\/[^/]+\//.test(page),
-    }),
-  ],
+  // Every page is rendered on request so admin edits show up immediately.
+  output: "server",
+  // No Astro sessions or image transforms are used, so skip provisioning the
+  // KV namespace and Images binding the adapter would otherwise add.
+  adapter: cloudflare({ imageService: "passthrough" }),
+  session: false,
   env: {
     schema: {
-      // Pooled Neon connection string; the data layer reads it at build time.
+      // Pooled Neon connection string; the data layer reads it per request.
       DATABASE_URL: envField.string({ context: "server", access: "secret" }),
+      // Managed Better Auth (Neon Auth) for the admin area.
+      NEON_AUTH_BASE_URL: envField.string({
+        context: "server",
+        access: "secret",
+      }),
+      // Signs the cached session-data cookie (32+ characters).
+      NEON_AUTH_COOKIE_SECRET: envField.string({
+        context: "server",
+        access: "secret",
+      }),
     },
   },
   vite: {

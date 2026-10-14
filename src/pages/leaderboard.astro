@@ -5,12 +5,10 @@ import StandingsTable from "../components/StandingsTable.astro";
 import StatCard from "../components/StatCard.astro";
 import PlayerAvatar from "../components/PlayerAvatar.astro";
 import { withBase } from "../lib/url";
-import {
-  getLeaderboardWithMovement,
-  getCompetitionStats,
-  getPointsRaceChart,
-} from "../data/queries";
 import PointsChart from "../components/PointsChart.astro";
+
+const { getLeaderboardWithMovement, getCompetitionStats, getPointsRaceChart } =
+  await Astro.locals.getQueries();
 
 const leaderboard = getLeaderboardWithMovement();
 const stats = getCompetitionStats();

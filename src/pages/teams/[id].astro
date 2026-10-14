@@ -1,5 +1,4 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import TerminalWindow from "../../components/TerminalWindow.astro";
 import StatCard from "../../components/StatCard.astro";
@@ -8,24 +7,16 @@ import BackLink from "../../components/BackLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
 import { withBase } from "../../lib/url";
-import { teams } from "../../data/teams";
-import { getTeamTasks } from "../../data/tasks";
-import {
-  getTeamStanding,
-  getTeamResults,
-  getPlayerStanding,
-} from "../../data/queries";
 
-export const getStaticPaths = (() => {
-  return teams.map((team) => ({ params: { id: team.id } }));
-}) satisfies GetStaticPaths;
+const { getTeamTasks, getTeamStanding, getTeamResults, getPlayerStanding } =
+  await Astro.locals.getQueries();
 
 const { id } = Astro.params;
 const standing = getTeamStanding(id!);
 
 // Unknown id → 404 rather than a broken page.
 if (!standing) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const { team, members, rank } = standing;

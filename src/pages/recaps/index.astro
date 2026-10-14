@@ -1,8 +1,8 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import { withBase } from "../../lib/url";
-import { getRecapSummaries } from "../../data/queries";
-import { tasks } from "../../data/tasks";
+
+const { getRecapSummaries, tasks } = await Astro.locals.getQueries();
 
 const recaps = getRecapSummaries();
 

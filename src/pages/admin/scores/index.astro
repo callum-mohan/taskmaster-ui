@@ -1,0 +1,70 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import TaskStatusBadge from "../../../components/TaskStatusBadge.astro";
+import { getScoreCountsByTask } from "../../../data/admin";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+const [{ tasks, getCurrentTask }, counts] = await Promise.all([
+  Astro.locals.getQueries(),
+  getScoreCountsByTask(),
+]);
+const currentId = getCurrentTask()?.id;
+// Newest week first: that's the one usually being scored.
+const ordered = [...tasks].sort((a, b) => b.weekNumber - a.weekNumber);
+---
+
+<AdminLayout title="Scores">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> score --week
+  </h1>
+  <p class="mt-1 text-sm text-ink-dim">
+    Pick a week to enter points for every player (or squad) at once, and to add
+    bonuses or deductions.
+  </p>
+
+  <TerminalWindow title="~/scores" class="mt-6">
+    <ul class="grid gap-2 sm:grid-cols-2">
+      {
+        ordered.map((task) => {
+          const count = counts.get(task.id);
+          return (
+            <li>
+              <a
+                href={withBase(`/admin/scores/${task.id}`)}
+                class:list={[
+                  "group flex h-full flex-col gap-2 rounded-md border px-4 py-3 transition-colors hover:border-acid-dim",
+                  task.id === currentId ? "border-amber/50" : "border-grid",
+                ]}
+              >
+                <span class="flex items-center justify-between gap-3">
+                  <span class="text-xs font-bold tracking-widest text-magenta">
+                    WEEK {String(task.weekNumber).padStart(2, "0")}
+                    {task.format === "team" && (
+                      <span class="ml-2 text-cyan">TEAM</span>
+                    )}
+                  </span>
+                  <TaskStatusBadge status={task.status} />
+                </span>
+                <span class="text-sm text-ink group-hover:text-acid">
+                  {task.title}
+                </span>
+                <span class="text-xs text-ink-faint">
+                  {count?.scores
+                    ? `${count.scores} score${count.scores === 1 ? "" : "s"}`
+                    : "not scored"}
+                  {count?.bonuses ? ` · ${count.bonuses} bonus` : ""}
+                  {(count?.bonuses ?? 0) > 1 ? "es" : ""}
+                </span>
+              </a>
+            </li>
+          );
+        })
+      }
+    </ul>
+    {tasks.length === 0 && <p class="text-sm text-ink-dim">No tasks yet.</p>}
+  </TerminalWindow>
+</AdminLayout>

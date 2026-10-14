@@ -1,5 +1,4 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import { withBase } from "../../lib/url";
 import TerminalWindow from "../../components/TerminalWindow.astro";
@@ -10,18 +9,16 @@ import ScoreBadge from "../../components/ScoreBadge.astro";
 import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
-import { getRecapTaskIds, getWeekRecap } from "../../data/queries";
 
-export const getStaticPaths = (() => {
-  return getRecapTaskIds().map((id) => ({ params: { id } }));
-}) satisfies GetStaticPaths;
+const { getWeekRecap, getRecapTaskIds } = await Astro.locals.getQueries();
 
 const { id } = Astro.params;
-const recap = getWeekRecap(id!);
+// Only completed, scored weeks have a recap; anything else (including a live
+// week that already has scores entered) is a 404.
+const recap = getRecapTaskIds().includes(id!) ? getWeekRecap(id!) : undefined;
 
-// Unknown or unscored week → 404 rather than a broken page.
 if (!recap) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const {

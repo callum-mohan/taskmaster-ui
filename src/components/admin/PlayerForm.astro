@@ -1,0 +1,82 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import SlugFromName from "./SlugFromName.astro";
+import { btnPrimary, btnGhost } from "./styles";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  mode: "create" | "edit";
+  values: FormValues;
+  errors?: FieldErrors;
+  /** Form-level error (e.g. a database constraint). */
+  formError?: string;
+}
+
+const { mode, values, errors = {}, formError } = Astro.props;
+const isCreate = mode === "create";
+---
+
+<form method="post" class="space-y-5" data-slug-form>
+  <input type="hidden" name="intent" value="save" />
+  {formError && <Notice tone="error">{formError}</Notice>}
+  <div class="grid gap-5 sm:grid-cols-2">
+    <AdminField
+      label="name"
+      name="name"
+      value={values.name}
+      error={errors.name}
+      required
+      attrs={{ "data-slug-source": "" }}
+    />
+    <AdminField
+      label="id"
+      name="id"
+      value={values.id}
+      error={errors.id}
+      readonly={!isCreate}
+      required
+      hint={isCreate
+        ? "Used in the player's URL (/players/<id>). Can't be changed later."
+        : "Used in URLs, so it can't be changed."}
+      attrs={isCreate ? { "data-slug-target": "" } : {}}
+    />
+  </div>
+  <AdminField
+    label="bio"
+    name="bio"
+    value={values.bio}
+    error={errors.bio}
+    rows={3}
+    hint="Optional. Shown on the player's profile."
+  />
+  <div class="grid gap-5 sm:grid-cols-2">
+    <AdminField
+      label="avatar url"
+      name="avatarUrl"
+      value={values.avatarUrl}
+      error={errors.avatarUrl}
+      placeholder="https://… or /avatars/…"
+      hint="Optional. Leave blank for a generated icon."
+    />
+    <AdminField
+      label="roster position"
+      name="sortOrder"
+      type="number"
+      min={0}
+      value={values.sortOrder}
+      error={errors.sortOrder}
+      hint={isCreate
+        ? "Optional. Blank adds the player to the end of the roster."
+        : "Display order; also breaks ties on equal points."}
+    />
+  </div>
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" class={btnPrimary}>
+      {isCreate ? "create player" : "save changes"}
+    </button>
+    <a href={withBase("/admin/players")} class={btnGhost}>cancel</a>
+  </div>
+</form>
+{isCreate && <SlugFromName />}

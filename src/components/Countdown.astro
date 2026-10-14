@@ -7,7 +7,7 @@ interface Props {
 
 const { deadline, class: className = "" } = Astro.props;
 
-// Build-time fallback so the component is not empty before JS runs or if
+// Server-rendered fallback so the component is not empty before JS runs or if
 // JavaScript is disabled. The client script keeps it ticking live.
 const diff = Math.max(0, new Date(deadline).getTime() - Date.now());
 const totalSeconds = Math.floor(diff / 1000);

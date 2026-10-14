@@ -1,27 +1,26 @@
-name: Deploy to GitHub Pages
+name: Deploy to Cloudflare Workers
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Allow this job to clone the repo and create a Pages deployment.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# Allow one concurrent deployment, skipping runs queued between the
-# run in-progress and latest queued. Do not cancel in-progress runs so
-# deployments complete.
+# One deployment at a time; queued runs wait rather than cancel so every
+# deploy completes.
 concurrency:
-  group: pages
+  group: deploy
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build
+  deploy:
+    name: Build & deploy
     runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://www.eayltaskmaster.com
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,26 +34,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Pages render on request, so the build needs no database access.
       - name: Build
         run: npm run build
-        env:
-          # Pooled Neon connection string (production branch); the data
-          # layer reads players, tasks and scores from it at build time.
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      # Deploys the generated Worker (dist/server/wrangler.json) and syncs the
+      # runtime secrets it reads per request from the GitHub secrets below.
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: dist/
-
-  deploy:
-    name: Deploy
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          command: deploy
+          secrets: |
+            DATABASE_URL
+            NEON_AUTH_BASE_URL
+            NEON_AUTH_COOKIE_SECRET
+        env:
+          # Production Neon branch: pooled connection string and Auth URL.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
+          # 32+ random characters (`openssl rand -base64 32`).
+          NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}

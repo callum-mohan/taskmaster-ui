@@ -1,20 +1,37 @@
-import { asc } from "drizzle-orm";
-import type { BonusPoint, Score, TeamScore } from "../types";
-import { db } from "../db";
-import {
+import type {
+  BonusPoint,
+  Player,
+  Score,
+  Task,
+  Team,
+  TeamScore,
+} from "../types";
+import type {
   bonusPoints as bonusPointsTable,
   taskScores as taskScoresTable,
   teamScores as teamScoresTable,
 } from "../db/schema";
-import { tasks } from "./tasks";
-import { players } from "./players";
-import { teams } from "./teams";
+
+export interface ScoreRows {
+  taskScores: (typeof taskScoresTable.$inferSelect)[];
+  teamScores: (typeof teamScoresTable.$inferSelect)[];
+  /** In recorded (id) order. */
+  bonusPoints: (typeof bonusPointsTable.$inferSelect)[];
+}
+
+export interface ScoreRecords {
+  /** All individual scores (team-task points expanded to members included). */
+  scores: Score[];
+  /** All team results for scored team tasks, ranked. */
+  teamScores: TeamScore[];
+  /** All bonus points and deductions. */
+  bonusPoints: BonusPoint[];
+}
 
 /**
- * Raw weekly results, loaded from Postgres once at build time and grouped by
- * task id (`week-NN`). Only points are stored: finishing positions and
- * leaderboard totals are derived below and in `queries.ts`, so recording a
- * week's results is just inserting its rows (e.g. via `npm run db:studio`).
+ * Raw weekly results, grouped by task id (`week-NN`). Only points are stored:
+ * finishing positions and leaderboard totals are derived below and in
+ * `queries.ts`, so recording a week's results is just inserting its rows.
  *
  * - `task_scores`  → one row per player per individual task.
  * - `team_scores`  → one row per squad per team task. A squad's points are
@@ -27,225 +44,211 @@ import { teams } from "./teams";
  * A week with no rows has simply not been scored yet. (A task's `status` is
  * derived from its dates in `tasks.ts`, so nothing needs flipping manually.)
  */
-const [taskScoreRows, teamScoreRows, bonusRows] = await Promise.all([
-  db.select().from(taskScoresTable),
-  db.select().from(teamScoresTable),
-  db.select().from(bonusPointsTable).orderBy(asc(bonusPointsTable.id)),
-]);
+export function buildScoreRecords(
+  rows: ScoreRows,
+  {
+    players,
+    teams,
+    tasks,
+  }: { players: Player[]; teams: Team[]; tasks: Task[] },
+): ScoreRecords {
+  /** Groups rows into `{ [taskId]: T[] }`, preserving row order. */
+  function groupByTask<Row extends { taskId: string }, T>(
+    items: Row[],
+    map: (row: Row) => T,
+  ): Record<string, T[]> {
+    const grouped: Record<string, T[]> = {};
+    for (const row of items) (grouped[row.taskId] ??= []).push(map(row));
+    return grouped;
+  }
 
-/** Groups rows into `{ [taskId]: T[] }`, preserving row order. */
-function groupByTask<Row extends { taskId: string }, T>(
-  rows: Row[],
-  map: (row: Row) => T,
-): Record<string, T[]> {
-  const grouped: Record<string, T[]> = {};
-  for (const row of rows) (grouped[row.taskId] ??= []).push(map(row));
-  return grouped;
-}
-
-/** Individual points per task: `{ [taskId]: { [playerId]: points } }`. */
-export const weeklyTaskScores: Record<
-  string,
-  Record<string, number>
-> = Object.fromEntries(
-  Object.entries(
-    groupByTask(taskScoreRows, (row) => [row.playerId, row.points] as const),
-  ).map(([taskId, entries]) => [taskId, Object.fromEntries(entries)]),
-);
-
-/** Squad points per team task: `{ [taskId]: { [teamId]: points } }`. */
-export const weeklyTeamScores: Record<
-  string,
-  Record<string, number>
-> = Object.fromEntries(
-  Object.entries(
-    groupByTask(teamScoreRows, (row) => [row.teamId, row.points] as const),
-  ).map(([taskId, entries]) => [taskId, Object.fromEntries(entries)]),
-);
-
-/** Bonus points and deductions per task, in the order they were recorded. */
-export const weeklyBonusPoints: Record<
-  string,
-  { playerId: string; points: number; reason: string }[]
-> = groupByTask(bonusRows, ({ playerId, points, reason }) => ({
-  playerId,
-  points,
-  reason,
-}));
-
-// Optional notes explaining how a player's task points were made up.
-const scoreComments = new Map(
-  taskScoreRows
-    .filter((row) => row.comment !== null)
-    .map((row) => [`${row.taskId}:${row.playerId}`, row.comment as string]),
-);
-
-// Roster order, used only as a deterministic tie-breaker when two players
-// earn the same points on a task so finishing positions stay stable.
-const rosterIndex = new Map(players.map((p, index) => [p.id, index]));
-
-// Team order, the equivalent deterministic tie-breaker for team standings.
-const teamOrderIndex = new Map(teams.map((t, index) => [t.id, index]));
-
-/**
- * Ranks `{ id, points }` entries highest-first and assigns standard
- * competition finishing positions (ties share a position, the next position
- * skips accordingly: …3, 3, 5). Ties are broken by `tieIndex` so the output
- * is deterministic. Shared by both the individual and team scoring passes.
- */
-function rankByPoints(
-  entries: { id: string; points: number }[],
-  tieIndex: Map<string, number>,
-): { id: string; points: number; position: number }[] {
-  const ranked = [...entries].sort(
-    (a, b) =>
-      b.points - a.points ||
-      (tieIndex.get(a.id) ?? 0) - (tieIndex.get(b.id) ?? 0),
+  /** Individual points per task: `{ [taskId]: { [playerId]: points } }`. */
+  const weeklyTaskScores: Record<
+    string,
+    Record<string, number>
+  > = Object.fromEntries(
+    Object.entries(
+      groupByTask(
+        rows.taskScores,
+        (row) => [row.playerId, row.points] as const,
+      ),
+    ).map(([taskId, entries]) => [taskId, Object.fromEntries(entries)]),
   );
 
-  let previousPoints: number | null = null;
-  let sharedPosition = 0;
-  return ranked.map((entry, index) => {
-    const position =
-      entry.points === previousPoints ? sharedPosition : index + 1;
-    previousPoints = entry.points;
-    sharedPosition = position;
-    return { ...entry, position };
-  });
-}
+  /** Squad points per team task: `{ [taskId]: { [teamId]: points } }`. */
+  const weeklyTeamScores: Record<
+    string,
+    Record<string, number>
+  > = Object.fromEntries(
+    Object.entries(
+      groupByTask(rows.teamScores, (row) => [row.teamId, row.points] as const),
+    ).map(([taskId, entries]) => [taskId, Object.fromEntries(entries)]),
+  );
 
-/**
- * Team results per team task, ranked. Weeks with no recorded team points are
- * skipped. This is the raw record the team leaderboard is derived from.
- */
-function buildTeamScores(): TeamScore[] {
-  const result: TeamScore[] = [];
+  /** Bonus points and deductions per task, in the order they were recorded. */
+  const weeklyBonusPoints: Record<
+    string,
+    { playerId: string; points: number; reason: string }[]
+  > = groupByTask(rows.bonusPoints, ({ playerId, points, reason }) => ({
+    playerId,
+    points,
+    reason,
+  }));
 
-  for (const task of tasks) {
-    if (task.format !== "team") continue;
-    const weekScores = weeklyTeamScores[task.id];
-    if (!weekScores) continue;
+  // Optional notes explaining how a player's task points were made up.
+  const scoreComments = new Map(
+    rows.taskScores
+      .filter((row) => row.comment !== null)
+      .map((row) => [`${row.taskId}:${row.playerId}`, row.comment as string]),
+  );
 
-    const ranked = rankByPoints(
-      Object.entries(weekScores).map(([teamId, points]) => ({
-        id: teamId,
-        points,
-      })),
-      teamOrderIndex,
+  // Roster order, used only as a deterministic tie-breaker when two players
+  // earn the same points on a task so finishing positions stay stable.
+  const rosterIndex = new Map(players.map((p, index) => [p.id, index]));
+
+  // Team order, the equivalent deterministic tie-breaker for team standings.
+  const teamOrderIndex = new Map(teams.map((t, index) => [t.id, index]));
+
+  /**
+   * Ranks `{ id, points }` entries highest-first and assigns standard
+   * competition finishing positions (ties share a position, the next position
+   * skips accordingly: …3, 3, 5). Ties are broken by `tieIndex` so the output
+   * is deterministic. Shared by both the individual and team scoring passes.
+   */
+  function rankByPoints(
+    entries: { id: string; points: number }[],
+    tieIndex: Map<string, number>,
+  ): { id: string; points: number; position: number }[] {
+    const ranked = [...entries].sort(
+      (a, b) =>
+        b.points - a.points ||
+        (tieIndex.get(a.id) ?? 0) - (tieIndex.get(b.id) ?? 0),
     );
 
-    for (const entry of ranked) {
-      result.push({
-        taskId: task.id,
-        teamId: entry.id,
-        points: entry.points,
-        position: entry.position,
-      });
-    }
+    let previousPoints: number | null = null;
+    let sharedPosition = 0;
+    return ranked.map((entry, index) => {
+      const position =
+        entry.points === previousPoints ? sharedPosition : index + 1;
+      previousPoints = entry.points;
+      sharedPosition = position;
+      return { ...entry, position };
+    });
   }
 
-  return result;
-}
+  /**
+   * Team results per team task, ranked. Weeks with no recorded team points are
+   * skipped. This is the raw record the team leaderboard is derived from.
+   */
+  function buildTeamScores(): TeamScore[] {
+    const result: TeamScore[] = [];
 
-// Team membership lookup for expanding team points down to each member.
-const membersByTeamId = new Map(teams.map((t) => [t.id, t.memberIds]));
+    for (const task of tasks) {
+      if (task.format !== "team") continue;
+      const weekScores = weeklyTeamScores[task.id];
+      if (!weekScores) continue;
 
-/**
- * Expands the static weekly points into flat `Score` records. For individual
- * tasks, players are ranked by points. For team tasks, each squad is ranked by
- * its points and every member inherits the squad's points and finishing
- * position — so the individual leaderboard reflects team results too. Ties
- * share a position (…3, 3, 5). Weeks with no recorded points are skipped.
- */
-function buildScores(): Score[] {
-  const result: Score[] = [];
+      const ranked = rankByPoints(
+        Object.entries(weekScores).map(([teamId, points]) => ({
+          id: teamId,
+          points,
+        })),
+        teamOrderIndex,
+      );
 
-  for (const task of tasks) {
-    if (task.format === "team") {
-      for (const teamScore of teamScores.filter((t) => t.taskId === task.id)) {
-        const memberIds = membersByTeamId.get(teamScore.teamId) ?? [];
-        for (const playerId of memberIds) {
-          result.push({
-            taskId: task.id,
-            playerId,
-            position: teamScore.position,
-            points: teamScore.points,
-          });
-        }
+      for (const entry of ranked) {
+        result.push({
+          taskId: task.id,
+          teamId: entry.id,
+          points: entry.points,
+          position: entry.position,
+        });
       }
-      continue;
     }
 
-    const weekScores = weeklyTaskScores[task.id];
-    if (!weekScores) continue;
-
-    const ranked = rankByPoints(
-      Object.entries(weekScores).map(([playerId, points]) => ({
-        id: playerId,
-        points,
-      })),
-      rosterIndex,
-    );
-
-    for (const entry of ranked) {
-      const comment = scoreComments.get(`${task.id}:${entry.id}`);
-      result.push({
-        taskId: task.id,
-        playerId: entry.id,
-        position: entry.position,
-        points: entry.points,
-        ...(comment !== undefined && { comment }),
-      });
-    }
+    return result;
   }
 
-  return result;
-}
+  // Team membership lookup for expanding team points down to each member.
+  const membersByTeamId = new Map(teams.map((t) => [t.id, t.memberIds]));
 
-/**
- * Flattens the weekly bonus entries into `BonusPoint` records, in week order.
- * Entries for unknown tasks or players are skipped so a typo can't create a
- * phantom player or week.
- */
-function buildBonusPoints(): BonusPoint[] {
-  const result: BonusPoint[] = [];
-  const sortedTasks = [...tasks].sort((a, b) => a.weekNumber - b.weekNumber);
+  /**
+   * Expands the static weekly points into flat `Score` records. For individual
+   * tasks, players are ranked by points. For team tasks, each squad is ranked by
+   * its points and every member inherits the squad's points and finishing
+   * position — so the individual leaderboard reflects team results too. Ties
+   * share a position (…3, 3, 5). Weeks with no recorded points are skipped.
+   */
+  function buildScores(): Score[] {
+    const result: Score[] = [];
 
-  for (const task of sortedTasks) {
-    for (const entry of weeklyBonusPoints[task.id] ?? []) {
-      if (!rosterIndex.has(entry.playerId) || entry.points === 0) continue;
-      result.push({ taskId: task.id, ...entry });
+    for (const task of tasks) {
+      if (task.format === "team") {
+        for (const teamScore of teamScores.filter(
+          (t) => t.taskId === task.id,
+        )) {
+          const memberIds = membersByTeamId.get(teamScore.teamId) ?? [];
+          for (const playerId of memberIds) {
+            result.push({
+              taskId: task.id,
+              playerId,
+              position: teamScore.position,
+              points: teamScore.points,
+            });
+          }
+        }
+        continue;
+      }
+
+      const weekScores = weeklyTaskScores[task.id];
+      if (!weekScores) continue;
+
+      const ranked = rankByPoints(
+        Object.entries(weekScores).map(([playerId, points]) => ({
+          id: playerId,
+          points,
+        })),
+        rosterIndex,
+      );
+
+      for (const entry of ranked) {
+        const comment = scoreComments.get(`${task.id}:${entry.id}`);
+        result.push({
+          taskId: task.id,
+          playerId: entry.id,
+          position: entry.position,
+          points: entry.points,
+          ...(comment !== undefined && { comment }),
+        });
+      }
     }
+
+    return result;
   }
 
-  return result;
-}
+  /**
+   * Flattens the weekly bonus entries into `BonusPoint` records, in week order.
+   * Entries for unknown tasks or players are skipped so a typo can't create a
+   * phantom player or week.
+   */
+  function buildBonusPoints(): BonusPoint[] {
+    const result: BonusPoint[] = [];
+    const sortedTasks = [...tasks].sort((a, b) => a.weekNumber - b.weekNumber);
 
-// All team results for scored team tasks, ranked.
-export const teamScores: TeamScore[] = buildTeamScores();
+    for (const task of sortedTasks) {
+      for (const entry of weeklyBonusPoints[task.id] ?? []) {
+        if (!rosterIndex.has(entry.playerId) || entry.points === 0) continue;
+        result.push({ taskId: task.id, ...entry });
+      }
+    }
 
-// All individual scores (team-task points expanded to members included).
-export const scores: Score[] = buildScores();
+    return result;
+  }
 
-// All bonus points and deductions.
-export const bonusPoints: BonusPoint[] = buildBonusPoints();
-
-export function getBonusPointsForPlayer(playerId: string): BonusPoint[] {
-  return bonusPoints.filter((b) => b.playerId === playerId);
-}
-
-export function getBonusPointsForTask(taskId: string): BonusPoint[] {
-  return bonusPoints.filter((b) => b.taskId === taskId);
-}
-
-export function getScoresForTask(taskId: string): Score[] {
-  return scores.filter((s) => s.taskId === taskId);
-}
-
-export function getScoresForPlayer(playerId: string): Score[] {
-  return scores.filter((s) => s.playerId === playerId);
-}
-
-export function getTeamScoresForTask(taskId: string): TeamScore[] {
-  return teamScores.filter((s) => s.taskId === taskId);
+  const teamScores = buildTeamScores();
+  return {
+    teamScores,
+    scores: buildScores(),
+    bonusPoints: buildBonusPoints(),
+  };
 }

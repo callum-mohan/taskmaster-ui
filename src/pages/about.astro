@@ -3,8 +3,8 @@ import Layout from "../layouts/Layout.astro";
 import TerminalWindow from "../components/TerminalWindow.astro";
 import StatCard from "../components/StatCard.astro";
 import { withBase } from "../lib/url";
-import { tasks } from "../data/tasks";
-import { getCompetitionStats } from "../data/queries";
+
+const { tasks, getCompetitionStats } = await Astro.locals.getQueries();
 
 const stats = getCompetitionStats();
 const totalWeeks = tasks.length;

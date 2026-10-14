@@ -24,3 +24,7 @@ pnpm-debug.log*
 .idea/
 .neon
 .env.local
+
+# Cloudflare Workers local state and secrets
+.wrangler/
+.dev.vars*

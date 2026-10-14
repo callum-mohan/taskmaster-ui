@@ -1,0 +1,123 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import AdminField from "../../components/admin/AdminField.astro";
+import Notice from "../../components/admin/Notice.astro";
+import { btnPrimary, btnGhost } from "../../components/admin/styles";
+import { createAuth, getSessionUser } from "../../lib/auth";
+import { NEON_AUTH_NETWORK_ERROR_CODES } from "@neondatabase/auth/server";
+import { withBase } from "../../lib/url";
+
+// Only same-site admin paths are allowed as a post-sign-in destination, so
+// the `next` parameter can't be used as an open redirect.
+const safeNext = (value: string | null) =>
+  value && /^\/admin(?:[/?#]|$)/.test(value) && !value.startsWith("//")
+    ? value
+    : "/admin";
+
+const next = safeNext(Astro.url.searchParams.get("next"));
+let email = "";
+let error: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const auth = createAuth(Astro);
+
+  if (form.get("intent") === "sign-out") {
+    await auth.signOut();
+    return Astro.redirect(withBase("/admin/login?signedOut=1"));
+  }
+
+  email = String(form.get("email") ?? "").trim();
+  const password = String(form.get("password") ?? "");
+  if (!email || !password) {
+    error = "Enter your email and password.";
+  } else {
+    const result = await auth.signIn.email({ email, password });
+    if (!result.error) {
+      return Astro.redirect(withBase(safeNext(String(form.get("next") ?? ""))));
+    }
+    const code = result.error
+      .code as (typeof NEON_AUTH_NETWORK_ERROR_CODES)[number];
+    error = NEON_AUTH_NETWORK_ERROR_CODES.includes(code)
+      ? "The sign-in service is unreachable. Try again in a moment."
+      : "Incorrect email or password.";
+  }
+}
+
+const user = await getSessionUser(Astro);
+if (user?.isAdmin && Astro.request.method === "GET") {
+  return Astro.redirect(withBase(next));
+}
+
+const forbidden = Boolean(user && !user.isAdmin);
+const signedOut = Astro.url.searchParams.has("signedOut");
+---
+
+<AdminLayout title="Sign in" bare>
+  <div class="mx-auto max-w-md">
+    <h1 class="mb-6 text-2xl font-extrabold tracking-tight text-ink">
+      <span class="text-acid">$</span> sudo login
+    </h1>
+
+    {
+      signedOut && !error && (
+        <Notice tone="success" class="mb-4">
+          Signed out.
+        </Notice>
+      )
+    }
+
+    {
+      forbidden ? (
+        <TerminalWindow title="~/admin/access.log">
+          <Notice tone="error">
+            {user?.email} is signed in but doesn't have the admin role.
+          </Notice>
+          <p class="mt-4 text-sm text-ink-dim">
+            Ask an existing admin to grant access, or sign in with a different
+            account.
+          </p>
+          <form method="post" class="mt-6 flex gap-3">
+            <input type="hidden" name="intent" value="sign-out" />
+            <button type="submit" class={btnPrimary}>
+              sign out
+            </button>
+            <a href={withBase("/")} class={btnGhost}>
+              back to site
+            </a>
+          </form>
+        </TerminalWindow>
+      ) : (
+        <TerminalWindow title="~/admin/login.sh" meta="admins only">
+          {error && (
+            <Notice tone="error" class="mb-5">
+              {error}
+            </Notice>
+          )}
+          <form method="post" class="space-y-5">
+            <input type="hidden" name="next" value={next} />
+            <AdminField
+              label="email"
+              name="email"
+              type="email"
+              value={email}
+              autocomplete="username"
+              required
+            />
+            <AdminField
+              label="password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+            <button type="submit" class:list={[btnPrimary, "w-full"]}>
+              sign in
+            </button>
+          </form>
+        </TerminalWindow>
+      )
+    }
+  </div>
+</AdminLayout>

@@ -1,0 +1,56 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PlayerForm from "../../../components/admin/PlayerForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createPlayer, describeWriteError } from "../../../data/admin";
+import {
+  parsePlayerForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+let values: FormValues = {};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const parsed = parsePlayerForm(form);
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await createPlayer(parsed.data);
+      const query = new URLSearchParams({
+        done: "saved",
+        name: parsed.data.name,
+      });
+      return Astro.redirect(withBase(`/admin/players?${query}`));
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+---
+
+<AdminLayout title="New player">
+  <a href={withBase("/admin/players")} class={btnGhost}>&larr; ALL PLAYERS</a>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch ~/players/new
+  </h1>
+  <TerminalWindow title="~/players/new.md" class="mt-6">
+    <PlayerForm
+      mode="create"
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+</AdminLayout>

@@ -1,9 +1,22 @@
-import { and, asc, count, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  eq,
+  inArray,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { getDb } from "../db";
 import {
   bonusPoints,
   playerAccounts,
   players,
+  pollOptions,
+  polls,
+  pollVotes,
   taskScores,
   tasks,
   teamMembers,
@@ -13,6 +26,7 @@ import {
 import type {
   BonusInput,
   PlayerInput,
+  PollInput,
   TaskInput,
   TaskScoreInput,
   TeamInput,
@@ -27,6 +41,9 @@ export type PlayerRecord = typeof players.$inferSelect;
 export type TeamRecord = typeof teams.$inferSelect & { memberIds: string[] };
 export type TaskRecord = typeof tasks.$inferSelect;
 export type BonusRecord = typeof bonusPoints.$inferSelect;
+export type PollRecord = typeof polls.$inferSelect & {
+  options: (typeof pollOptions.$inferSelect)[];
+};
 
 /** Rows a delete will also remove through `ON DELETE CASCADE`. */
 export interface DeleteImpact {
@@ -41,13 +58,14 @@ const nextSortOrder = (table: typeof players | typeof teams) =>
 
 export async function getAdminCounts() {
   const db = getDb();
-  const [[p], [t], [k], [s], [ts], [b]] = await db.batch([
+  const [[p], [t], [k], [s], [ts], [b], [q]] = await db.batch([
     db.select({ n: count() }).from(players),
     db.select({ n: count() }).from(teams),
     db.select({ n: count() }).from(tasks),
     db.select({ n: count() }).from(taskScores),
     db.select({ n: count() }).from(teamScores),
     db.select({ n: count() }).from(bonusPoints),
+    db.select({ n: count() }).from(polls),
   ]);
   return {
     players: p.n,
@@ -55,6 +73,7 @@ export async function getAdminCounts() {
     tasks: k.n,
     scores: s.n + ts.n,
     bonuses: b.n,
+    polls: q.n,
   };
 }
 
@@ -389,6 +408,148 @@ export async function deleteBonus(taskId: string, id: number): Promise<void> {
     .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId)));
 }
 
+// ── Polls ─────────────────────────────────────────────────────────────
+
+export async function getPoll(id: string): Promise<PollRecord | undefined> {
+  const db = getDb();
+  const [[poll], options] = await db.batch([
+    db.select().from(polls).where(eq(polls.id, id)),
+    db
+      .select()
+      .from(pollOptions)
+      .where(eq(pollOptions.pollId, id))
+      .orderBy(asc(pollOptions.sortOrder), asc(pollOptions.id)),
+  ]);
+  return poll && { ...poll, options };
+}
+
+const pollValues = (input: PollInput) => ({
+  question: input.question,
+  description: input.description,
+  kind: input.kind,
+  minChoices: input.minChoices,
+  maxChoices: input.maxChoices,
+  opensAt: input.opensAt,
+  closesAt: input.closesAt,
+  resultsVisibility: input.resultsVisibility,
+  allowVoteChange: input.allowVoteChange,
+  anonymous: input.anonymous,
+  showOnHomeDays: input.showOnHomeDays,
+  published: input.published,
+  voteBonusPoints: input.voteBonusPoints,
+  bonusTaskId: input.bonusTaskId,
+});
+
+export async function createPoll(input: PollInput): Promise<void> {
+  const db = getDb();
+  await db.batch([
+    db.insert(polls).values({ id: input.id, ...pollValues(input) }),
+    db.insert(pollOptions).values(
+      input.options.map((option, index) => ({
+        pollId: input.id,
+        label: option.label,
+        sortOrder: index + 1,
+      })),
+    ),
+  ]);
+}
+
+/**
+ * Saves a poll and its options in one transaction. Existing options keep
+ * their id (and votes) when renamed or reordered; options left out are
+ * deleted along with their votes.
+ */
+export async function updatePoll(id: string, input: PollInput): Promise<void> {
+  const db = getDb();
+  const keptIds = input.options.flatMap((o) => (o.id ? [o.id] : []));
+  const added = input.options
+    .map((option, index) => ({ option, sortOrder: index + 1 }))
+    .filter(({ option }) => !option.id);
+  await db.batch([
+    db.update(polls).set(pollValues(input)).where(eq(polls.id, id)),
+    db
+      .delete(pollOptions)
+      .where(
+        keptIds.length > 0
+          ? and(eq(pollOptions.pollId, id), notInArray(pollOptions.id, keptIds))
+          : eq(pollOptions.pollId, id),
+      ),
+    ...input.options.flatMap((option, index) =>
+      option.id
+        ? [
+            db
+              .update(pollOptions)
+              .set({ label: option.label, sortOrder: index + 1 })
+              .where(
+                and(eq(pollOptions.id, option.id), eq(pollOptions.pollId, id)),
+              ),
+          ]
+        : [],
+    ),
+    ...(added.length > 0
+      ? [
+          db.insert(pollOptions).values(
+            added.map(({ option, sortOrder }) => ({
+              pollId: id,
+              label: option.label,
+              sortOrder,
+            })),
+          ),
+        ]
+      : []),
+  ]);
+}
+
+/** Moves a poll's opening or closing time (the "open/close now" actions). */
+export async function setPollWindow(
+  id: string,
+  window: { opensAt?: string; closesAt?: string },
+): Promise<void> {
+  await getDb().update(polls).set(window).where(eq(polls.id, id));
+}
+
+export async function setPollPublished(
+  id: string,
+  published: boolean,
+): Promise<void> {
+  await getDb().update(polls).set({ published }).where(eq(polls.id, id));
+}
+
+/** Clears every vote on a poll (e.g. after fixing a mistake in it). */
+export async function resetPollVotes(id: string): Promise<void> {
+  await getDb().delete(pollVotes).where(eq(pollVotes.pollId, id));
+}
+
+export async function getPollVoteImpact(id: string): Promise<DeleteImpact[]> {
+  const [{ n }] = await getDb()
+    .select({ n: countDistinct(pollVotes.playerId) })
+    .from(pollVotes)
+    .where(eq(pollVotes.pollId, id));
+  return [{ label: "player ballot", count: n }];
+}
+
+export async function getPollDeleteImpact(id: string): Promise<DeleteImpact[]> {
+  const db = getDb();
+  const [[o], [v]] = await db.batch([
+    db
+      .select({ n: count() })
+      .from(pollOptions)
+      .where(eq(pollOptions.pollId, id)),
+    db
+      .select({ n: countDistinct(pollVotes.playerId) })
+      .from(pollVotes)
+      .where(eq(pollVotes.pollId, id)),
+  ]);
+  return [
+    { label: "option", count: o.n },
+    { label: "player ballot", count: v.n },
+  ];
+}
+
+export async function deletePoll(id: string): Promise<void> {
+  await getDb().delete(polls).where(eq(polls.id, id));
+}
+
 // ── Errors ────────────────────────────────────────────────────────────
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
@@ -400,6 +561,11 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   team_members_player_id_unique: "A player can only be in one team.",
   player_accounts_email_unique: "Another player already uses that email.",
   player_accounts_email_lower: "Use a lower-case email address.",
+  polls_pkey: "A poll with that id already exists.",
+  polls_closes_after_opens: "The poll must close after it opens.",
+  polls_max_choices_at_least_min: "The maximum can't be below the minimum.",
+  polls_vote_bonus_points_range: "Voting bonus must be between 0 and 100.",
+  polls_bonus_task_id_tasks_id_fk: "That bonus week no longer exists.",
 };
 
 /**

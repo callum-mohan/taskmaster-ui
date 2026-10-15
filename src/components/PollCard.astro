@@ -1,0 +1,198 @@
+---
+import TerminalWindow from "./TerminalWindow.astro";
+import PollStatusBadge from "./PollStatusBadge.astro";
+import PollResultsList from "./PollResultsList.astro";
+import Notice from "./admin/Notice.astro";
+import type { PollCard } from "../types";
+import { describeChoiceRule } from "../lib/account-forms";
+import { withBase } from "../lib/url";
+
+interface Props {
+  card: PollCard;
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  /** Outcome of the viewer's last vote on this poll, if any. */
+  notice?: { tone: "success" | "error"; message: string };
+  class?: string;
+}
+
+const { card, formatStamp, notice, class: className } = Astro.props;
+const { poll, viewer, myChoices, hasVoted, canVote, results, resultsHint } =
+  card;
+
+const open = poll.status === "open";
+const multiple = poll.kind === "multiple";
+const voteHref = withBase(`/account/polls/${poll.id}`);
+const signInHref = withBase(
+  `/login?next=${encodeURIComponent(`/account/polls/${poll.id}`)}`,
+);
+const legendId = `poll-${poll.id}-question`;
+
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-4 py-2 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg";
+const btnGhost =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-grid px-4 py-2 text-xs font-bold tracking-widest text-ink-dim transition-colors hover:border-ink-faint hover:text-ink";
+const choice =
+  "flex cursor-pointer items-center gap-3 rounded-md border border-grid px-3 py-2.5 text-sm text-ink transition-colors hover:border-ink-faint has-[:checked]:border-acid-dim has-[:checked]:bg-acid/5";
+
+const bonus = poll.bonusTaskId ? poll.voteBonusPoints : 0;
+const rules = [
+  describeChoiceRule(poll),
+  ...(bonus > 0 ? [`+${bonus} pt${bonus === 1 ? "" : "s"} for voting`] : []),
+  poll.anonymous ? "anonymous" : "votes are public",
+  ...(poll.allowVoteChange ? [] : ["votes are final"]),
+];
+---
+
+<div id={`poll-${poll.id}`} class:list={["scroll-mt-24", className]}>
+  <TerminalWindow title={`~/polls/${poll.id}.poll`} meta={rules.join(" · ")}>
+    <div class="flex flex-wrap items-center gap-3">
+      <PollStatusBadge status={poll.status} />
+      <span class="text-[11px] text-ink-faint">
+        {
+          open
+            ? `closes ${formatStamp(poll.closesAt)}`
+            : `closed ${formatStamp(poll.closesAt)}`
+        }
+      </span>
+    </div>
+
+    <h3
+      id={legendId}
+      class="mt-3 text-xl font-extrabold leading-snug text-ink sm:text-2xl"
+    >
+      {poll.question}
+    </h3>
+    {
+      poll.description && (
+        <p class="mt-2 max-w-prose whitespace-pre-line text-sm leading-relaxed text-ink-dim">
+          {poll.description}
+        </p>
+      )
+    }
+    <p class="mt-2 text-[11px] text-ink-faint sm:hidden">{rules.join(" · ")}</p>
+
+    {
+      notice && (
+        <Notice tone={notice.tone} class="mt-4">
+          {notice.message}
+        </Notice>
+      )
+    }
+
+    {
+      canVote && (
+        <form method="post" action={voteHref} class="mt-5 space-y-4">
+          <fieldset aria-labelledby={legendId}>
+            <p class="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+              {describeChoiceRule(poll)}
+            </p>
+            <div class="grid gap-2">
+              {poll.options.map((option) => (
+                <label class={choice}>
+                  <input
+                    type={multiple ? "checkbox" : "radio"}
+                    name="choice"
+                    value={option.id}
+                    checked={myChoices.includes(option.id)}
+                    required={!multiple}
+                    class="h-4 w-4 shrink-0 accent-[var(--color-acid)]"
+                  />
+                  <span class="min-w-0 break-words">{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div class="flex flex-wrap gap-3">
+            <button type="submit" name="intent" value="vote" class={btnPrimary}>
+              {hasVoted ? "update vote" : "cast vote"}
+            </button>
+            {hasVoted && (
+              <button
+                type="submit"
+                name="intent"
+                value="retract"
+                formnovalidate
+                class={btnGhost}
+              >
+                withdraw vote
+              </button>
+            )}
+          </div>
+        </form>
+      )
+    }
+
+    {
+      results ? (
+        <section class="mt-6" aria-label="Results">
+          {canVote && (
+            <p class="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+              results so far
+            </p>
+          )}
+          <PollResultsList
+            results={results}
+            myChoices={myChoices}
+            final={poll.status === "closed"}
+          />
+        </section>
+      ) : (
+        !canVote && (
+          <ul class="mt-5 grid gap-2">
+            {poll.options.map((option) => (
+              <li class="flex items-center gap-3 rounded-md border border-grid px-3 py-2.5 text-sm text-ink">
+                <span class="text-ink-faint" aria-hidden="true">
+                  {myChoices.includes(option.id) ? "■" : "□"}
+                </span>
+                <span class="min-w-0 break-words">{option.label}</span>
+                {myChoices.includes(option.id) && (
+                  <span class="ml-auto text-[10px] font-bold tracking-widest text-cyan">
+                    YOUR PICK
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      )
+    }
+
+    <div class="mt-5 space-y-1 text-xs text-ink-dim">
+      {
+        open && viewer === "guest" && (
+          <p>
+            <span class="text-acid">$</span>{" "}
+            <a href={signInHref} class="text-cyan hover:underline">
+              sign in
+            </a>{" "}
+            with your player account to vote.
+          </p>
+        )
+      }
+      {
+        open && viewer === "non-player" && (
+          <p>
+            <span class="text-amber">!</span> Only player accounts can vote.
+          </p>
+        )
+      }
+      {
+        open && viewer === "player" && hasVoted && (
+          <p>
+            <span class="text-acid">✓</span>{" "}
+            {poll.allowVoteChange
+              ? "You've voted. You can change it until the poll closes."
+              : "You've voted. Your vote is locked in."}
+          </p>
+        )
+      }
+      {
+        !open && viewer === "player" && !hasVoted && (
+          <p class="text-ink-faint">You didn't vote in this poll.</p>
+        )
+      }
+      {resultsHint && <p class="text-ink-faint">{resultsHint}</p>}
+    </div>
+  </TerminalWindow>
+</div>

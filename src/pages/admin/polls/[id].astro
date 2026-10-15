@@ -1,0 +1,297 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PollStatusBadge from "../../../components/PollStatusBadge.astro";
+import PollResultsList from "../../../components/PollResultsList.astro";
+import PollForm from "../../../components/admin/PollForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import {
+  deletePoll,
+  describeWriteError,
+  getPoll,
+  getPollDeleteImpact,
+  getPollVoteImpact,
+  resetPollVotes,
+  setPollPublished,
+  setPollWindow,
+  updatePoll,
+} from "../../../data/admin";
+import {
+  applyPollPreset,
+  formValues,
+  parsePollForm,
+  pollBonusWeeks,
+  pollFormValues,
+  wallClockNow,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { resolveBonusTask } from "../../../data/polls";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+const id = Astro.params.id!;
+const [record, { getPollById, getPollResults, players, teams, tasks }] =
+  await Promise.all([getPoll(id), Astro.locals.getQueries()]);
+const poll = getPollById(id);
+if (!record || !poll) return Astro.rewrite("/404");
+
+const name = `poll "${record.question}"`;
+const self = withBase(`/admin/polls/${id}`);
+const back = (done: string) => Astro.redirect(`${self}?done=${done}`);
+
+let values: FormValues = pollFormValues(record);
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  const preset = form.get("preset");
+  if (intent === "delete") {
+    await deletePoll(id);
+    const query = new URLSearchParams({ done: "deleted", name });
+    return Astro.redirect(withBase(`/admin/polls?${query}`));
+  }
+  if (intent === "reset-votes") {
+    await resetPollVotes(id);
+    return back("reset");
+  }
+  // "Open now" / "close now" only move a boundary that hasn't passed yet,
+  // so they can't break the opens-before-closes rule.
+  if (intent === "open-now" && poll.status === "scheduled") {
+    await setPollWindow(id, { opensAt: wallClockNow() });
+    return back("opened");
+  }
+  if (intent === "close-now" && poll.status === "open") {
+    await setPollWindow(id, { closesAt: wallClockNow() });
+    return back("closed");
+  }
+  if (intent === "publish" || intent === "unpublish") {
+    await setPollPublished(id, intent === "publish");
+    return back(intent === "publish" ? "published" : "unpublished");
+  }
+  if (typeof preset === "string") {
+    values = applyPollPreset(formValues(form), preset, {
+      players: players.map((p) => p.name),
+      teams: teams.map((t) => t.name),
+    });
+  } else {
+    form.set("id", id);
+    const parsed = parsePollForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updatePoll(id, parsed.data);
+        return back("saved");
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+
+const results = getPollResults(poll, true);
+const [voteImpact, deleteImpact] = await Promise.all([
+  getPollVoteImpact(id),
+  getPollDeleteImpact(id),
+]);
+
+const done = Astro.url.searchParams.get("done");
+const notices: Record<string, string> = {
+  saved: "Poll saved. Changes are live.",
+  reset: "All votes cleared.",
+  opened: "Poll opened.",
+  closed: "Poll closed.",
+  published: "Poll published.",
+  unpublished: "Poll unpublished: it's now a hidden draft.",
+};
+const notice = done ? notices[done] : undefined;
+
+const stamp = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const fmt = (iso: string) => stamp.format(new Date(iso));
+const weeks = pollBonusWeeks(tasks);
+const autoWeekId = values.opensAt
+  ? resolveBonusTask(values.opensAt, tasks)
+  : undefined;
+const autoWeekLabel = weeks.find((w) => w.id === autoWeekId)?.label;
+const onHomepage = poll.published && poll.status !== "scheduled";
+const bonusWeek = weeks.find((w) => w.id === poll.bonusTaskId)?.label;
+const bonusLine =
+  poll.voteBonusPoints === 0
+    ? "No voting bonus."
+    : bonusWeek
+      ? `Voters earn +${poll.voteBonusPoints} in ${bonusWeek}${poll.bonusTaskPinned ? "" : " (auto)"}.`
+      : "Voting bonus is off until a task exists.";
+const visibilityLabel: Record<typeof poll.resultsVisibility, string> = {
+  always: "always public",
+  after_vote: "shown after voting",
+  after_close: "shown once closed",
+  admin_only: "admins only",
+};
+const actionBtn =
+  "w-full rounded-md border border-grid px-3 py-2 text-left text-xs text-ink-dim transition-colors hover:border-acid-dim hover:text-acid";
+---
+
+<AdminLayout title={`Edit ${name}`}>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <a href={withBase("/admin/polls")} class={btnGhost}>&larr; ALL POLLS</a>
+    <span class="flex gap-4 text-xs">
+      <a
+        href={withBase(`/admin/polls/new?from=${id}`)}
+        class="text-ink-dim hover:text-ink hover:underline">duplicate</a
+      >
+      {
+        onHomepage && (
+          <a
+            href={withBase(`/#poll-${id}`)}
+            class="text-cyan hover:underline"
+            target="_blank"
+            rel="noopener"
+          >
+            view on homepage ↗
+          </a>
+        )
+      }
+    </span>
+  </div>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> vim ~/polls/{id}.poll
+  </h1>
+
+  {
+    notice && (
+      <Notice tone="success" class="mt-6">
+        {notice}
+      </Notice>
+    )
+  }
+
+  <div class="mt-6 grid items-start gap-6 lg:grid-cols-[1.6fr_1fr]">
+    <TerminalWindow title={`~/polls/${id}.poll`}>
+      <PollForm
+        mode="edit"
+        values={values}
+        errors={errors}
+        formError={formError}
+        weeks={weeks}
+        autoWeekLabel={autoWeekLabel}
+        voterCount={results.voterCount}
+      />
+    </TerminalWindow>
+
+    <div class="space-y-6">
+      <TerminalWindow title="~/polls/status" meta="now">
+        <h2 class="sr-only">Status</h2>
+        <div class="flex items-center gap-3">
+          <PollStatusBadge status={poll.status} draft={!poll.published} />
+          <span class="text-xs text-ink-faint">
+            {
+              poll.status === "scheduled"
+                ? `opens ${fmt(poll.opensAt)}`
+                : poll.status === "open"
+                  ? `closes ${fmt(poll.closesAt)}`
+                  : `closed ${fmt(poll.closesAt)}`
+            }
+          </span>
+        </div>
+        <p class="mt-3 text-xs text-ink-dim">
+          {
+            !poll.published
+              ? "Hidden draft: not on the site."
+              : onHomepage
+                ? "On the homepage now."
+                : "Will appear on the homepage when it opens."
+          }
+        </p>
+        <p class="mt-1 text-xs text-ink-dim">{bonusLine}</p>
+        <form method="post" class="mt-4 grid gap-2">
+          {
+            poll.status === "scheduled" && (
+              <button
+                type="submit"
+                name="intent"
+                value="open-now"
+                class={actionBtn}
+              >
+                <span class="text-acid">&gt;</span> open now
+              </button>
+            )
+          }
+          {
+            poll.status === "open" && (
+              <button
+                type="submit"
+                name="intent"
+                value="close-now"
+                class={actionBtn}
+              >
+                <span class="text-acid">&gt;</span> close now
+              </button>
+            )
+          }
+          <button
+            type="submit"
+            name="intent"
+            value={poll.published ? "unpublish" : "publish"}
+            class={actionBtn}
+          >
+            <span class="text-acid">&gt;</span>{" "}
+            {poll.published ? "unpublish (make draft)" : "publish"}
+          </button>
+        </form>
+      </TerminalWindow>
+
+      <TerminalWindow
+        title="~/polls/results"
+        meta={visibilityLabel[poll.resultsVisibility]}
+      >
+        <h2 class="sr-only">Results</h2>
+        <PollResultsList results={results} final={poll.status === "closed"} />
+        {
+          poll.anonymous && results.voterCount > 0 && (
+            <p class="mt-3 text-[11px] text-ink-faint">
+              Anonymous poll: voter names are never shown.
+            </p>
+          )
+        }
+      </TerminalWindow>
+    </div>
+  </div>
+
+  <section aria-labelledby="danger-heading" class="mt-8">
+    <h2
+      id="danger-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      danger zone
+    </h2>
+    <div class="flex flex-wrap items-start gap-3">
+      {
+        results.voterCount > 0 && (
+          <ConfirmDelete
+            subject={`every vote on ${name}`}
+            impact={voteImpact}
+            intent="reset-votes"
+            label="reset votes"
+          />
+        )
+      }
+      <ConfirmDelete subject={name} impact={deleteImpact} label="delete poll" />
+    </div>
+  </section>
+</AdminLayout>

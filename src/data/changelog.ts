@@ -5,6 +5,14 @@ import type { FeatureUpdate } from "../types";
 // keep the shape stable and add new entries at the top.
 export const changelog: FeatureUpdate[] = [
   {
+    id: "polls",
+    date: "2026-10-15",
+    title: "Homepage polls",
+    description:
+      "The Taskmaster can now run polls on the homepage. Sign in with your player account to vote and earn a bonus point; depending on the poll, results show live, after you vote, or when it closes.",
+    category: "new",
+  },
+  {
     id: "bonus-points",
     date: "2026-10-13",
     title: "Bonus points & deductions",

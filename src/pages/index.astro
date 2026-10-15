@@ -9,6 +9,13 @@ import ScoreBadge from "../components/ScoreBadge.astro";
 import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
 import WhatsNewModal from "../components/WhatsNewModal.astro";
+import PollCard from "../components/PollCard.astro";
+import {
+  describeVoteOutcome,
+  VOTE_OUTCOMES,
+  type VoteOutcome,
+} from "../lib/account-forms";
+import type { PollViewer } from "../types";
 
 const {
   getCurrentTask,
@@ -16,6 +23,7 @@ const {
   getRecentResults,
   getCompetitionStats,
   getRecentFeatures,
+  getHomePolls,
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
@@ -23,6 +31,21 @@ const topPlayers = getTopPlayers(5);
 const recentResults = getRecentResults(3);
 const stats = getCompetitionStats();
 const recentFeatures = getRecentFeatures();
+
+const viewer = await Astro.locals.getViewer();
+const pollViewer: PollViewer = !viewer
+  ? { kind: "guest" }
+  : viewer.playerId
+    ? { kind: "player", playerId: viewer.playerId }
+    : { kind: "non-player" };
+const polls = getHomePolls(pollViewer);
+
+// The vote endpoint redirects back with `?poll=<id>&vote=<outcome>`.
+const votedPoll = Astro.url.searchParams.get("poll");
+const voteParam = Astro.url.searchParams.get("vote");
+const voteOutcome: VoteOutcome | undefined = VOTE_OUTCOMES.find(
+  (o) => o === voteParam,
+);
 
 const dayFmt = new Intl.DateTimeFormat("en-GB", {
   weekday: "short",
@@ -188,6 +211,39 @@ const btnGhost =
               </div>
             </div>
           </TerminalWindow>
+        </section>
+      )
+    }
+
+    <!-- =========================== POLLS =========================== -->
+    {
+      polls.length > 0 && (
+        <section
+          id="polls"
+          class="mt-14 scroll-mt-24"
+          aria-labelledby="polls-heading"
+        >
+          <h2
+            id="polls-heading"
+            class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            polls --open
+          </h2>
+          <div
+            class:list={["grid gap-6", polls.length > 1 && "lg:grid-cols-2"]}
+          >
+            {polls.map((card) => (
+              <PollCard
+                card={card}
+                formatStamp={formatStamp}
+                notice={
+                  voteOutcome && votedPoll === card.poll.id
+                    ? describeVoteOutcome(voteOutcome, card.poll)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
         </section>
       )
     }

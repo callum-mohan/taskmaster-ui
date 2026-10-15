@@ -20,6 +20,6 @@ const { prefix, classes } = config[tone];
   role={tone === "error" ? "alert" : "status"}
   class:list={["rounded-md border px-4 py-3 text-sm", classes, className]}
 >
-  <span class="font-bold">[{prefix}]</span>
+  <span class="font-bold">[{prefix}]</span>{" "}
   <slot />
 </div>

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -10,6 +11,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
 } from "drizzle-orm/pg-core";
 
 // Raw competition records. Only facts are stored here: finishing positions,
@@ -18,6 +20,13 @@ import {
 // and snake_case in Postgres (`casing: "snake_case"` in the client/config).
 
 export const taskFormat = pgEnum("task_format", ["individual", "team"]);
+export const pollKind = pgEnum("poll_kind", ["single", "multiple"]);
+export const pollResultsVisibility = pgEnum("poll_results_visibility", [
+  "always",
+  "after_vote",
+  "after_close",
+  "admin_only",
+]);
 
 export const players = pgTable("players", {
   id: text().primaryKey(),
@@ -153,5 +162,98 @@ export const playerAccounts = pgTable(
   },
   (t) => [
     check("player_accounts_email_lower", sql`${t.email} = lower(${t.email})`),
+  ],
+);
+
+/**
+ * A homepage poll. Its status (scheduled / open / closed) is derived from
+ * `opensAt` / `closesAt`, like a task's, so it can never go stale.
+ */
+export const polls = pgTable(
+  "polls",
+  {
+    id: text().primaryKey(),
+    question: text().notNull(),
+    description: text(),
+    kind: pollKind().notNull().default("single"),
+    // How many options a voter must / may pick (both 1 for single choice).
+    minChoices: integer().notNull().default(1),
+    // Null means "up to every option".
+    maxChoices: integer(),
+    // Wall-clock (local) times with no zone, like `tasks`.
+    opensAt: timestamp({ mode: "string" }).notNull(),
+    closesAt: timestamp({ mode: "string" }).notNull(),
+    resultsVisibility: pollResultsVisibility().notNull().default("after_vote"),
+    allowVoteChange: boolean().notNull().default(true),
+    // Anonymous polls only ever publish counts; public ones name the voters.
+    anonymous: boolean().notNull().default(true),
+    // Days a closed poll stays on the homepage (0 hides it once it closes).
+    showOnHomeDays: integer().notNull().default(3),
+    // Unpublished polls are drafts: hidden from the site whatever the dates.
+    published: boolean().notNull().default(true),
+    // Bonus points each voter earns (0 = none). Derived from the votes, so
+    // withdrawing a vote or deleting the poll takes the points away too.
+    voteBonusPoints: integer().notNull().default(1),
+    // The week the bonus counts in; null = the week live when the poll opens.
+    bonusTaskId: text().references(() => tasks.id, { onDelete: "set null" }),
+    createdAt: timestamp({ mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("polls_closes_after_opens", sql`${t.closesAt} > ${t.opensAt}`),
+    check("polls_min_choices_positive", sql`${t.minChoices} >= 1`),
+    check(
+      "polls_max_choices_at_least_min",
+      sql`${t.maxChoices} is null or ${t.maxChoices} >= ${t.minChoices}`,
+    ),
+    check("polls_show_on_home_days_range", sql`${t.showOnHomeDays} >= 0`),
+    check(
+      "polls_vote_bonus_points_range",
+      sql`${t.voteBonusPoints} between 0 and 100`,
+    ),
+  ],
+);
+
+export const pollOptions = pgTable(
+  "poll_options",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    pollId: text()
+      .notNull()
+      .references(() => polls.id, { onDelete: "cascade" }),
+    label: text().notNull(),
+    sortOrder: integer().notNull(),
+  },
+  (t) => [
+    index("poll_options_poll_id_idx").on(t.pollId),
+    // Target of the votes' composite key, so a vote's option must belong to
+    // the vote's poll.
+    unique("poll_options_id_poll_id_unique").on(t.id, t.pollId),
+  ],
+);
+
+/** One row per option a player picked. Only player accounts can vote. */
+export const pollVotes = pgTable(
+  "poll_votes",
+  {
+    // Denormalised from the option so "this player's vote on this poll" is
+    // a single indexed lookup / delete.
+    pollId: text()
+      .notNull()
+      .references(() => polls.id, { onDelete: "cascade" }),
+    optionId: integer().notNull(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    createdAt: timestamp({ mode: "string" }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.optionId, t.playerId] }),
+    foreignKey({
+      name: "poll_votes_option_fk",
+      columns: [t.optionId, t.pollId],
+      foreignColumns: [pollOptions.id, pollOptions.pollId],
+    }).onDelete("cascade"),
+    index("poll_votes_poll_id_player_id_idx").on(t.pollId, t.playerId),
+    index("poll_votes_player_id_idx").on(t.playerId),
   ],
 );

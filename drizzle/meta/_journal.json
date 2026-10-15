@@ -15,6 +15,20 @@
       "when": 1791981342263,
       "tag": "0001_player_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792013648031,
+      "tag": "0002_polls",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792053828276,
+      "tag": "0003_poll_vote_bonus",
+      "breakpoints": true
     }
   ]
 }

@@ -161,6 +161,81 @@ export interface CompetitionData {
   scores: Score[];
   teamScores: TeamScore[];
   bonusPoints: BonusPoint[];
+  /** Every poll (drafts included), newest opening first. */
+  polls: Poll[];
+}
+
+// ── Polls ─────────────────────────────────────────────────────────────
+
+/** "single" → pick exactly one option; "multiple" → pick min–max options. */
+export type PollKind = "single" | "multiple";
+
+/**
+ * Derived from the poll's dates, like `TaskStatus`:
+ *   now < opensAt               → "scheduled"
+ *   opensAt <= now < closesAt   → "open"
+ *   now >= closesAt             → "closed"
+ */
+export type PollStatus = "scheduled" | "open" | "closed";
+
+/**
+ * Who sees the tallies (admins always do):
+ *   "always"      → everyone, even before voting.
+ *   "after_vote"  → players once they've voted; everyone once it closes.
+ *   "after_close" → everyone, but only once it closes.
+ *   "admin_only"  → never published.
+ */
+export type PollResultsVisibility =
+  "always" | "after_vote" | "after_close" | "admin_only";
+
+export interface PollOption {
+  id: number;
+  label: string;
+}
+
+/** One option a player picked. */
+export interface PollVote {
+  optionId: number;
+  playerId: string;
+}
+
+/** A poll's settings (no votes), safe to hand to components. */
+export interface PollSettings {
+  id: string;
+  question: string;
+  description?: string;
+  kind: PollKind;
+  /** Options a voter must pick (1 for single choice). */
+  minChoices: number;
+  /** Options a voter may pick (1 for single choice; capped at the option count). */
+  maxChoices: number;
+  opensAt: string; // ISO 8601
+  closesAt: string; // ISO 8601
+  resultsVisibility: PollResultsVisibility;
+  allowVoteChange: boolean;
+  /** Anonymous polls publish counts only; public polls name the voters. */
+  anonymous: boolean;
+  /** Days a closed poll stays on the homepage (0 = gone once closed). */
+  showOnHomeDays: number;
+  /** Drafts (false) are hidden from the site whatever the dates. */
+  published: boolean;
+  /** Bonus points each voter earns (0 = none). */
+  voteBonusPoints: number;
+  /**
+   * The week the voting bonus counts in: the admin's pick, or else the week
+   * live when the poll opens. Absent only when there are no tasks at all.
+   */
+  bonusTaskId?: string;
+  /** True when `bonusTaskId` was picked by an admin rather than derived. */
+  bonusTaskPinned: boolean;
+  status: PollStatus;
+  /** In display order. */
+  options: PollOption[];
+}
+
+/** A poll with its raw votes. Votes never leave the data layer as-is. */
+export interface Poll extends PollSettings {
+  votes: PollVote[];
 }
 
 // Derived view models used by the UI. Keeping these separate from the
@@ -604,4 +679,55 @@ export interface LostArchiveEntry {
   weekNumber: number;
   title: string;
   description: string;
+}
+
+// ── Poll view models ──────────────────────────────────────────────────
+
+/** Who is looking at a poll, which decides what they can do with it. */
+export type PollViewerKind = "guest" | "non-player" | "player";
+
+export interface PollViewer {
+  kind: PollViewerKind;
+  /** Set for `"player"` viewers. */
+  playerId?: string;
+}
+
+export interface PollOptionResult {
+  option: PollOption;
+  votes: number;
+  /** Share of voters (not of ticks) who picked it, 0–100, rounded. */
+  percent: number;
+  /** Has the most votes (ties all lead); false when nobody has voted. */
+  leading: boolean;
+  /** Who picked it, only for public (non-anonymous) polls. */
+  voters?: Player[];
+}
+
+export interface PollResults {
+  /** Players who voted. */
+  voterCount: number;
+  /** Roster size, for turnout ("12 of 25 voted"). */
+  eligibleCount: number;
+  options: PollOptionResult[];
+}
+
+/** Everything a homepage poll card needs for one viewer. */
+export interface PollCard {
+  poll: PollSettings;
+  viewer: PollViewerKind;
+  /** Option ids this viewer picked (empty if they haven't voted). */
+  myChoices: number[];
+  hasVoted: boolean;
+  /** The ballot form is shown (open poll, player, and not locked in). */
+  canVote: boolean;
+  /** Tallies, when this viewer may see them. */
+  results?: PollResults;
+  /** Why results are hidden, e.g. "Results appear once you vote." */
+  resultsHint?: string;
+}
+
+/** A row in the admin poll list. */
+export interface PollSummary {
+  poll: PollSettings;
+  voterCount: number;
 }

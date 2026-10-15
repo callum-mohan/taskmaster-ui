@@ -55,7 +55,10 @@ src/
 │   ├── players.ts     # rows → Player ─┐
 │   ├── teams.ts       # rows → Team    ├─ pure mappers
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
-│   ├── scores.ts      # rows → Score  ─┘  (points → positions; bonus points)
+│   ├── scores.ts      # rows → Score  ─┤  (points → positions; bonus points)
+│   ├── polls.ts       # rows → Poll   ─┘  (status, voting bonuses derived)
+│   ├── poll-queries.ts # poll selectors: who can vote / see results
+│   ├── votes.ts       # a player's own poll votes
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
 │   ├── accounts.ts    # player sign-in accounts + self-service profile edits
@@ -68,7 +71,7 @@ src/
 │   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
 │   ├── login.astro            # /login — the player portal
 │   ├── logout.ts              # POST /logout — signs out (either portal)
-│   ├── account/               # /account — edit own profile, change password
+│   ├── account/               # /account — edit own profile, change password, vote in polls
 │   ├── index.astro            # homepage
 │   ├── tasks/                 # /tasks and /tasks/[id]
 │   ├── players/               # /players and /players/[id]
@@ -139,8 +142,8 @@ immediately; there's nothing to rebuild.
 ## 🔐 Admin
 
 `/admin` lets signed-in admins create, edit and delete players, teams (and
-their members) and tasks, enter a week's scores in one grid, and record bonus
-points or deductions. Deletes ask for confirmation and list what else will be
+their members), tasks and [polls](#️-polls), enter a week's scores in one
+grid, and record bonus points or deductions. Deletes ask for confirmation and list what else will be
 removed. Forms are plain HTML posts, so they work without JavaScript.
 
 - Admins sign in at the **admin portal**, `/admin/login` (email + password
@@ -164,6 +167,37 @@ removed. Forms are plain HTML posts, so they work without JavaScript.
   `noindex`.
 - Each Neon branch has its own users: develop against `dev`, and create
   production admins with `--branch production`.
+
+## 🗳️ Polls
+
+Admins run homepage polls from `/admin/polls`. Signed-in **players** vote on
+the homepage; visitors see the poll read-only with a sign-in link, and admin
+accounts without a player profile can't vote. Each poll sets:
+
+- **Type:** single choice, or multiple choice with a min/max number of picks
+  (blank max = no limit).
+- **Options:** 2–40. Type them in, or use **+ every player** / **+ every team**
+  and edit the list. Renaming an option keeps its votes; clearing a row
+  deletes it and its votes.
+- **Schedule:** open and close times (wall-clock, like tasks), and how many
+  days a closed poll stays on the homepage (0 = gone once closed). Status
+  (scheduled / open / closed) comes from the dates. The edit page also has
+  **open now** and **close now** buttons.
+- **Show results:** always, after voting, after it closes, or admins only.
+- **Voters:** anonymous (counts only) or public (names next to each option).
+- **Vote changes:** allowed until the poll closes, or the first vote is final.
+- **Published:** untick to keep the poll as a hidden draft.
+- **Voting bonus:** points each voter earns (default 1, 0 turns it off),
+  once per poll however many options they pick. They count in the week live
+  when the poll opens, or a week the admin picks, and show in that week's
+  bonus ledger on player and task pages. The bonus is worked out from the
+  votes, not stored: withdrawing a vote, resetting votes or deleting the poll
+  removes it. The admin scores page lists it for that week (read-only).
+
+The homepage shows every open poll (newest first) followed by recently closed
+ones. You can **duplicate** a poll (its votes aren't copied) or **reset votes**
+on it. Votes are a `POST` to `/account/polls/<id>`, so the `/account` guard
+requires a signed-in player who has replaced their temporary password.
 
 ## 👤 Player accounts
 

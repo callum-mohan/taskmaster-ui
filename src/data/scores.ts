@@ -15,8 +15,11 @@ import type {
 export interface ScoreRows {
   taskScores: (typeof taskScoresTable.$inferSelect)[];
   teamScores: (typeof teamScoresTable.$inferSelect)[];
-  /** In recorded (id) order. */
-  bonusPoints: (typeof bonusPointsTable.$inferSelect)[];
+  /** In recorded order (stored rows, then derived poll-vote bonuses). */
+  bonusPoints: Pick<
+    typeof bonusPointsTable.$inferSelect,
+    "taskId" | "playerId" | "points" | "reason"
+  >[];
 }
 
 export interface ScoreRecords {

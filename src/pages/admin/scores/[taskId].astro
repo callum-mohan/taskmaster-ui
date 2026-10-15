@@ -31,12 +31,13 @@ import { withBase } from "../../../lib/url";
 if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
 
 const { taskId } = Astro.params;
-const { players, teams, getTaskById, getPlayerById } =
+const { players, teams, getTaskById, getPlayerById, getPollBonusesForTask } =
   await Astro.locals.getQueries();
 const task = getTaskById(taskId!);
 if (!task) return Astro.rewrite("/404");
 
 const isTeam = task.format === "team";
+const pollBonuses = getPollBonusesForTask(task.id);
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const selfUrl = withBase(`/admin/scores/${task.id}`);
 
@@ -285,6 +286,32 @@ const doneMessage: Record<string, string> = {
           })
         }
       </ul>
+      {
+        pollBonuses.length > 0 && (
+          <div class="mt-5 rounded-md border border-grid p-3">
+            <h3 class="mb-2 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+              poll voting bonuses
+            </h3>
+            <ul class="space-y-1 text-sm">
+              {pollBonuses.map(({ poll, voterCount }) => (
+                <li class="text-ink-dim">
+                  <span class="text-acid">+{poll.voteBonusPoints}</span> ×{" "}
+                  {voterCount} {voterCount === 1 ? "voter" : "voters"} ·{" "}
+                  <a
+                    href={withBase(`/admin/polls/${poll.id}`)}
+                    class="text-cyan hover:underline"
+                  >
+                    {poll.question}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p class="mt-2 text-xs text-ink-faint">
+              Earned automatically by voting; manage them on the poll.
+            </p>
+          </div>
+        )
+      }
       <div class="mt-5 rounded-md border border-dashed border-grid p-3">
         <h3
           class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"

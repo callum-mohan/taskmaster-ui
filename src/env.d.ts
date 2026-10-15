@@ -1,5 +1,17 @@
 /// <reference types="astro/client" />
 
+// The Worker bindings this app uses (see `wrangler.jsonc`). Declared here
+// rather than pulling in the full `@cloudflare/workers-types`.
+declare module "cloudflare:workers" {
+  interface RateLimiter {
+    limit(options: { key: string }): Promise<{ success: boolean }>;
+  }
+  export const env: {
+    /** Throttles task reveal-password guesses (optional locally). */
+    TASK_REVEAL_LIMITER?: RateLimiter;
+  };
+}
+
 declare namespace App {
   interface Locals {
     /**

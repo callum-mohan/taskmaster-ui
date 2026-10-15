@@ -136,6 +136,10 @@ Changing the schema:
    `npm run build`.
 3. Switch back with `neon checkout production` and run `npm run db:migrate`.
 
+If the direct Postgres port (5432) is blocked on your network, use
+`npm run db:migrate:http` instead: it applies the same migrations over Neon's
+HTTP driver (port 443) and records them in the same journal.
+
 **Recording results:** use the [admin area](#-admin). Changes are live
 immediately; there's nothing to rebuild.
 
@@ -167,6 +171,25 @@ removed. Forms are plain HTML posts, so they work without JavaScript.
   `noindex`.
 - Each Neon branch has its own users: develop against `dev`, and create
   production admins with `--branch production`.
+
+## 🔒 Reveal passwords
+
+A task can have an optional **reveal password** (set on the admin task form).
+Once the task goes live, its title, description and brief stay encrypted
+everywhere (home page, task cards, command palette, banner, `.ics`) until a
+visitor enters the password on the task page. Then they get an
+`ACCESS GRANTED` decrypt animation.
+
+- Matching ignores case and surrounding spaces. A correct guess sets a signed,
+  HttpOnly cookie for that task, so the visitor doesn't need it again. Changing
+  the password re-locks everyone.
+- Wrong guesses are throttled per IP (10 a minute) by the
+  `TASK_REVEAL_LIMITER` rate-limit binding in `wrangler.jsonc`.
+- The admin task page shows the password with **copy**, **reveal to
+  everyone** (no password needed after that; first-time visitors still get
+  the animation once) and **re-lock** buttons.
+- Completed tasks are always public. Admin pages always show real content, but
+  public pages don't make an exception for admins.
 
 ## 🗳️ Polls
 

@@ -3,14 +3,17 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../components/TerminalWindow.astro";
 import TaskForm from "../../../components/admin/TaskForm.astro";
 import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import RevealControls from "../../../components/admin/RevealControls.astro";
 import { btnGhost } from "../../../components/admin/styles";
 import {
   deleteTask,
   describeWriteError,
   getTask,
   getTaskDeleteImpact,
+  setTaskRevealed,
   updateTask,
 } from "../../../data/admin";
+import { deriveTaskStatus } from "../../../data/tasks";
 import {
   parseTaskForm,
   toDateTimeLocal,
@@ -37,16 +40,25 @@ let values: FormValues = {
   releaseDate: toDateTimeLocal(task.releaseDate),
   deadline: toDateTimeLocal(task.deadline),
   format: task.format,
+  revealPassword: task.revealPassword ?? "",
 };
 let errors: FieldErrors = {};
 let formError: string | undefined;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  if (form.get("intent") === "delete") {
+  const intent = form.get("intent");
+  if (intent === "delete") {
     await deleteTask(id);
     const query = new URLSearchParams({ done: "deleted", name: weekName });
     return Astro.redirect(withBase(`/admin/tasks?${query}`));
+  }
+  if (intent === "reveal" || intent === "relock") {
+    await setTaskRevealed(id, intent === "reveal");
+    const done = intent === "reveal" ? "revealed" : "relocked";
+    return Astro.redirect(
+      withBase(`/admin/tasks/${id}?done=${done}#reveal-heading`),
+    );
   }
   form.set("id", id);
   const parsed = parseTaskForm(form);
@@ -69,6 +81,24 @@ if (Astro.request.method === "POST") {
 }
 
 const impact = await getTaskDeleteImpact(id);
+
+const toIso = (timestamp: string) => timestamp.replace(" ", "T");
+const status = deriveTaskStatus({
+  releaseDate: toIso(task.releaseDate),
+  deadline: toIso(task.deadline),
+});
+const revealedAt = task.revealedAt
+  ? `at ${new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(toIso(task.revealedAt)))}`
+  : undefined;
+const doneParam = Astro.url.searchParams.get("done");
+const revealDone =
+  doneParam === "revealed" || doneParam === "relocked" ? doneParam : undefined;
 ---
 
 <AdminLayout title={`Edit ${weekName}`}>
@@ -98,6 +128,22 @@ const impact = await getTaskDeleteImpact(id);
       formError={formError}
     />
   </TerminalWindow>
+  <section aria-labelledby="reveal-heading" class="mt-8">
+    <h2
+      id="reveal-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      reveal password
+    </h2>
+    <TerminalWindow title={`~/tasks/${task.id}.lock`}>
+      <RevealControls
+        password={task.revealPassword}
+        status={status}
+        revealedAt={revealedAt}
+        done={revealDone}
+      />
+    </TerminalWindow>
+  </section>
   <section aria-labelledby="danger-heading" class="mt-8">
     <h2
       id="danger-heading"

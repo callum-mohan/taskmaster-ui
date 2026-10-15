@@ -68,7 +68,7 @@ const releaseLabel = dayFmt.format(new Date(task.releaseDate));
           </span>
         )
       }
-      <TaskStatusBadge status={status} />
+      <TaskStatusBadge status={status} locked={task.locked} />
     </div>
   </div>
 
@@ -83,6 +83,23 @@ const releaseLabel = dayFmt.format(new Date(task.releaseDate));
         <p class="mt-4 text-[11px] tracking-widest text-ink-faint uppercase">
           Unlocks {releaseLabel}
         </p>
+      </>
+    ) : status === "live" && task.locked ? (
+      <>
+        <h3 class="mt-3 text-xl font-extrabold text-ink-faint">
+          <span aria-hidden="true">▓▓▓▒▒░ ▓▒░</span>
+          <span class="sr-only">Encrypted task</span>
+        </h3>
+        <p class="mt-2 flex-1 text-sm text-ink-dim">
+          <span class="text-acid">$</span> cat brief.md &rarr;{" "}
+          <span class="text-amber">encrypted, password required</span>
+        </p>
+        <a
+          href={withBase(`/tasks/${task.id}`)}
+          class="mt-5 inline-flex items-center justify-center gap-2 rounded-md border border-amber bg-amber/10 px-4 py-2 text-xs font-bold tracking-widest text-amber transition-colors hover:bg-amber hover:text-term-bg"
+        >
+          [ DECRYPT TASK ]<span class="sr-only">week {task.weekNumber}</span>
+        </a>
       </>
     ) : (
       <>

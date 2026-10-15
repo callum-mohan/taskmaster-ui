@@ -1,8 +1,9 @@
 import { defineMiddleware } from "astro:middleware";
-import { loadCompetition } from "./data/competition";
+import { loadCompetition, type CompetitionViewer } from "./data/competition";
 import { createQueries, type Queries } from "./data/queries";
 import { getSessionPlayer } from "./data/accounts";
 import { getSessionUser, hasSessionCookie } from "./lib/auth";
+import { readRevealCookies } from "./lib/task-reveal";
 import type { AdminUser, SessionPlayer, Viewer } from "./types";
 
 // Two sign-in portals: `/admin/login` for admins and `/login` for players.
@@ -19,6 +20,11 @@ const isAccountPath = (path: string) =>
 const isAuthPagePath = (path: string) =>
   /^\/(?:login|logout)\/?$/i.test(normalise(path));
 
+const matchesRoute = (
+  context: { routePattern: string; url: URL },
+  test: (path: string) => boolean,
+) => test(context.routePattern) || test(context.url.pathname);
+
 export const onRequest = defineMiddleware(async (context, next) => {
   // Send `www.` visitors to the apex domain, keeping the path and query.
   if (context.url.hostname.startsWith("www.")) {
@@ -28,10 +34,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
   }
 
   // Load the competition data lazily and at most once per request, so routes
-  // that never ask for it (e.g. the sitemap index) skip the query.
+  // that never ask for it (e.g. the sitemap index) skip the query. Guarded
+  // admin routes (only reached by admins, see below) see real task content;
+  // everywhere else password-protected tasks are redacted unless the
+  // visitor unlocked them.
   let queries: Promise<Queries> | undefined;
+  const isGuardedAdmin =
+    matchesRoute(context, isAdminPath) &&
+    context.routePattern !== ADMIN_LOGIN_PATH;
+  const viewer: CompetitionViewer = isGuardedAdmin
+    ? { mode: "admin" }
+    : { mode: "public", revealTokens: readRevealCookies(context.request) };
   context.locals.getQueries = () =>
-    (queries ??= loadCompetition().then(createQueries));
+    (queries ??= loadCompetition(viewer).then(createQueries));
 
   // The signed-in user and their player link, each looked up at most once
   // per request and only when something asks (guards, the navbar).
@@ -56,7 +71,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const { pathname } = context.url;
   const route = context.routePattern;
   const matches = (test: (path: string) => boolean) =>
-    test(route) || test(pathname);
+    matchesRoute(context, test);
   const loginRedirect = (loginPath: string) => {
     const target = new URL(loginPath, context.url);
     target.searchParams.set("next", pathname + context.url.search);
@@ -84,8 +99,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   } else if (!matches(isAuthPagePath)) {
     const response = await next();
     // Public pages show the signed-in user in the navbar, so a signed-in
-    // copy must never be stored and replayed (e.g. after logging out).
-    if (hasSessionCookie(context.request)) {
+    // copy must never be stored and replayed (e.g. after logging out). The
+    // same goes for pages rendered with a visitor's task-reveal cookies.
+    if (
+      hasSessionCookie(context.request) ||
+      (viewer.mode === "public" && viewer.revealTokens.size > 0)
+    ) {
       response.headers.set("Cache-Control", "private, no-store");
     }
     return response;

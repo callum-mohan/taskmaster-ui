@@ -16,4 +16,12 @@
   // Secrets (set with `npx wrangler secret put <NAME>`): DATABASE_URL,
   // NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET. Locally they come from
   // `.env.local`.
+  // Throttles guesses at a task's reveal password: 10 per minute per IP+task.
+  "ratelimits": [
+    {
+      "name": "TASK_REVEAL_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+  ],
 }

@@ -153,6 +153,15 @@ const briefMode = values.briefMode ?? "prose";
       }
     </div>
   </fieldset>
+  <AdminField
+    label="reveal password"
+    name="revealPassword"
+    value={values.revealPassword}
+    error={errors.revealPassword}
+    autocomplete="off"
+    placeholder="(none)"
+    hint="Optional. Keeps the title and brief encrypted until a visitor enters it on the task page. Case and spaces are ignored. Changing it re-locks everyone."
+  />
   <div class="flex flex-wrap gap-3 pt-2">
     <button type="submit" class={btnPrimary}>
       {isCreate ? "create task" : "save changes"}

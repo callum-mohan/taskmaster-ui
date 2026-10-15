@@ -27,6 +27,7 @@ const {
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
+const currentEncrypted = currentTask?.status === "live" && currentTask.locked;
 const topPlayers = getTopPlayers(5);
 const recentResults = getRecentResults(3);
 const stats = getCompetitionStats();
@@ -161,16 +162,36 @@ const btnGhost =
                   <span class="text-sm font-bold tracking-[0.3em] text-magenta">
                     {weekLabel(currentTask.weekNumber)}
                   </span>
-                  <TaskStatusBadge status={currentTask.status} />
+                  <TaskStatusBadge
+                    status={currentTask.status}
+                    locked={currentTask.locked}
+                  />
                 </div>
 
-                <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink text-glow sm:text-5xl">
-                  {currentTask.title}
-                </h3>
+                {currentEncrypted ? (
+                  <>
+                    <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink-faint sm:text-5xl">
+                      <span aria-hidden="true">▓▓▓▓▒▒░ ▓▓▒░</span>
+                      <span class="sr-only">Encrypted task</span>
+                    </h3>
+                    <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
+                      <span class="text-acid">$</span> cat brief.md &rarr;{" "}
+                      <span class="text-amber">encrypted</span>. The Taskmaster
+                      holds the key: grab the password and decrypt it on the
+                      task page.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink text-glow sm:text-5xl">
+                      {currentTask.title}
+                    </h3>
 
-                <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
-                  {currentTask.description}
-                </p>
+                    <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
+                      {currentTask.description}
+                    </p>
+                  </>
+                )}
 
                 <dl class="mt-6 grid grid-cols-2 gap-4 text-sm">
                   <div class="rounded-md border border-grid bg-term-bg/50 p-3">
@@ -195,7 +216,7 @@ const btnGhost =
                   href={withBase(`/tasks/${currentTask.id}`)}
                   class={`${btnPrimary} mt-6`}
                 >
-                  [ VIEW TASK ]
+                  {currentEncrypted ? "[ DECRYPT TASK ]" : "[ VIEW TASK ]"}
                 </a>
               </div>
 

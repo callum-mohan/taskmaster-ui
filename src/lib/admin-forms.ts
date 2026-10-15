@@ -222,6 +222,7 @@ const taskSchema = z
     releaseDate: localDateTime,
     deadline: localDateTime,
     format: z.enum(["individual", "team"], { error: "Pick a format." }),
+    revealPassword: optionalText(60),
   })
   .refine((t) => t.deadline > t.releaseDate, {
     path: ["deadline"],
@@ -260,6 +261,7 @@ export function parseTaskForm(form: FormData): ParseResult<TaskInput> {
       releaseDate: values.releaseDate ?? "",
       deadline: values.deadline ?? "",
       format: values.format ?? "",
+      revealPassword: values.revealPassword ?? "",
     },
     values,
   );

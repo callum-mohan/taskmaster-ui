@@ -74,6 +74,12 @@ export const tasks = pgTable(
     releaseDate: timestamp({ mode: "string" }).notNull(),
     deadline: timestamp({ mode: "string" }).notNull(),
     format: taskFormat().notNull().default("individual"),
+    // Optional shared secret that keeps a live task's title and brief
+    // encrypted until a visitor enters it. Stored as entered (it's announced
+    // to everyone), matched trimmed and case-insensitively.
+    revealPassword: text(),
+    // Set when an admin reveals a password-protected task to everyone.
+    revealedAt: timestamp({ mode: "string" }),
   },
   (t) => [
     check(

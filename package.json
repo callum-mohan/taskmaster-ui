@@ -16,6 +16,7 @@
     "db:check": "node --env-file=.env.local scripts/db-check.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:http": "node --env-file=.env.local scripts/db-migrate-http.mjs",
     "db:seed": "tsx --env-file=.env.local db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "admin:create": "node scripts/create-admin.mjs",

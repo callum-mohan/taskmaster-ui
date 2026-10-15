@@ -265,6 +265,7 @@ const taskValues = (input: TaskInput) => ({
   releaseDate: input.releaseDate,
   deadline: input.deadline,
   format: input.format,
+  revealPassword: input.revealPassword,
 });
 
 export async function createTask(input: TaskInput): Promise<void> {
@@ -275,6 +276,23 @@ export async function createTask(input: TaskInput): Promise<void> {
 
 export async function updateTask(id: string, input: TaskInput): Promise<void> {
   await getDb().update(tasks).set(taskValues(input)).where(eq(tasks.id, id));
+}
+
+/**
+ * Reveals a password-protected task to everyone (or re-locks it). Re-locking
+ * keeps visitors who already entered the password unlocked; change the
+ * password to lock them out too.
+ */
+export async function setTaskRevealed(
+  id: string,
+  revealed: boolean,
+): Promise<void> {
+  await getDb()
+    .update(tasks)
+    .set({
+      revealedAt: revealed ? sql`date_trunc('second', localtimestamp)` : null,
+    })
+    .where(eq(tasks.id, id));
 }
 
 export async function getTaskDeleteImpact(id: string): Promise<DeleteImpact[]> {

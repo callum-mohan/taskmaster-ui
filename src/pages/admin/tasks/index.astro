@@ -77,6 +77,16 @@ const stamp = new Intl.DateTimeFormat("en-GB", {
                       TEAM
                     </span>
                   )}
+                  {task.passwordProtected && task.status !== "completed" && (
+                    <span
+                      class:list={[
+                        "ml-2 text-[10px] font-bold tracking-widest",
+                        task.revealedToAll ? "text-acid" : "text-amber",
+                      ]}
+                    >
+                      {task.revealedToAll ? "REVEALED" : "🔒 PASSWORD"}
+                    </span>
+                  )}
                 </td>
                 <td
                   class:list={[

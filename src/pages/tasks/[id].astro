@@ -10,6 +10,15 @@ import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
+import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
+import DecryptReveal from "../../components/DecryptReveal.astro";
+import { getRevealPassword } from "../../data/task-reveal";
+import {
+  allowRevealAttempt,
+  passwordMatches,
+  setRevealCookie,
+} from "../../lib/task-reveal";
+import type { RevealError } from "../../types";
 
 const {
   getTaskSummary,
@@ -30,6 +39,52 @@ if (!summary) {
 }
 
 const { task, winner, winningScore, winningTeam } = summary;
+
+// A live, password-protected task this visitor hasn't unlocked yet: the data
+// layer has already redacted its title and brief.
+const needsPassword = task.locked && task.status === "live";
+
+// Reveal-password guesses post back here (post/redirect/get on success).
+let revealError: RevealError | undefined;
+if (Astro.request.method === "POST") {
+  if (!needsPassword) {
+    return Astro.redirect(withBase(`/tasks/${task.id}`), 303);
+  }
+  const form = await Astro.request.formData();
+  const guess = String(form.get("password") ?? "").slice(0, 200);
+  let clientIp = Astro.request.headers.get("cf-connecting-ip") ?? "";
+  try {
+    clientIp ||= Astro.clientAddress;
+  } catch {
+    clientIp ||= "unknown";
+  }
+  if (!(await allowRevealAttempt(clientIp, task.id))) {
+    revealError = "throttled";
+    Astro.response.status = 429;
+  } else {
+    const password = await getRevealPassword(task.id);
+    if (password && guess.trim() && passwordMatches(guess, password)) {
+      await setRevealCookie(
+        Astro.cookies,
+        task.id,
+        password,
+        Astro.url.protocol === "https:",
+      );
+      return Astro.redirect(withBase(`/tasks/${task.id}?decrypted=1`), 303);
+    }
+    revealError = "denied";
+    Astro.response.status = 403;
+  }
+}
+
+// Decrypt animation: straight after a correct password, otherwise once per
+// browser the first time a password-protected task is seen unlocked.
+const revealPlay: "always" | "if-unseen" | undefined =
+  task.passwordProtected && !task.locked && task.status === "live"
+    ? Astro.url.searchParams.has("decrypted")
+      ? "always"
+      : "if-unseen"
+    : undefined;
 const isTeam = task.format === "team";
 const results = task.status === "completed" ? getTaskResults(task.id) : [];
 const teamResults =
@@ -40,13 +95,18 @@ const bonuses = getTaskBonuses(task.id);
 
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const isLocked = task.status === "upcoming";
+const briefFile = `${task.id}.brief`;
 
-const pageTitle = `${weekLabel} — ${task.title}`;
+const pageTitle = needsPassword
+  ? `${weekLabel} — Encrypted`
+  : `${weekLabel} — ${task.title}`;
 const pageDescription = isLocked
   ? `${weekLabel} of the EAYL Taskmaster is still classified. The brief unlocks soon.`
-  : winner
-    ? `${task.description} Won by ${winner.name}${winningScore ? ` with ${winningScore} pts` : ""}.`
-    : task.description;
+  : needsPassword
+    ? `${weekLabel} of the EAYL Taskmaster is live, but the brief is encrypted. Enter the Taskmaster's password to decrypt it.`
+    : winner
+      ? `${task.description} Won by ${winner.name}${winningScore ? ` with ${winningScore} pts` : ""}.`
+      : task.description;
 
 const dayFmt = new Intl.DateTimeFormat("en-GB", {
   weekday: "long",
@@ -78,13 +138,18 @@ const medal = (position: number) =>
 
 <Layout title={pageTitle} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    {
+      revealPlay && (
+        <DecryptReveal taskId={task.id} play={revealPlay} label={briefFile} />
+      )
+    }
     <!-- Back link -->
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/tasks" label="ALL TASKS" />
       <ShareButton
         url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${weekLabel} — ${task.title} · EAYL Taskmaster`}
+        shareTitle={`${pageTitle} · EAYL Taskmaster`}
         shareText={pageDescription}
         label="SHARE TASK"
       />
@@ -96,7 +161,7 @@ const medal = (position: number) =>
         <span class="text-sm font-bold tracking-[0.3em] text-magenta">
           {weekLabel}
         </span>
-        <TaskStatusBadge status={task.status} />
+        <TaskStatusBadge status={task.status} locked={task.locked} />
         {
           isTeam && (
             <span class="inline-flex items-center rounded border border-magenta/40 bg-magenta/10 px-2 py-0.5 text-[10px] font-bold tracking-[0.2em] text-magenta">
@@ -105,16 +170,29 @@ const medal = (position: number) =>
           )
         }
       </div>
-      <h1
-        class="mt-3 text-4xl font-extrabold leading-tight text-ink text-glow sm:text-6xl"
-      >
-        {task.title}
-      </h1>
+      {
+        needsPassword ? (
+          <h1 class="mt-3 text-4xl font-extrabold leading-tight text-ink-faint sm:text-6xl">
+            <span aria-hidden="true">▓▓▓▓▒▒░ ▓▓▒░</span>
+            <span class="sr-only">Encrypted task</span>
+          </h1>
+        ) : (
+          <h1
+            class="mt-3 text-4xl font-extrabold leading-tight text-ink text-glow sm:text-6xl"
+            data-decrypt
+          >
+            {task.title}
+          </h1>
+        )
+      }
     </header>
 
     <!-- The brief -->
     <section class="mt-8">
-      <TerminalWindow title={`~/tasks/${task.id}.brief`} meta={weekLabel}>
+      <TerminalWindow
+        title={`~/tasks/${briefFile}${needsPassword ? ".enc" : ""}`}
+        meta={weekLabel}
+      >
         {
           isLocked ? (
             <div class="py-6 text-center">
@@ -131,11 +209,16 @@ const medal = (position: number) =>
                 Unlocks {formatStamp(task.releaseDate)}
               </p>
             </div>
+          ) : needsPassword ? (
+            <TaskRevealPrompt label={briefFile} error={revealError} />
           ) : (
             <div>
               {task.brief &&
                 (Array.isArray(task.brief) ? (
-                  <ul class="space-y-3 border-l-2 border-acid pl-4">
+                  <ul
+                    class="space-y-3 border-l-2 border-acid pl-4"
+                    data-decrypt
+                  >
                     {task.brief.map((point) => (
                       <li class="flex gap-3 text-lg leading-relaxed text-ink sm:text-xl">
                         <span class="shrink-0 text-acid" aria-hidden="true">
@@ -146,11 +229,14 @@ const medal = (position: number) =>
                     ))}
                   </ul>
                 ) : (
-                  <blockquote class="border-l-2 border-acid pl-4 text-lg leading-relaxed text-ink sm:text-xl">
+                  <blockquote
+                    class="border-l-2 border-acid pl-4 text-lg leading-relaxed text-ink sm:text-xl"
+                    data-decrypt
+                  >
                     {task.brief}
                   </blockquote>
                 ))}
-              <p class="mt-6 text-sm leading-relaxed text-ink-dim">
+              <p class="mt-6 text-sm leading-relaxed text-ink-dim" data-decrypt>
                 {task.description}
               </p>
               {task.status === "live" && (

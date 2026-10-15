@@ -57,7 +57,31 @@ export interface Task {
   status: TaskStatus;
   /** Whether the task is contested individually or in teams. */
   format: TaskFormat;
+  /**
+   * Whether an admin set a reveal password. The password itself is never
+   * part of the public record.
+   */
+  passwordProtected: boolean;
+  /** An admin revealed this password-protected task to everyone. */
+  revealedToAll: boolean;
+  /**
+   * The task's content is withheld from this visitor: a password-protected,
+   * not-yet-completed task they haven't unlocked. When true, `title` is
+   * "???", `description` is empty and `brief` is absent.
+   */
+  locked: boolean;
 }
+
+/**
+ * How the request's task snapshot treats password-protected tasks:
+ * `public` redacts locked tasks unless the visitor unlocked them;
+ * `admin` never redacts (admins edit the real content).
+ */
+export type TaskRevealContext =
+  { mode: "public"; unlockedTaskIds: ReadonlySet<string> } | { mode: "admin" };
+
+/** Why a reveal-password attempt on a task page failed. */
+export type RevealError = "denied" | "throttled";
 
 export interface Score {
   taskId: string;

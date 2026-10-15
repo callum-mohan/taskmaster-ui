@@ -671,3 +671,105 @@ a[data-me-row].is-me {
     transform: translate(1px, 1px);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/*  Task reveal (password-protected tasks)                            */
+/*  `decrypt-pending` is set on <html> by an inline script before the  */
+/*  task content paints, so the real text never flashes before the    */
+/*  decrypt animation scrambles it. Without JS it is never set.        */
+/* ------------------------------------------------------------------ */
+.decrypt-pending [data-decrypt] {
+  visibility: hidden;
+}
+
+/* Glyphs still scrambling read as dim noise; resolved ones as ink. */
+.decrypt-noise {
+  color: var(--color-acid);
+  opacity: 0.55;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--color-acid) 60%, transparent);
+}
+
+.reveal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-term-bg) 92%, transparent);
+  backdrop-filter: blur(2px);
+  animation: reveal-overlay-out 0.35s ease-in 1.55s forwards;
+}
+.reveal-overlay::before {
+  /* A single bright scanline sweeping down the screen. */
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  background: var(--color-acid);
+  box-shadow: 0 0 18px 4px
+    color-mix(in srgb, var(--color-acid) 45%, transparent);
+  animation: reveal-sweep 0.9s ease-in-out forwards;
+}
+.reveal-granted {
+  animation: access-granted 0.9s steps(1) 0.45s both;
+}
+@keyframes reveal-sweep {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100vh);
+    opacity: 0;
+  }
+}
+@keyframes access-granted {
+  0% {
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  20% {
+    opacity: 0.2;
+  }
+  30%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes reveal-overlay-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* Wrong reveal password: a short horizontal "nope" shake. */
+.deny-shake {
+  animation: deny-shake 0.45s ease-in-out;
+}
+@keyframes deny-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-overlay,
+  .reveal-overlay::before,
+  .reveal-granted,
+  .deny-shake {
+    animation: none;
+  }
+}

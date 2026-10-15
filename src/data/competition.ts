@@ -1,5 +1,5 @@
 import { asc, desc } from "drizzle-orm";
-import type { CompetitionData } from "../types";
+import type { CompetitionData, TaskRevealContext } from "../types";
 import { getDb } from "../db";
 import {
   bonusPoints as bonusPointsTable,
@@ -18,13 +18,24 @@ import { mapTeams } from "./teams";
 import { mapTasks } from "./tasks";
 import { buildScoreRecords } from "./scores";
 import { derivePollBonusRows, mapPolls } from "./polls";
+import { unlockedTaskIds } from "../lib/task-reveal";
+
+/**
+ * Who the snapshot is for: public visitors (with any task reveal cookies
+ * they carry, keyed by task id) or an admin, who always sees real content.
+ */
+export type CompetitionViewer =
+  | { mode: "public"; revealTokens: ReadonlyMap<string, string> }
+  | { mode: "admin" };
 
 /**
  * Loads every competition record for the current request in one HTTP round
  * trip and maps the rows onto the `src/types` shapes. Nothing is cached, so
  * admin edits are visible on the very next page view.
  */
-export async function loadCompetition(): Promise<CompetitionData> {
+export async function loadCompetition(
+  viewer: CompetitionViewer = { mode: "public", revealTokens: new Map() },
+): Promise<CompetitionData> {
   const db = getDb();
   const [
     playerRows,
@@ -58,7 +69,21 @@ export async function loadCompetition(): Promise<CompetitionData> {
 
   const players = mapPlayers(playerRows);
   const teams = mapTeams(teamRows, memberRows);
-  const tasks = mapTasks(taskRows);
+  const reveal: TaskRevealContext =
+    viewer.mode === "admin"
+      ? viewer
+      : {
+          mode: "public",
+          unlockedTaskIds: await unlockedTaskIds(
+            viewer.revealTokens,
+            new Map(
+              taskRows.flatMap((row) =>
+                row.revealPassword ? [[row.id, row.revealPassword]] : [],
+              ),
+            ),
+          ),
+        };
+  const tasks = mapTasks(taskRows, reveal);
   const polls = mapPolls(pollRows, pollOptionRows, pollVoteRows, tasks);
   const records = buildScoreRecords(
     {

@@ -262,8 +262,10 @@ secrets:
 The last three are synced to the Worker as secrets on each deploy (the site
 fails closed if any is missing). Then, once:
 
-1. In Cloudflare, add `eayltaskmaster.co.uk` as a **Custom Domain** on the
-   `taskmaster-ui` Worker, and point DNS away from GitHub Pages.
+1. Remove any old DNS records for `eayltaskmaster.co.uk` and
+   `www.eayltaskmaster.co.uk` (e.g. GitHub Pages). `wrangler deploy` attaches
+   both as **Custom Domains** (see `routes` in `wrangler.jsonc`), creating the
+   DNS records and certificates; `www` is 301-redirected to the apex.
 2. Disable GitHub Pages for the repository.
 3. If you also use the `*.workers.dev` URL, add it as a trusted domain:
    `neon neon-auth domain add https://<name>.workers.dev --branch production`

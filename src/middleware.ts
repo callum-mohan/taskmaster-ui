@@ -20,6 +20,13 @@ const isAuthPagePath = (path: string) =>
   /^\/(?:login|logout)\/?$/i.test(normalise(path));
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  // Send `www.` visitors to the apex domain, keeping the path and query.
+  if (context.url.hostname.startsWith("www.")) {
+    const target = new URL(context.url);
+    target.hostname = target.hostname.slice(4);
+    return context.redirect(target.href, 301);
+  }
+
   // Load the competition data lazily and at most once per request, so routes
   // that never ask for it (e.g. the sitemap index) skip the query.
   let queries: Promise<Queries> | undefined;

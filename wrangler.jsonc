@@ -7,6 +7,12 @@
   "observability": {
     "enabled": true,
   },
+  // Both hosts are served by this Worker; the middleware 301s `www` to the
+  // apex so there's a single canonical origin (and one Neon Auth domain).
+  "routes": [
+    { "pattern": "eayltaskmaster.co.uk", "custom_domain": true },
+    { "pattern": "www.eayltaskmaster.co.uk", "custom_domain": true },
+  ],
   // Secrets (set with `npx wrangler secret put <NAME>`): DATABASE_URL,
   // NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET. Locally they come from
   // `.env.local`.

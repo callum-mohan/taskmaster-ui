@@ -3,6 +3,8 @@
 import { withBase } from "../lib/url";
 
 const year = new Date().getFullYear();
+const aboutHref = withBase("/about");
+const onAbout = Astro.url.pathname.startsWith(aboutHref);
 ---
 
 <footer class="mt-16 border-t border-grid bg-term-bg/80">
@@ -13,6 +15,26 @@ const year = new Date().getFullYear();
       <span class="text-acid">$</span>
       <span>echo "EAYL Taskmaster &mdash; The Ultimate Academy Challenge"</span>
     </p>
+    <nav aria-label="Footer">
+      <a
+        href={aboutHref}
+        aria-current={onAbout ? "page" : undefined}
+        class:list={[
+          "group inline-flex items-center gap-1 tracking-wide transition-colors",
+          onAbout ? "text-acid" : "text-ink-dim hover:text-ink",
+        ]}
+      >
+        <span
+          class:list={[
+            onAbout ? "text-acid" : "text-ink-faint group-hover:text-acid",
+          ]}
+          aria-hidden="true"
+        >
+          ./
+        </span>
+        about
+      </a>
+    </nav>
     <p class="flex items-center gap-2">
       <span class="h-2 w-2 rounded-full bg-dot-green"></span>
       <span

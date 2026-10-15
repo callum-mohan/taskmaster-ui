@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { playerAccounts, players } from "../db/schema";
 import type {
@@ -14,6 +14,15 @@ import type { ProfileInput } from "../lib/account-forms";
 // `scripts/create-player-accounts.mjs`, since sign-up is disabled.
 
 type AccountRow = typeof playerAccounts.$inferSelect;
+
+// Postgres renders `timestamptz` as e.g. "2026-10-15 13:55:43.12+00"; turn it
+// into a standard ISO instant so `new Date()` parses it everywhere.
+const toInstantIso = (timestamp: string) =>
+  new Date(
+    timestamp
+      .replace(" ", "T")
+      .replace(/([+-]\d{2})(\d{2})?$/, (_, h, m) => `${h}:${m ?? "00"}`),
+  ).toISOString();
 
 const toAccount = (row: AccountRow): PlayerAccount => ({
   playerId: row.playerId,
@@ -39,6 +48,7 @@ export async function getSessionPlayer(
       bio: players.bio,
       avatarUrl: players.avatarUrl,
       mustChangePassword: playerAccounts.mustChangePassword,
+      notificationsReadAt: playerAccounts.notificationsReadAt,
     })
     .from(playerAccounts)
     .innerJoin(players, eq(players.id, playerAccounts.playerId))
@@ -53,6 +63,9 @@ export async function getSessionPlayer(
     ...(row.avatarUrl && { avatarUrl: row.avatarUrl }),
     mustChangePassword: row.mustChangePassword,
     isAdmin: user.isAdmin,
+    ...(row.notificationsReadAt && {
+      notificationsReadAt: toInstantIso(row.notificationsReadAt),
+    }),
   };
 }
 
@@ -129,4 +142,12 @@ export async function clearMustChangePassword(userId: string): Promise<void> {
     .update(playerAccounts)
     .set({ mustChangePassword: false })
     .where(eq(playerAccounts.userId, userId));
+}
+
+/** A player opened their notifications: everything up to now is read. */
+export async function markNotificationsRead(playerId: string): Promise<void> {
+  await getDb()
+    .update(playerAccounts)
+    .set({ notificationsReadAt: sql`now()` })
+    .where(eq(playerAccounts.playerId, playerId));
 }

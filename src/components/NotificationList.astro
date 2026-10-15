@@ -1,0 +1,99 @@
+---
+import type { NotificationItem, NotificationKind } from "../types";
+
+interface Props {
+  items: NotificationItem[];
+  class?: string;
+}
+
+const { items, class: className = "" } = Astro.props;
+
+const dateFmt = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const kindConfig: Record<NotificationKind, { label: string; classes: string }> =
+  {
+    "task-released": {
+      label: "TASK",
+      classes: "border-acid/40 bg-acid/10 text-acid",
+    },
+    "poll-opened": {
+      label: "POLL",
+      classes: "border-cyan/40 bg-cyan/10 text-cyan",
+    },
+  };
+---
+
+{
+  items.length === 0 ? (
+    <p class:list={["px-4 py-8 text-center text-sm text-ink-faint", className]}>
+      <span class="text-acid" aria-hidden="true">
+        &gt;{" "}
+      </span>
+      nothing new yet. check back when the next task drops.
+    </p>
+  ) : (
+    <ul class:list={["divide-y divide-grid", className]}>
+      {items.map((item) => {
+        const kind = kindConfig[item.kind];
+        return (
+          <li>
+            <a
+              href={item.href}
+              data-notification-item
+              data-unread={item.unread ? "" : undefined}
+              class="group flex gap-3 border-l-2 border-transparent px-4 py-3 transition-colors hover:bg-term-panel-2 data-[unread]:border-acid data-[unread]:bg-acid/5"
+            >
+              <span class="mt-1 w-2 shrink-0" aria-hidden="true">
+                {item.unread && (
+                  <span
+                    data-notification-dot
+                    class="block h-2 w-2 rounded-full bg-acid"
+                  />
+                )}
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="flex flex-wrap items-center gap-2">
+                  <span
+                    class:list={[
+                      "inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-[0.15em]",
+                      kind.classes,
+                    ]}
+                  >
+                    {kind.label}
+                  </span>
+                  <time
+                    datetime={item.at}
+                    class="text-[10px] tracking-[0.15em] text-ink-faint uppercase tabular-nums"
+                  >
+                    {dateFmt.format(new Date(item.at))}
+                  </time>
+                  {item.unread && (
+                    <span
+                      data-notification-new
+                      class="text-[10px] font-bold tracking-[0.15em] text-acid"
+                    >
+                      NEW
+                    </span>
+                  )}
+                </span>
+                <span class="mt-1 block truncate text-sm font-bold text-ink group-hover:text-acid">
+                  {item.title}
+                </span>
+                {item.detail && (
+                  <span class="mt-0.5 block text-xs text-ink-dim">
+                    {item.detail}
+                  </span>
+                )}
+              </span>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  )
+}

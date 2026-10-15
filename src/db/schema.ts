@@ -165,6 +165,9 @@ export const playerAccounts = pgTable(
     userId: text().unique("player_accounts_user_id_unique"),
     mustChangePassword: boolean().notNull().default(true),
     createdAt: timestamp({ mode: "string" }).notNull().defaultNow(),
+    // When the player last opened their notifications; null until they do.
+    // A real instant (set with `now()`), so it carries a time zone.
+    notificationsReadAt: timestamp({ withTimezone: true, mode: "string" }),
   },
   (t) => [
     check("player_accounts_email_lower", sql`${t.email} = lower(${t.email})`),

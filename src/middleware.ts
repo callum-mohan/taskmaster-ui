@@ -63,6 +63,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       name: linked?.playerName ?? signedIn.name,
       isAdmin: signedIn.isAdmin,
       ...(linked && { playerId: linked.playerId }),
+      ...(linked?.notificationsReadAt && {
+        notificationsReadAt: linked.notificationsReadAt,
+      }),
     };
   };
 

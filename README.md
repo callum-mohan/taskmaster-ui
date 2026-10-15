@@ -58,6 +58,7 @@ src/
 │   ├── scores.ts      # rows → Score  ─┤  (points → positions; bonus points)
 │   ├── polls.ts       # rows → Poll   ─┘  (status, voting bonuses derived)
 │   ├── poll-queries.ts # poll selectors: who can vote / see results
+│   ├── notification-queries.ts # a player's feed (new tasks + polls), derived
 │   ├── votes.ts       # a player's own poll votes
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
@@ -71,7 +72,7 @@ src/
 │   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
 │   ├── login.astro            # /login — the player portal
 │   ├── logout.ts              # POST /logout — signs out (either portal)
-│   ├── account/               # /account — edit own profile, change password, vote in polls
+│   ├── account/               # /account — edit own profile, change password, vote in polls, notifications
 │   ├── index.astro            # homepage
 │   ├── tasks/                 # /tasks and /tasks/[id]
 │   ├── players/               # /players and /players/[id]
@@ -221,6 +222,20 @@ The homepage shows every open poll (newest first) followed by recently closed
 ones. You can **duplicate** a poll (its votes aren't copied) or **reset votes**
 on it. Votes are a `POST` to `/account/polls/<id>`, so the `/account` guard
 requires a signed-in player who has replaced their temporary password.
+
+## 🔔 Notifications
+
+Signed-in **players** get a bell in the navbar with an unread count. It opens
+a dropdown (a full-height drawer on phones) listing the newest 20 events:
+**tasks** once their release date passes and published **polls** once they
+open. Guests and admin accounts without a player profile don't see it.
+
+The feed is derived from the competition snapshot, so nothing is written
+when a task or poll goes live. The only stored fact is
+`player_accounts.notifications_read_at`: opening the panel `POST`s to
+`/account/notifications/read`, which sets it to `now()`, and anything newer
+is unread. Without JavaScript the bell links to `/account/notifications`,
+which lists the feed with a "mark all read" button.
 
 ## 👤 Player accounts
 

@@ -1,14 +1,18 @@
 ---
 // Site navigation styled as a terminal window title bar.
+import NotificationBell from "./NotificationBell.astro";
+import NotificationPanel from "./NotificationPanel.astro";
 import { withBase } from "../lib/url";
-import type { Viewer } from "../types";
+import type { NotificationFeed, Viewer } from "../types";
 
 interface Props {
   /** Who is signed in; switches "login" for profile/admin/logout links. */
   viewer?: Viewer;
+  /** Signed-in players' feed; the bell only shows when this is set. */
+  notifications?: NotificationFeed;
 }
 
-const { viewer } = Astro.props;
+const { viewer, notifications } = Astro.props;
 
 interface NavItem {
   href: string;
@@ -75,7 +79,7 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
     aria-label="Primary"
   >
     <!-- Brand / terminal traffic lights -->
-    <a href={withBase("/")} class="group flex items-center gap-3">
+    <a href={withBase("/")} class="group mr-auto flex items-center gap-3">
       <span class="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
         <span class="h-3 w-3 rounded-full bg-dot-red" data-tl="red"></span>
         <span class="h-3 w-3 rounded-full bg-dot-amber" data-tl="amber"></span>
@@ -161,28 +165,6 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
           </li>
         ))
       }
-      <li>
-        <a
-          href={withBase("/about")}
-          aria-current={isActive("/about") ? "page" : undefined}
-          class:list={[
-            "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
-            isActive("/about") ? "text-acid" : "text-ink-dim hover:text-ink",
-          ]}
-        >
-          <span
-            class:list={[
-              "mr-1",
-              isActive("/about")
-                ? "text-acid"
-                : "text-ink-faint group-hover:text-acid",
-            ]}
-          >
-            ./
-          </span>
-          about
-        </a>
-      </li>
       {
         viewer ? (
           <li class="relative" data-nav-dropdown>
@@ -343,6 +325,15 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
       </li>
     </ul>
 
+    {
+      notifications && (
+        <NotificationBell
+          unreadCount={notifications.unreadCount}
+          class="-ml-2"
+        />
+      )
+    }
+
     <!-- Mobile toggle -->
     <button
       type="button"
@@ -423,23 +414,6 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
         ))
       }
       <li class="border-b border-grid-soft py-2 last:border-b-0">
-        <a
-          href={withBase("/about")}
-          aria-current={isActive("/about") ? "page" : undefined}
-          class:list={[
-            "flex items-center gap-2 py-2 text-sm tracking-wide",
-            isActive("/about") ? "text-acid" : "text-ink-dim",
-          ]}
-        >
-          <span
-            class:list={[isActive("/about") ? "text-acid" : "text-ink-faint"]}
-          >
-            ./
-          </span>
-          about
-        </a>
-      </li>
-      <li class="border-b border-grid-soft py-2 last:border-b-0">
         {
           viewer && (
             <p class="py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
@@ -492,6 +466,8 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
     </ul>
   </div>
 </header>
+
+{notifications && <NotificationPanel feed={notifications} />}
 
 <script>
   import {

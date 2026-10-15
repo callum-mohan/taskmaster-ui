@@ -5,6 +5,14 @@ import type { FeatureUpdate } from "../types";
 // keep the shape stable and add new entries at the top.
 export const changelog: FeatureUpdate[] = [
   {
+    id: "notifications",
+    date: "2026-10-15",
+    title: "Notifications",
+    description:
+      "Signed-in players now get a bell in the navbar that flags new tasks and polls since you last looked. Open it to catch up; your read state follows you across devices.",
+    category: "new",
+  },
+  {
     id: "polls",
     date: "2026-10-15",
     title: "Homepage polls",

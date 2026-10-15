@@ -36,6 +36,13 @@
       "when": 1792062679412,
       "tag": "0004_task_reveal_password",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792073881639,
+      "tag": "0005_notifications_read_at",
+      "breakpoints": true
     }
   ]
 }

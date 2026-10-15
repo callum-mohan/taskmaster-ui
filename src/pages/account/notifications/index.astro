@@ -1,0 +1,68 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import NotificationList from "../../../components/NotificationList.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+const player = Astro.locals.player;
+if (!player || player.mustChangePassword) {
+  return Astro.redirect(withBase("/login"));
+}
+
+const { getNotifications } = await Astro.locals.getQueries();
+const feed = getNotifications({ readAt: player.notificationsReadAt });
+const justRead = Astro.url.searchParams.get("done") === "read";
+---
+
+<Layout title="Notifications">
+  <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p
+          class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim"
+        >
+          notify --list
+        </p>
+        <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-ink">
+          Notifications
+        </h1>
+        <p class="mt-2 text-sm text-ink-dim">
+          {
+            feed.unreadCount > 0
+              ? `${feed.unreadCount} unread since you last checked.`
+              : "You're all caught up."
+          }
+        </p>
+      </div>
+      {
+        feed.unreadCount > 0 && (
+          <form method="post" action={withBase("/account/notifications/read")}>
+            <button type="submit" class={btnGhost}>
+              mark all read
+            </button>
+          </form>
+        )
+      }
+    </header>
+
+    {
+      justRead && (
+        <Notice tone="success" class="mt-6">
+          Notifications marked as read.
+        </Notice>
+      )
+    }
+
+    <TerminalWindow
+      title="~/notifications"
+      meta={`${feed.items.length} latest`}
+      class="mt-8"
+      bodyClass="p-0 sm:p-0"
+    >
+      <NotificationList items={feed.items} />
+    </TerminalWindow>
+  </div>
+</Layout>

@@ -159,6 +159,8 @@ export interface SessionPlayer {
   mustChangePassword: boolean;
   /** Also holds the `admin` role, so `/admin` is available too. */
   isAdmin: boolean;
+  /** When they last opened their notifications (ISO 8601); unset if never. */
+  notificationsReadAt?: string;
 }
 
 /**
@@ -170,6 +172,8 @@ export interface Viewer {
   isAdmin: boolean;
   /** Set when the account is linked to a player profile. */
   playerId?: string;
+  /** Linked players only: when they last opened their notifications. */
+  notificationsReadAt?: string;
 }
 
 /**
@@ -754,4 +758,31 @@ export interface PollCard {
 export interface PollSummary {
   poll: PollSettings;
   voterCount: number;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────
+
+/** What happened; each kind is derived from records already in the snapshot. */
+export type NotificationKind = "task-released" | "poll-opened";
+
+/** One entry in a player's notification feed. */
+export interface NotificationItem {
+  /** Stable per event, e.g. `task:week-05` or `poll:best-egg`. */
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  /** Secondary line, e.g. "Week 05 · team task". */
+  detail?: string;
+  /** Base-prefixed link to the task or poll. */
+  href: string;
+  /** When it happened (ISO 8601). */
+  at: string;
+  /** Happened after the player last opened their notifications. */
+  unread: boolean;
+}
+
+/** A player's newest notifications, newest first. */
+export interface NotificationFeed {
+  items: NotificationItem[];
+  unreadCount: number;
 }

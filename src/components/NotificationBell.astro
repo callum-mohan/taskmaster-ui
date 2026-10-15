@@ -1,0 +1,49 @@
+---
+import { withBase } from "../lib/url";
+
+interface Props {
+  unreadCount: number;
+  class?: string;
+}
+
+const { unreadCount, class: className = "" } = Astro.props;
+
+const label =
+  unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications";
+---
+
+<a
+  href={withBase("/account/notifications")}
+  data-notification-bell
+  aria-label={label}
+  title="Notifications"
+  class:list={[
+    "relative inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded border border-grid text-ink-dim transition-colors hover:border-ink-faint hover:text-acid aria-expanded:border-acid aria-expanded:text-acid",
+    className,
+  ]}
+>
+  <svg
+    class="h-4 w-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+  </svg>
+  {
+    unreadCount > 0 && (
+      <span
+        data-notification-badge
+        aria-hidden="true"
+        class="absolute -top-1.5 -right-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full border border-term-bg bg-acid px-1 text-[10px] leading-none font-bold text-term-bg tabular-nums"
+      >
+        {unreadCount > 9 ? "9+" : unreadCount}
+      </span>
+    )
+  }
+</a>

@@ -7,10 +7,8 @@ import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
 import { withBase } from "../lib/url";
 
-const [{ getCommandPaletteItems, getWhatsNew }, viewer] = await Promise.all([
-  Astro.locals.getQueries(),
-  Astro.locals.getViewer(),
-]);
+const [{ getCommandPaletteItems, getWhatsNew, getNotifications }, viewer] =
+  await Promise.all([Astro.locals.getQueries(), Astro.locals.getViewer()]);
 
 interface Props {
   /** Page-specific title segment; the site name is appended automatically. */
@@ -38,6 +36,10 @@ const socialImage = new URL(withBase(image), Astro.site);
 
 const paletteItems = getCommandPaletteItems();
 const whatsNew = getWhatsNew();
+// Only players get notifications: their read marker lives on the account.
+const notifications = viewer?.playerId
+  ? getNotifications({ readAt: viewer.notificationsReadAt })
+  : undefined;
 ---
 
 <!doctype html>
@@ -97,7 +99,7 @@ const whatsNew = getWhatsNew();
       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[70] focus:bg-acid focus:text-term-bg focus:px-3 focus:py-1 focus:font-bold"
       >Skip to content</a
     >
-    <Navbar viewer={viewer} />
+    <Navbar viewer={viewer} notifications={notifications} />
     <WhatsNewBanner info={whatsNew} />
     <main id="main" class="flex-1">
       <slot />

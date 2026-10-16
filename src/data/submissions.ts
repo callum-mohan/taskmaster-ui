@@ -1,11 +1,13 @@
 import { and, asc, count, eq, isNull, sql } from "drizzle-orm";
 import type {
+  SubmissionEntry,
   SubmissionKind,
   SubmissionOwnerRef,
   TaskSubmission,
 } from "../types";
 import { getDb } from "../db";
 import { taskSubmissions } from "../db/schema";
+import { presignGet } from "../lib/storage";
 
 // Task submissions. Entries are loaded per task (only task pages and the
 // admin gallery need them), so they stay out of the competition snapshot.
@@ -51,6 +53,23 @@ export async function getSubmission(
     .from(taskSubmissions)
     .where(eq(taskSubmissions.id, id));
   return row && mapSubmission(row);
+}
+
+/**
+ * Points photo entries straight at presigned links, skipping the media
+ * route. Only for pages already rendered per viewer (never shared-cached)
+ * whose entries have passed the access check.
+ */
+export function presignEntryMedia(
+  entries: SubmissionEntry[],
+): Promise<SubmissionEntry[]> {
+  return Promise.all(
+    entries.map(async (entry) =>
+      entry.mediaUrl && entry.objectKey
+        ? { ...entry, mediaUrl: await presignGet(entry.objectKey) }
+        : entry,
+    ),
+  );
 }
 
 /** Rows owned by a player (individual task) or squad (team task). */

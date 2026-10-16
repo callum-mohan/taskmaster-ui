@@ -36,13 +36,12 @@ export const GET: APIRoute = async ({ params, locals }) => {
   // Hidden and not-yet-public entries look the same as missing ones.
   if (!allowed) return notFound();
 
-  const isPublic = task.status === "completed" && !submission.hidden;
   return new Response(null, {
     status: 302,
     headers: {
       Location: await presignGet(submission.objectKey, LINK_SECONDS),
-      // Reuse the redirect for a while, well inside the link's lifetime.
-      "Cache-Control": isPublic ? "public, max-age=300" : "private, no-store",
+      // Entries are sign-in only, so no shared cache may keep the link.
+      "Cache-Control": "private, no-store",
     },
   });
 };

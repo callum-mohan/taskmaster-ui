@@ -86,9 +86,9 @@ export function createSubmissionQueries(data: CompetitionData) {
   });
 
   /**
-   * Who may see an entry: admins always; everyone once the deadline has
-   * passed (unless an admin hid it); before that only the player or squad
-   * it belongs to.
+   * Who may see an entry: admins always; any signed-in user once the
+   * deadline has passed (unless an admin hid it); before that only the
+   * player or squad it belongs to.
    */
   function canViewSubmission(
     task: Task,
@@ -96,6 +96,7 @@ export function createSubmissionQueries(data: CompetitionData) {
     viewer: SubmissionViewer,
   ): boolean {
     if (viewer.isAdmin) return true;
+    if (!viewer.signedIn) return false;
     if (task.status === "completed" && !submission.hidden) return true;
     if (!viewer.playerId) return false;
     const owner = getSubmissionOwnerRef(task, viewer.playerId);
@@ -182,12 +183,13 @@ export function createSubmissionQueries(data: CompetitionData) {
       .sort((a, b) => order(a.owner) - order(b.owner));
   }
 
-  /** The public gallery: visible entries once the deadline has passed. */
+  /** The shared gallery: visible entries for signed-in users once the deadline has passed. */
   function getPublicSubmissionGallery(
     task: Task,
     submissions: TaskSubmission[],
+    viewer: SubmissionViewer,
   ): SubmissionGalleryGroup[] {
-    return task.status === "completed"
+    return task.status === "completed" && viewer.signedIn
       ? getSubmissionGallery(task, submissions)
       : [];
   }

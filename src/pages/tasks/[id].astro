@@ -14,7 +14,7 @@ import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
 import DecryptReveal from "../../components/DecryptReveal.astro";
 import SubmissionPanel from "../../components/SubmissionPanel.astro";
 import SubmissionGallery from "../../components/SubmissionGallery.astro";
-import { loadTaskSubmissions } from "../../data/submissions";
+import { loadTaskSubmissions, presignEntryMedia } from "../../data/submissions";
 import { getRevealPassword } from "../../data/task-reveal";
 import {
   allowRevealAttempt,
@@ -99,23 +99,31 @@ const pager = getTaskPager(task.id);
 const hasRecap = getRecapTaskIds().includes(task.id);
 const bonuses = getTaskBonuses(task.id);
 
-// Entries: the viewer's own slots while the task is live, then a public
-// gallery once the deadline passes. Only loaded when something will show.
+// Entries: the viewer's own slots while the task is live, then a gallery for
+// signed-in users once the deadline passes. Only loaded when something will show.
 const viewer = await Astro.locals.getViewer();
+const submissionViewer = {
+  signedIn: viewer !== undefined,
+  isAdmin: viewer?.isAdmin ?? false,
+  ...(viewer?.playerId && { playerId: viewer.playerId }),
+};
 const takesEntries =
   task.status === "live" && !task.locked && task.submissions.max > 0;
 const submissions =
-  task.status === "completed" || (takesEntries && viewer?.playerId)
+  (task.status === "completed" && viewer) || (takesEntries && viewer?.playerId)
     ? await loadTaskSubmissions(task.id)
     : [];
 const submissionPanel = takesEntries
-  ? getSubmissionPanel(task, submissions, {
-      signedIn: viewer !== undefined,
-      isAdmin: viewer?.isAdmin ?? false,
-      ...(viewer?.playerId && { playerId: viewer.playerId }),
-    })
+  ? getSubmissionPanel(task, submissions, submissionViewer)
   : undefined;
-const gallery = getPublicSubmissionGallery(task, submissions);
+const gallery = await Promise.all(
+  getPublicSubmissionGallery(task, submissions, submissionViewer).map(
+    async (group) => ({
+      ...group,
+      entries: await presignEntryMedia(group.entries),
+    }),
+  ),
+);
 const entryCount = gallery.reduce((n, g) => n + g.entries.length, 0);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const squadCount = gallery.filter((g) => g.owner.type === "team").length;

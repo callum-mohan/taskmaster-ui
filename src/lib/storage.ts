@@ -52,16 +52,30 @@ export async function putObject(
   }
 }
 
+// Links are signed as of the start of a fixed window, so every request in that
+// window gets the same URL and the browser can reuse its cached image.
+const SIGN_WINDOW_SECONDS = 60 * 60;
+
 /** A time-limited GET link for a private object (no credentials needed). */
 export async function presignGet(
   key: string,
-  expiresInSeconds = 600,
+  minLifetimeSeconds = 600,
 ): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const signedAt = now - (now % SIGN_WINDOW_SECONDS);
   const url = new URL(objectUrl(key));
-  url.searchParams.set("X-Amz-Expires", String(expiresInSeconds));
+  url.searchParams.set(
+    "X-Amz-Expires",
+    String(SIGN_WINDOW_SECONDS + minLifetimeSeconds),
+  );
   const signed = await client().sign(url.href, {
     method: "GET",
-    aws: { signQuery: true },
+    aws: {
+      signQuery: true,
+      datetime: new Date(signedAt * 1000)
+        .toISOString()
+        .replace(/[:-]|\.\d{3}/g, ""),
+    },
   });
   return signed.url;
 }

@@ -275,6 +275,12 @@ same score sheet (and audit log) as `/admin/scores`. Entries can be hidden
 from the public gallery or deleted. Deleting an entry, task, player or team
 also deletes its photos from storage.
 
+Once a task is **completed**, the same page can add a photo or text entry on
+a player's behalf (e.g. one they sent over WhatsApp). Pick the player and
+upload. On team tasks the entry goes to the player's squad. Admin-added entries
+ignore the task's entry limit and allowed kinds (they work even when on-site
+entries were closed), and they go straight into the public gallery.
+
 ## 🔔 Notifications
 
 Signed-in **players** get a bell in the navbar with an unread count. It opens

@@ -944,6 +944,19 @@ export interface SubmissionGalleryGroup {
   entries: SubmissionEntry[];
 }
 
+/** A player an admin can add an entry for. */
+export interface SubmitterOption {
+  id: string;
+  name: string;
+}
+
+/** Players an admin can add entries for, grouped by squad on team tasks. */
+export interface SubmitterOptionGroup {
+  /** The squad's name (team tasks only). */
+  label?: string;
+  players: SubmitterOption[];
+}
+
 /** What happened to a player's submission attempt (shown on the task page). */
 export type SubmissionOutcome =
   | "submitted"

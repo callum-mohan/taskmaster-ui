@@ -1,5 +1,9 @@
 import { z } from "astro/zod";
-import type { SubmissionKind, SubmissionOutcome } from "../types";
+import type {
+  SubmissionKind,
+  SubmissionOutcome,
+  SubmissionOwnerRef,
+} from "../types";
 
 // Parsing for the player submission form (`/account/submissions/[taskId]`).
 // Photos are checked by their bytes, not the browser's claimed type, and
@@ -72,6 +76,12 @@ export function sniffImage(bytes: Uint8Array): ImageType | "heic" | undefined {
 
 export type SubmissionIntent = "create-photo" | "create-text" | "delete";
 
+/** An admin adding an entry for a player (`/admin/submissions/[taskId]`). */
+export type AddEntryIntent = "add-photo" | "add-text";
+
+export const isAddEntryIntent = (value: unknown): value is AddEntryIntent =>
+  value === "add-photo" || value === "add-text";
+
 export function parseSubmissionIntent(
   form: FormData,
 ): SubmissionIntent | undefined {
@@ -139,3 +149,11 @@ export function parseSubmissionId(
   const id = Number(form.get(name));
   return Number.isInteger(id) && id > 0 ? id : undefined;
 }
+
+/** Where an entry's photo lives in the bucket (unique per upload). */
+export const submissionObjectKey = (
+  taskId: string,
+  owner: SubmissionOwnerRef,
+  type: ImageType,
+) =>
+  `submissions/${taskId}/${owner.type}-${owner.id}/${crypto.randomUUID()}.${type.extension}`;

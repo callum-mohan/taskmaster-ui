@@ -1,7 +1,18 @@
 import { z } from "astro/zod";
 import type { PollRecord } from "../data/admin";
 import { toWallClock } from "./time";
-import { MAX_SUBMISSIONS_PER_TASK, SUBMISSION_KINDS } from "./submission-forms";
+import type { SubmissionOutcome } from "../types";
+import {
+  MAX_CAPTION_LENGTH,
+  MAX_PHOTO_BYTES,
+  MAX_SUBMISSIONS_PER_TASK,
+  MAX_TEXT_LENGTH,
+  SUBMISSION_KINDS,
+  parsePhotoEntry,
+  parseTextEntry,
+  type AddEntryIntent,
+  type PhotoEntryInput,
+} from "./submission-forms";
 
 // Validation for the admin forms. Each parser takes the submitted FormData
 // and returns either typed input for `src/data/admin.ts` or per-field error
@@ -428,6 +439,61 @@ export function parseBonusForm(form: FormData): ParseResult<BonusInput> {
 export function parseRowId(form: FormData, name = "rowId"): number | undefined {
   const n = Number(form.get(name));
   return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+// ── Entries added for a player ────────────────────────────────────────
+
+export type AddEntryInput = { playerId: string } & (
+  { kind: "text"; text: string } | { kind: "photo"; photo: PhotoEntryInput }
+);
+
+const photoErrors: Partial<Record<SubmissionOutcome, string>> = {
+  "too-large": `Photos must be ${Math.round(MAX_PHOTO_BYTES / (1024 * 1024))} MB or smaller.`,
+  "bad-type": "That isn't a supported photo. Use JPEG, PNG, WebP, GIF or AVIF.",
+  heic: "HEIC photos can't be shown in most browsers. Convert it to JPEG first.",
+};
+
+/**
+ * An admin's photo or text entry for a player (see `AddEntryForms`). The
+ * player must be one of `playerIds`, the submitters the task allows. The
+ * entry limit and kinds don't apply.
+ */
+export async function parseAddEntryForm(
+  form: FormData,
+  intent: AddEntryIntent,
+  playerIds: ReadonlySet<string>,
+): Promise<ParseResult<AddEntryInput>> {
+  const values = formValues(form);
+  const errors: FieldErrors = {};
+  const playerId = values.playerId ?? "";
+  if (!playerIds.has(playerId)) errors.playerId = "Pick a player.";
+
+  if (intent === "add-text") {
+    const text = parseTextEntry(form);
+    if (!text.ok) {
+      errors.text = `Write the entry (up to ${MAX_TEXT_LENGTH} characters).`;
+    }
+    return text.ok && !errors.playerId
+      ? { ok: true, data: { playerId, kind: "text", text: text.data }, values }
+      : { ok: false, errors, values };
+  }
+
+  const file = form.get("photo");
+  if (!(file instanceof File) || file.size === 0) {
+    errors.photo = "Choose a photo.";
+    return { ok: false, errors, values };
+  }
+  const photo = await parsePhotoEntry(form);
+  if (!photo.ok) {
+    if (photo.outcome === "invalid") {
+      errors.caption = `Captions are up to ${MAX_CAPTION_LENGTH} characters.`;
+    } else {
+      errors.photo = photoErrors[photo.outcome] ?? "That photo can't be used.";
+    }
+  }
+  return photo.ok && !errors.playerId
+    ? { ok: true, data: { playerId, kind: "photo", photo: photo.data }, values }
+    : { ok: false, errors, values };
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────

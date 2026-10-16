@@ -1,0 +1,223 @@
+---
+import { btnPrimary, inputClass, labelClass } from "./styles";
+import type { SubmitterOptionGroup } from "../../types";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import {
+  MAX_CAPTION_LENGTH,
+  MAX_PHOTO_BYTES,
+  MAX_TEXT_LENGTH,
+  PHOTO_ACCEPT,
+  type AddEntryIntent,
+} from "../../lib/submission-forms";
+
+interface Props {
+  /** Who an entry can be added for (grouped by squad on team tasks). */
+  submitters: SubmitterOptionGroup[];
+  isTeam: boolean;
+  /** A rejected form to show again, with its values and field errors. */
+  failed?: { intent: AddEntryIntent; values: FormValues; errors: FieldErrors };
+  class?: string;
+}
+
+const { submitters, isTeam, failed, class: className } = Astro.props;
+const maxMb = Math.round(MAX_PHOTO_BYTES / (1024 * 1024));
+const hasSubmitters = submitters.some((g) => g.players.length > 0);
+
+const stateFor = (intent: AddEntryIntent) =>
+  failed?.intent === intent
+    ? { values: failed.values, errors: failed.errors }
+    : { values: {} as FormValues, errors: {} as FieldErrors };
+const forms: {
+  intent: AddEntryIntent;
+  title: string;
+  submit: string;
+  multipart: boolean;
+}[] = [
+  {
+    intent: "add-photo",
+    title: "photo",
+    submit: "[ ADD PHOTO ]",
+    multipart: true,
+  },
+  {
+    intent: "add-text",
+    title: "text",
+    submit: "[ ADD TEXT ]",
+    multipart: false,
+  },
+];
+const fieldId = (intent: AddEntryIntent, name: string) => `${intent}-${name}`;
+const errorId = (intent: AddEntryIntent, name: string) =>
+  `${fieldId(intent, name)}-error`;
+---
+
+<section
+  id="add-entry"
+  aria-labelledby="add-entry-heading"
+  class:list={["scroll-mt-24", className]}
+>
+  <h2
+    id="add-entry-heading"
+    class="text-[11px] font-bold tracking-[0.2em] text-ink-faint uppercase"
+  >
+    add an entry for a player
+  </h2>
+  <p class="mt-1 text-xs text-ink-faint">
+    For entries sent in another way. They go straight into the public gallery
+    (hide them below if needed) and don't count against the entry limit.
+    {isTeam && " On a team task the entry goes to the player's squad."}
+  </p>
+
+  {
+    hasSubmitters ? (
+      <div class="mt-3 grid gap-4 lg:grid-cols-2">
+        {forms.map(({ intent, title, submit, multipart }) => {
+          const { values, errors } = stateFor(intent);
+          const field = (name: string) => ({
+            id: fieldId(intent, name),
+            name,
+            "aria-invalid": errors[name] ? ("true" as const) : undefined,
+            "aria-describedby": errors[name]
+              ? errorId(intent, name)
+              : undefined,
+          });
+          const errorFor = (name: string) =>
+            errors[name] && (
+              <p id={errorId(intent, name)} class="text-xs text-danger">
+                <span aria-hidden="true">✗ </span>
+                {errors[name]}
+              </p>
+            );
+          return (
+            <form
+              method="post"
+              enctype={multipart ? "multipart/form-data" : undefined}
+              class="space-y-3 rounded-lg border border-grid bg-term-bg/40 p-4"
+              data-add-entry-form
+              data-max-bytes={multipart ? MAX_PHOTO_BYTES : undefined}
+            >
+              <input type="hidden" name="intent" value={intent} />
+              <h3 class="text-xs font-bold tracking-widest text-cyan uppercase">
+                {title} entry
+              </h3>
+              <div class="space-y-1.5">
+                <label for={fieldId(intent, "playerId")} class={labelClass}>
+                  player
+                </label>
+                <select
+                  {...field("playerId")}
+                  required
+                  class={inputClass(Boolean(errors.playerId))}
+                >
+                  <option value="" selected={!values.playerId}>
+                    choose a player
+                  </option>
+                  {submitters.map((group) => {
+                    const options = group.players.map((p) => (
+                      <option value={p.id} selected={values.playerId === p.id}>
+                        {p.name}
+                      </option>
+                    ));
+                    return group.label ? (
+                      <optgroup label={group.label}>{options}</optgroup>
+                    ) : (
+                      options
+                    );
+                  })}
+                </select>
+                {errorFor("playerId")}
+              </div>
+              {multipart ? (
+                <>
+                  <div class="space-y-1.5">
+                    <label for={fieldId(intent, "photo")} class={labelClass}>
+                      photo (JPEG, PNG, WebP, GIF or AVIF · max {maxMb} MB)
+                    </label>
+                    <input
+                      {...field("photo")}
+                      type="file"
+                      accept={PHOTO_ACCEPT}
+                      required
+                      class="block w-full text-sm text-ink-dim file:mr-3 file:rounded file:border file:border-grid file:bg-term-panel file:px-3 file:py-1.5 file:text-xs file:font-bold file:tracking-widest file:text-ink hover:file:border-acid"
+                    />
+                    {errorFor("photo")}
+                  </div>
+                  <div class="space-y-1.5">
+                    <label for={fieldId(intent, "caption")} class={labelClass}>
+                      caption (optional)
+                    </label>
+                    <input
+                      {...field("caption")}
+                      type="text"
+                      maxlength={MAX_CAPTION_LENGTH}
+                      value={values.caption ?? ""}
+                      class={inputClass(Boolean(errors.caption))}
+                    />
+                    {errorFor("caption")}
+                  </div>
+                </>
+              ) : (
+                <div class="space-y-1.5">
+                  <label for={fieldId(intent, "text")} class={labelClass}>
+                    text (max {MAX_TEXT_LENGTH} characters)
+                  </label>
+                  <textarea
+                    {...field("text")}
+                    required
+                    rows={5}
+                    maxlength={MAX_TEXT_LENGTH}
+                    class={inputClass(Boolean(errors.text))}
+                    set:text={values.text ?? ""}
+                  />
+                  {errorFor("text")}
+                </div>
+              )}
+              <button
+                type="submit"
+                class:list={[
+                  btnPrimary,
+                  "disabled:cursor-wait disabled:opacity-60",
+                ]}
+              >
+                {submit}
+              </button>
+            </form>
+          );
+        })}
+      </div>
+    ) : (
+      <p class="mt-3 text-sm text-ink-dim">
+        <span class="text-acid">$</span>{" "}
+        {isTeam ? "no squad has members yet" : "no players yet"}
+      </p>
+    )
+  }
+</section>
+
+<script>
+  // Progressive enhancement: catch oversized photos before uploading and show
+  // a busy state while the form posts. The forms work without this.
+  document
+    .querySelectorAll<HTMLFormElement>("form[data-add-entry-form]")
+    .forEach((form) => {
+      const button = form.querySelector<HTMLButtonElement>(
+        'button[type="submit"]',
+      );
+      const file = form.querySelector<HTMLInputElement>('input[type="file"]');
+      const maxBytes = Number(form.dataset.maxBytes);
+      file?.addEventListener("change", () => {
+        const size = file.files?.[0]?.size ?? 0;
+        const mb = Math.round(maxBytes / (1024 * 1024));
+        const tooBig = size > maxBytes;
+        file.setCustomValidity(
+          tooBig ? `Photos must be ${mb} MB or smaller.` : "",
+        );
+        if (tooBig) file.reportValidity();
+      });
+      form.addEventListener("submit", () => {
+        if (!button) return;
+        button.disabled = true;
+        button.textContent = file ? "[ UPLOADING… ]" : "[ SAVING… ]";
+      });
+    });
+</script>

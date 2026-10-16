@@ -6,6 +6,8 @@ import type {
   SubmissionOwnerRef,
   SubmissionPanel,
   SubmissionViewer,
+  SubmitterOption,
+  SubmitterOptionGroup,
   Task,
   TaskSubmission,
 } from "../types";
@@ -190,11 +192,40 @@ export function createSubmissionQueries(data: CompetitionData) {
       : [];
   }
 
+  /**
+   * Admins add entries on a player's behalf (e.g. sent in by message) once
+   * the deadline has passed, regardless of the task's entry limit or kinds.
+   */
+  const canAddEntriesForPlayers = (task: Task) => task.status === "completed";
+
+  /**
+   * Who an admin can add an entry for: every player on individual tasks;
+   * squad members (grouped by squad) on team tasks, as the entry goes to the
+   * squad.
+   */
+  function getSubmitterOptions(task: Task): SubmitterOptionGroup[] {
+    const option = (id: string): SubmitterOption => ({
+      id,
+      name: playersById.get(id)?.name ?? id,
+    });
+    if (task.format === "individual") {
+      return [{ players: players.map((p) => option(p.id)) }];
+    }
+    return teams
+      .filter((team) => team.memberIds.length > 0)
+      .map((team) => ({
+        label: team.name,
+        players: team.memberIds.map(option),
+      }));
+  }
+
   return {
     getSubmissionOwnerRef,
     canViewSubmission,
     getSubmissionPanel,
     getSubmissionGallery,
     getPublicSubmissionGallery,
+    canAddEntriesForPlayers,
+    getSubmitterOptions,
   };
 }

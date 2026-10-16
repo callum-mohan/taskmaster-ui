@@ -12,6 +12,7 @@ import {
   parseSubmissionId,
   parseSubmissionIntent,
   parseTextEntry,
+  submissionObjectKey,
 } from "../../../lib/submission-forms";
 import { withBase } from "../../../lib/url";
 
@@ -96,7 +97,7 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
   const photo = await parsePhotoEntry(form);
   if (!photo.ok) return reply(photo.outcome);
   const { bytes, type, caption } = photo.data;
-  const objectKey = `submissions/${task.id}/${owner.type}-${owner.id}/${crypto.randomUUID()}.${type.extension}`;
+  const objectKey = submissionObjectKey(task.id, owner, type);
   try {
     await putObject(objectKey, bytes, type.contentType);
   } catch (error) {

@@ -28,10 +28,12 @@ import {
   teams,
 } from "../db/schema";
 import type { BatchItem } from "drizzle-orm/batch";
-import type { AdminUser, ScoreAuditEntry } from "../types";
+import type { AdminUser, ScoreAuditEntry, SubmissionOwnerRef } from "../types";
 import { timestamptzToIso } from "../lib/time";
-import { deleteObjects } from "../lib/storage";
+import { deleteObjects, putObject } from "../lib/storage";
+import { submissionObjectKey } from "../lib/submission-forms";
 import type {
+  AddEntryInput,
   BonusInput,
   PlayerInput,
   PollInput,
@@ -400,6 +402,51 @@ export async function setSubmissionHidden(
     .update(taskSubmissions)
     .set({ hiddenAt: hidden ? sql`now()` : null })
     .where(submissionOf(taskId, id));
+}
+
+/**
+ * Records an entry on a player's behalf (e.g. one they sent in another way),
+ * uploading its photo first. Unlike a player's own submission, the task's
+ * entry limit and kinds don't apply. Throws `StorageError` if the upload
+ * fails; returns the new entry's id.
+ */
+export async function addSubmissionForPlayer(
+  taskId: string,
+  owner: SubmissionOwnerRef,
+  entry: AddEntryInput,
+): Promise<number> {
+  const base = {
+    taskId,
+    playerId: entry.playerId,
+    teamId: owner.type === "team" ? owner.id : null,
+  };
+  const insert = (values: typeof taskSubmissions.$inferInsert) =>
+    getDb()
+      .insert(taskSubmissions)
+      .values(values)
+      .returning({ id: taskSubmissions.id })
+      .then(([row]) => row.id);
+
+  if (entry.kind === "text") {
+    return insert({ ...base, kind: "text", text: entry.text });
+  }
+  const { bytes, type, caption } = entry.photo;
+  const objectKey = submissionObjectKey(taskId, owner, type);
+  await putObject(objectKey, bytes, type.contentType);
+  try {
+    return await insert({
+      ...base,
+      kind: "photo",
+      text: caption,
+      objectKey,
+      contentType: type.contentType,
+      sizeBytes: bytes.byteLength,
+    });
+  } catch (error) {
+    // Don't leave an orphaned image when the entry wasn't recorded.
+    await deleteObjects([objectKey]);
+    throw error;
+  }
 }
 
 /** Deletes an entry and its photo. */

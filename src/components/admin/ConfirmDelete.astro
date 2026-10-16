@@ -13,6 +13,13 @@ interface Props {
   fields?: Record<string, string | number>;
   /** Summary button label. */
   label?: string;
+  /**
+   * Classes for the summary button, replacing the default ghost button
+   * (e.g. `btnIcon` with an icon in the `summary` slot).
+   */
+  summaryClass?: string;
+  /** Tooltip for the summary button. */
+  title?: string;
   class?: string;
 }
 
@@ -22,6 +29,8 @@ const {
   intent = "delete",
   fields = {},
   label = "delete",
+  summaryClass = btnGhost,
+  title,
   class: className,
 } = Astro.props;
 
@@ -33,12 +42,13 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
      admin opens the disclosure and reads what will be removed. -->
 <details class:list={["group", className]}>
   <summary
+    title={title}
     class:list={[
-      btnGhost,
+      summaryClass,
       "cursor-pointer list-none hover:border-danger/60 hover:text-danger",
     ]}
   >
-    {label}
+    <slot name="summary">{label}</slot>
   </summary>
   <div
     class="mt-3 space-y-3 rounded-md border border-danger/50 bg-danger/5 p-4 text-sm"

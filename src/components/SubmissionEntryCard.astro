@@ -34,21 +34,13 @@ const alt = entry.text
 >
   {
     entry.kind === "photo" && entry.mediaUrl ? (
-      <a
-        href={entry.mediaUrl}
-        target="_blank"
-        rel="noopener"
-        class="group block bg-term-bg"
-      >
-        <img
-          src={entry.mediaUrl}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          class="aspect-[4/3] w-full object-cover transition-opacity group-hover:opacity-90"
-        />
-        <span class="sr-only">(opens full size in a new tab)</span>
-      </a>
+      <img
+        src={entry.mediaUrl}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        class="aspect-[4/3] w-full bg-term-bg object-cover"
+      />
     ) : (
       <div class="flex-1 border-l-2 border-cyan px-4 py-3">
         <p class="whitespace-pre-line break-words text-sm leading-relaxed text-ink">

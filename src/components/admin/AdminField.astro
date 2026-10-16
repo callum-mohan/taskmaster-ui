@@ -1,4 +1,5 @@
 ---
+import PasswordToggle from "../PasswordToggle.astro";
 import { inputClass, labelClass } from "./styles";
 
 interface Props {
@@ -71,6 +72,20 @@ const shared = {
   {
     rows ? (
       <textarea {...shared} rows={rows} set:text={value ?? ""} />
+    ) : type === "password" ? (
+      <div class="relative">
+        <input
+          {...shared}
+          class={`${shared.class} pr-10`}
+          type="password"
+          value={value ?? ""}
+          autocomplete={autocomplete}
+        />
+        <PasswordToggle
+          for={id}
+          class="absolute top-1/2 right-2 -translate-y-1/2"
+        />
+      </div>
     ) : (
       <input
         {...shared}

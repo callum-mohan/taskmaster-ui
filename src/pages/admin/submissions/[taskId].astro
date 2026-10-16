@@ -4,8 +4,10 @@ import TerminalWindow from "../../../components/TerminalWindow.astro";
 import TaskStatusBadge from "../../../components/TaskStatusBadge.astro";
 import Notice from "../../../components/admin/Notice.astro";
 import SubmissionReviewCard from "../../../components/admin/SubmissionReviewCard.astro";
+import AddEntryForms from "../../../components/admin/AddEntryForms.astro";
 import { btnPrimary, btnGhost } from "../../../components/admin/styles";
 import {
+  addSubmissionForPlayer,
   deleteSubmission,
   describeWriteError,
   getTaskScoreSheet,
@@ -15,13 +17,21 @@ import {
 } from "../../../data/admin";
 import { loadTaskSubmissions } from "../../../data/submissions";
 import {
+  parseAddEntryForm,
   parseTaskScoresForm,
   parseTeamScoresForm,
   scoreField,
   type FieldErrors,
   type FormValues,
 } from "../../../lib/admin-forms";
-import { parseSubmissionId } from "../../../lib/submission-forms";
+import {
+  MAX_PHOTO_BYTES,
+  MAX_SUBMISSION_REQUEST_BYTES,
+  isAddEntryIntent,
+  parseSubmissionId,
+  type AddEntryIntent,
+} from "../../../lib/submission-forms";
+import { StorageError } from "../../../lib/storage";
 import { ukDateFormat } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
@@ -30,8 +40,16 @@ const admin = Astro.locals.admin;
 if (!admin) return Astro.redirect(withBase("/admin/login"));
 
 const { taskId } = Astro.params;
-const { players, teams, getTaskById, getPlayerById, getSubmissionGallery } =
-  await Astro.locals.getQueries();
+const {
+  players,
+  teams,
+  getTaskById,
+  getPlayerById,
+  getSubmissionGallery,
+  getSubmissionOwnerRef,
+  canAddEntriesForPlayers,
+  getSubmitterOptions,
+} = await Astro.locals.getQueries();
 const task = getTaskById(taskId!);
 if (!task) return Astro.rewrite("/404");
 
@@ -39,12 +57,24 @@ const isTeam = task.format === "team";
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const selfUrl = withBase(`/admin/submissions/${task.id}`);
 const scoreFormId = "score-form";
+const canAddEntries = canAddEntriesForPlayers(task);
+const submitters = canAddEntries ? getSubmitterOptions(task) : [];
 
 let gridValues: FormValues | undefined;
 let gridErrors: FieldErrors = {};
 let formError: string | undefined;
+let addEntryFailed:
+  | { intent: AddEntryIntent; values: FormValues; errors: FieldErrors }
+  | undefined;
 
-if (Astro.request.method === "POST") {
+// Refuse oversized uploads before reading the body.
+const tooLarge =
+  Number(Astro.request.headers.get("content-length")) >
+  MAX_SUBMISSION_REQUEST_BYTES;
+
+if (Astro.request.method === "POST" && tooLarge) {
+  formError = `Nothing was saved: photos must be ${Math.round(MAX_PHOTO_BYTES / (1024 * 1024))} MB or smaller.`;
+} else if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const intent = form.get("intent");
   try {
@@ -88,6 +118,41 @@ if (Astro.request.method === "POST") {
         return Astro.redirect(
           `${selfUrl}?done=${intent === "hide-entry" ? "hidden" : "shown"}#entry-${id}`,
         );
+      }
+    } else if (isAddEntryIntent(intent)) {
+      if (!canAddEntries) {
+        formError = "Entries can only be added once the task is completed.";
+      } else {
+        const playerIds = new Set(
+          submitters.flatMap((g) => g.players.map((p) => p.id)),
+        );
+        const parsed = await parseAddEntryForm(form, intent, playerIds);
+        const owner =
+          parsed.ok && getSubmissionOwnerRef(task, parsed.data.playerId);
+        if (parsed.ok && owner) {
+          try {
+            const id = await addSubmissionForPlayer(
+              task.id,
+              owner,
+              parsed.data,
+            );
+            return Astro.redirect(`${selfUrl}?done=added#entry-${id}`);
+          } catch (error) {
+            if (!(error instanceof StorageError)) throw error;
+            console.error("Admin entry upload failed", error);
+            addEntryFailed = {
+              intent,
+              values: parsed.values,
+              errors: { photo: "The upload didn't go through. Try again." },
+            };
+          }
+        } else {
+          addEntryFailed = {
+            intent,
+            values: parsed.values,
+            errors: parsed.ok ? { playerId: "Pick a player." } : parsed.errors,
+          };
+        }
       }
     }
   } catch (error) {
@@ -149,6 +214,7 @@ const doneMessage: Record<string, string> = {
   hidden: "Entry hidden from the public gallery.",
   shown: "Entry visible again.",
   deleted: "Entry deleted.",
+  added: "Entry added. It's already in the public gallery.",
 };
 const settings = task.submissions;
 ---
@@ -220,6 +286,30 @@ const settings = task.submissions;
       <Notice tone="error" class="mt-6">
         Nothing was saved. Fix the highlighted points and try again.
       </Notice>
+    )
+  }
+  {
+    addEntryFailed && (
+      <Notice tone="error" class="mt-6">
+        Entry not added. Fix the highlighted fields and try again.
+      </Notice>
+    )
+  }
+
+  {
+    canAddEntries ? (
+      <TerminalWindow title={`~/entries/${task.id}/add`} class="mt-6">
+        <AddEntryForms
+          submitters={submitters}
+          isTeam={isTeam}
+          failed={addEntryFailed}
+        />
+      </TerminalWindow>
+    ) : (
+      <p class="mt-6 text-xs text-ink-faint">
+        <span class="text-acid">$</span> Once the task is completed you can add
+        entries here for players who sent them in another way.
+      </p>
     )
   }
 

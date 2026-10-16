@@ -1,7 +1,8 @@
 ---
 import SubmissionEntryCard from "../SubmissionEntryCard.astro";
 import ConfirmDelete from "./ConfirmDelete.astro";
-import { btnGhost, inputClass, labelClass } from "./styles";
+import AdminIcon from "./AdminIcon.astro";
+import { btnIcon, inputClass, labelClass } from "./styles";
 import type { SubmissionGalleryGroup } from "../../types";
 import {
   scoreField,
@@ -102,10 +103,19 @@ const compact = entries.length === 0 && Boolean(scoreFormId);
                   value={entry.hidden ? "show-entry" : "hide-entry"}
                 />
                 <input type="hidden" name="submissionId" value={entry.id} />
-                <button type="submit" class:list={[btnGhost, "px-3 py-1.5"]}>
-                  {entry.hidden ? "unhide" : "hide"}
+                <button
+                  type="submit"
+                  class={btnIcon}
+                  title={
+                    entry.hidden
+                      ? "unhide: show in the public gallery"
+                      : "hide from the public gallery"
+                  }
+                >
+                  <AdminIcon name={entry.hidden ? "eye" : "eye-off"} />
                   <span class="sr-only">
-                    {entry.kind} entry by {entry.submitterName}
+                    {entry.hidden ? "unhide" : "hide"} {entry.kind} entry by{" "}
+                    {entry.submitterName}
                   </span>
                 </button>
               </form>
@@ -113,7 +123,16 @@ const compact = entries.length === 0 && Boolean(scoreFormId);
                 subject={`${entry.kind} entry by ${entry.submitterName}`}
                 intent="delete-entry"
                 fields={{ submissionId: entry.id }}
-              />
+                summaryClass={btnIcon}
+                title="delete entry"
+              >
+                <Fragment slot="summary">
+                  <AdminIcon name="trash" />
+                  <span class="sr-only">
+                    delete {entry.kind} entry by {entry.submitterName}
+                  </span>
+                </Fragment>
+              </ConfirmDelete>
             </div>
           </li>
         ))}

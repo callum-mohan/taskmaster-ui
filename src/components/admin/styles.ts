@@ -11,6 +11,10 @@ export const btnGhost =
 export const btnDanger =
   "inline-flex items-center justify-center gap-2 rounded-md border border-danger/60 bg-danger/10 px-4 py-2 text-xs font-bold tracking-widest text-danger transition-colors hover:bg-danger hover:text-term-bg";
 
+/** A square, icon-only control (pair it with an accessible name). */
+export const btnIcon =
+  "inline-flex h-8 w-8 items-center justify-center rounded-md border border-grid text-ink-dim transition-colors hover:border-ink-faint hover:text-ink";
+
 export const inputBase =
   "w-full rounded-md border bg-term-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint transition-colors focus:border-acid";
 

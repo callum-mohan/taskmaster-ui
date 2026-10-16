@@ -20,7 +20,7 @@ const { groups, formatStamp, class: className } = Astro.props;
           <a
             href={group.owner.href}
             class:list={[
-              "text-sm font-extrabold hover:underline",
+              "text-sm font-extrabold transition-colors hover:text-acid active:text-acid",
               group.owner.type === "team" ? "text-magenta" : "text-ink",
             ]}
           >

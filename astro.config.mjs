@@ -27,6 +27,30 @@ export default defineConfig({
         context: "server",
         access: "secret",
       }),
+      // Neon Object Storage (S3-compatible) for task submission photos. The
+      // endpoint is per branch; the key needs storage:read + storage:write.
+      AWS_ENDPOINT_URL_S3: envField.string({
+        context: "server",
+        access: "secret",
+      }),
+      AWS_ACCESS_KEY_ID: envField.string({
+        context: "server",
+        access: "secret",
+      }),
+      AWS_SECRET_ACCESS_KEY: envField.string({
+        context: "server",
+        access: "secret",
+      }),
+      AWS_REGION: envField.string({
+        context: "server",
+        access: "secret",
+        default: "us-east-2",
+      }),
+      STORAGE_BUCKET: envField.string({
+        context: "server",
+        access: "secret",
+        default: "uploads",
+      }),
     },
   },
   vite: {

@@ -64,6 +64,13 @@
       "when": 1792181935175,
       "tag": "0008_backfill_score_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792184586554,
+      "tag": "0009_task_submissions",
+      "breakpoints": true
     }
   ]
 }

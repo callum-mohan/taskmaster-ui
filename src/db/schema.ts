@@ -27,6 +27,7 @@ export const pollResultsVisibility = pgEnum("poll_results_visibility", [
   "after_close",
   "admin_only",
 ]);
+export const submissionKind = pgEnum("submission_kind", ["photo", "text"]);
 export const scoreAuditEntity = pgEnum("score_audit_entity", [
   "task_score",
   "team_score",
@@ -103,12 +104,71 @@ export const tasks = pgTable(
     revealPassword: text(),
     // Set when an admin reveals a password-protected task to everyone.
     revealedAt: timestamp({ mode: "string" }),
+    // How many entries each player (or squad, on team tasks) may submit;
+    // 0 keeps on-site submissions closed. See `task_submissions`.
+    maxSubmissions: integer().notNull().default(0),
+    submissionKinds: submissionKind()
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
   },
   (t) => [
     check(
       "tasks_deadline_after_release",
       sql`${t.deadline} > ${t.releaseDate}`,
     ),
+    check(
+      "tasks_max_submissions_range",
+      sql`${t.maxSubmissions} between 0 and 10`,
+    ),
+    check(
+      "tasks_submission_kinds_when_open",
+      sql`${t.maxSubmissions} = 0 or cardinality(${t.submissionKinds}) > 0`,
+    ),
+  ],
+);
+
+/**
+ * A player's entry for a task: a photo (stored in Object Storage under
+ * `objectKey`, with an optional caption in `text`) or a text entry. On team
+ * tasks the entry belongs to the squad in `teamId`; `playerId` is always the
+ * member who submitted it. Entries are public once the task's deadline passes
+ * unless an admin hid them.
+ */
+export const taskSubmissions = pgTable(
+  "task_submissions",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    taskId: text()
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    teamId: text().references(() => teams.id, { onDelete: "cascade" }),
+    kind: submissionKind().notNull(),
+    text: text(),
+    objectKey: text().unique("task_submissions_object_key_unique"),
+    contentType: text(),
+    sizeBytes: integer(),
+    hiddenAt: timestamp({ withTimezone: true, mode: "string" }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "task_submissions_photo_has_object",
+      sql`(${t.kind} = 'photo') = (${t.objectKey} is not null)`,
+    ),
+    check(
+      "task_submissions_text_has_body",
+      sql`${t.kind} <> 'text' or coalesce(length(trim(${t.text})), 0) > 0`,
+    ),
+    index("task_submissions_task_id_player_id_idx").on(t.taskId, t.playerId),
+    index("task_submissions_task_id_team_id_idx").on(t.taskId, t.teamId),
+    index("task_submissions_player_id_idx").on(t.playerId),
+    index("task_submissions_team_id_idx").on(t.teamId),
   ],
 );
 

@@ -41,6 +41,7 @@ import { getRecapContent } from "./recaps";
 import { changelog } from "./changelog";
 import { createPollQueries } from "./poll-queries";
 import { createNotificationQueries } from "./notification-queries";
+import { createSubmissionQueries } from "./submission-queries";
 import { withBase } from "../lib/url";
 
 // This module is the single "data layer" the UI talks to. Pages read these
@@ -1581,5 +1582,6 @@ export function createQueries(data: CompetitionData) {
     ...createPollQueries(data),
     getPlayerRankHistory,
     ...createNotificationQueries(data, { getPlayerRankHistory }),
+    ...createSubmissionQueries(data),
   };
 }

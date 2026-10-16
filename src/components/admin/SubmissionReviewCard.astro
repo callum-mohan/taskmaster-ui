@@ -1,0 +1,201 @@
+---
+import SubmissionEntryCard from "../SubmissionEntryCard.astro";
+import ConfirmDelete from "./ConfirmDelete.astro";
+import { btnGhost, inputClass, labelClass } from "./styles";
+import type { SubmissionGalleryGroup } from "../../types";
+import {
+  scoreField,
+  type FieldErrors,
+  type FormValues,
+} from "../../lib/admin-forms";
+
+interface Props {
+  group: SubmissionGalleryGroup;
+  /** Secondary line, e.g. a squad's members. */
+  detail?: string;
+  /**
+   * The `id` of the page's score form. Points inputs join it through the
+   * `form` attribute, so each card's hide/delete forms can sit alongside.
+   * Omit for owners that can't be scored (e.g. after a format change).
+   */
+  scoreFormId?: string;
+  values?: FormValues;
+  errors?: FieldErrors;
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  class?: string;
+}
+
+const {
+  group,
+  detail,
+  scoreFormId,
+  values = {},
+  errors = {},
+  formatStamp,
+  class: className,
+} = Astro.props;
+const { owner, entries } = group;
+const pointsKey = scoreField.points(owner.id);
+const commentKey = scoreField.comment(owner.id);
+const pointsError = errors[pointsKey];
+const commentError = errors[commentKey];
+const fieldId = (key: string) => `review-${key.replace(/[^a-z0-9_-]/gi, "-")}`;
+// Owners without entries only need a name and the score inputs, on one row.
+const compact = entries.length === 0 && Boolean(scoreFormId);
+---
+
+<article
+  id={`owner-${owner.type}-${owner.id}`}
+  class:list={[
+    "scroll-mt-24 rounded-lg border border-grid bg-term-bg/40",
+    compact
+      ? "grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-center"
+      : "p-4",
+    className,
+  ]}
+>
+  <header class="flex flex-wrap items-baseline justify-between gap-2">
+    <h3 class="text-sm font-extrabold text-ink">
+      <a
+        href={owner.href}
+        class="hover:text-acid"
+        target="_blank"
+        rel="noopener">{owner.name}</a
+      >
+      {
+        detail && (
+          <span class="block text-xs font-normal text-ink-faint">{detail}</span>
+        )
+      }
+    </h3>
+    {
+      !compact && (
+        <span
+          class:list={[
+            "text-[10px] font-bold tracking-widest uppercase",
+            entries.length > 0 ? "text-acid" : "text-ink-faint",
+          ]}
+        >
+          {`${entries.length} ${entries.length === 1 ? "entry" : "entries"}`}
+        </span>
+      )
+    }
+  </header>
+
+  {
+    entries.length > 0 ? (
+      <ul class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {entries.map((entry) => (
+          <li id={`entry-${entry.id}`} class="min-w-0 scroll-mt-24 space-y-2">
+            <SubmissionEntryCard
+              entry={entry}
+              formatStamp={formatStamp}
+              showSubmitter={owner.type === "team"}
+              showHidden
+            />
+            <div class="flex flex-wrap items-start gap-2">
+              <form method="post">
+                <input
+                  type="hidden"
+                  name="intent"
+                  value={entry.hidden ? "show-entry" : "hide-entry"}
+                />
+                <input type="hidden" name="submissionId" value={entry.id} />
+                <button type="submit" class:list={[btnGhost, "px-3 py-1.5"]}>
+                  {entry.hidden ? "unhide" : "hide"}
+                  <span class="sr-only">
+                    {entry.kind} entry by {entry.submitterName}
+                  </span>
+                </button>
+              </form>
+              <ConfirmDelete
+                subject={`${entry.kind} entry by ${entry.submitterName}`}
+                intent="delete-entry"
+                fields={{ submissionId: entry.id }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    ) : (
+      !compact && (
+        <p class="mt-3 text-sm text-ink-faint">
+          <span class="text-acid">$</span> no entries
+        </p>
+      )
+    )
+  }
+
+  {
+    scoreFormId ? (
+      <div
+        class:list={[
+          "grid gap-3 sm:grid-cols-[8rem_1fr]",
+          !compact && "mt-4 border-t border-grid-soft pt-4",
+        ]}
+      >
+        <div class="space-y-1.5">
+          <label
+            for={fieldId(pointsKey)}
+            class:list={[labelClass, compact && "sr-only"]}
+          >
+            points
+          </label>
+          <input
+            id={fieldId(pointsKey)}
+            form={scoreFormId}
+            type="number"
+            step="1"
+            inputmode="numeric"
+            name={pointsKey}
+            placeholder={compact ? "points" : undefined}
+            value={values[pointsKey] ?? ""}
+            aria-invalid={pointsError ? "true" : undefined}
+            aria-describedby={
+              pointsError ? `${fieldId(pointsKey)}-error` : undefined
+            }
+            class:list={[inputClass(Boolean(pointsError)), "tabular-nums"]}
+          />
+          {pointsError && (
+            <p id={`${fieldId(pointsKey)}-error`} class="text-xs text-danger">
+              {pointsError}
+            </p>
+          )}
+        </div>
+        <div class="space-y-1.5">
+          <label
+            for={fieldId(commentKey)}
+            class:list={[labelClass, compact && "sr-only"]}
+          >
+            note
+          </label>
+          <input
+            id={fieldId(commentKey)}
+            form={scoreFormId}
+            type="text"
+            maxlength={500}
+            name={commentKey}
+            placeholder={compact ? "note" : undefined}
+            value={values[commentKey] ?? ""}
+            aria-invalid={commentError ? "true" : undefined}
+            aria-describedby={
+              commentError ? `${fieldId(commentKey)}-error` : undefined
+            }
+            class={inputClass(Boolean(commentError))}
+          />
+          {commentError && (
+            <p id={`${fieldId(commentKey)}-error`} class="text-xs text-danger">
+              {commentError}
+            </p>
+          )}
+        </div>
+      </div>
+    ) : (
+      <p class="mt-4 border-t border-grid-soft pt-3 text-xs text-ink-faint">
+        Not scored here: this task's format changed after these entries were
+        submitted.
+      </p>
+    )
+  }
+</article>

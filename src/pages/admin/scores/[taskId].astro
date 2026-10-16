@@ -159,7 +159,11 @@ const doneMessage: Record<string, string> = {
 <AdminLayout title={`Scores · ${weekLabel}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <a href={withBase("/admin/scores")} class={btnGhost}>&larr; ALL WEEKS</a>
-    <span class="flex gap-4 text-xs">
+    <span class="flex flex-wrap gap-4 text-xs">
+      <a
+        href={withBase(`/admin/submissions/${task.id}`)}
+        class="text-cyan hover:underline">review entries</a
+      >
       <a
         href={withBase(`/admin/tasks/${task.id}`)}
         class="text-cyan hover:underline">edit task</a

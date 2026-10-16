@@ -51,9 +51,17 @@ jobs:
             DATABASE_URL
             NEON_AUTH_BASE_URL
             NEON_AUTH_COOKIE_SECRET
+            AWS_ENDPOINT_URL_S3
+            AWS_ACCESS_KEY_ID
+            AWS_SECRET_ACCESS_KEY
         env:
           # Production Neon branch: pooled connection string and Auth URL.
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           NEON_AUTH_BASE_URL: ${{ secrets.NEON_AUTH_BASE_URL }}
           # 32+ random characters (`openssl rand -base64 32`).
           NEON_AUTH_COOKIE_SECRET: ${{ secrets.NEON_AUTH_COOKIE_SECRET }}
+          # Production Object Storage (submission photos): the branch endpoint
+          # and a storage:read + storage:write credential.
+          AWS_ENDPOINT_URL_S3: ${{ secrets.AWS_ENDPOINT_URL_S3 }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

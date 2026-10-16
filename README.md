@@ -27,6 +27,9 @@ on request on **Cloudflare Workers**.
   migrations use `pg` (node-postgres) and `drizzle-kit`
 - [Neon Auth](https://neon.com/docs/auth/overview) (Managed Better Auth) for
   admin and player sign-in, via `@neondatabase/auth`
+- [Neon Object Storage](https://neon.com/docs/storage/overview)
+  (S3-compatible) for task submission photos, via
+  [`aws4fetch`](https://github.com/mhart/aws4fetch)
 - Prettier (with `prettier-plugin-astro`)
 
 ## 📁 Project structure
@@ -60,6 +63,8 @@ src/
 │   ├── poll-queries.ts # poll selectors: who can vote / see results
 │   ├── notification-queries.ts # a player's feed (tasks, polls, results, bonuses), derived
 │   ├── votes.ts       # a player's own poll votes
+│   ├── submissions.ts # task entries: per-task loader + a player's own writes
+│   ├── submission-queries.ts # entry selectors: who can submit / see what
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
 │   ├── accounts.ts    # player sign-in accounts + self-service profile edits
@@ -67,12 +72,15 @@ src/
 ├── lib/
 │   ├── auth.ts        # Neon Auth adapter for Astro (sign in/out, session)
 │   ├── admin-forms.ts # admin form parsing + validation (zod)
-│   └── account-forms.ts # player profile + password form validation
+│   ├── account-forms.ts # player profile + password form validation
+│   ├── submission-forms.ts # entry form parsing, limits + photo type sniffing
+│   └── storage.ts     # Object Storage client (put, presigned get, delete)
 ├── pages/
 │   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
 │   ├── login.astro            # /login — the player portal
 │   ├── logout.ts              # POST /logout — signs out (either portal)
-│   ├── account/               # /account — edit own profile, change password, vote in polls, notifications
+│   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries
+│   ├── submissions/           # /submissions/[id]/media — access-checked photo links
 │   ├── index.astro            # homepage
 │   ├── tasks/                 # /tasks and /tasks/[id]
 │   ├── players/               # /players and /players/[id]
@@ -118,6 +126,11 @@ git-ignored `.env.local`:
 - `DATABASE_URL` — **pooled**; read by the site on every request.
 - `DATABASE_URL_UNPOOLED` — **direct**; used for migrations and seeding.
 - `NEON_AUTH_BASE_URL` — the branch's Neon Auth URL (admin and player sign-in).
+- `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+  `AWS_REGION` — the branch's Object Storage endpoint and a
+  `storage:read` + `storage:write` credential, for submission photos. Pull
+  them with `neon env pull --services object-storage`. Optional
+  `STORAGE_BUCKET` (default `uploads`) names the private bucket.
 
 Also add `NEON_AUTH_COOKIE_SECRET` to `.env.local` yourself (32+ random
 characters: `openssl rand -base64 32`); it signs the cached session cookie.
@@ -230,6 +243,38 @@ ones. You can **duplicate** a poll (its votes aren't copied) or **reset votes**
 on it. Votes are a `POST` to `/account/polls/<id>`, so the `/account` guard
 requires a signed-in player who has replaced their temporary password.
 
+## 📸 Task submissions
+
+Players submit entries from the task page while a task is live. Each task
+sets, on the admin task form, how many **entries** it takes (0 = closed, the
+default) and which **kinds**:
+
+- **Photo:** JPEG, PNG, WebP, GIF or AVIF, up to 15 MB, with an optional
+  caption. The file's bytes decide its type (SVG is never accepted; iPhone
+  HEIC gets a hint to export as JPEG). Photos go to the private `uploads`
+  bucket in Neon Object Storage, under
+  `submissions/<task>/<player|team>-<id>/<uuid>.<ext>`.
+- **Text:** up to 5000 characters.
+
+On **team tasks** entries belong to the squad: any member can submit or
+withdraw them, and the limit is per squad. Players can withdraw an entry
+(freeing the slot) until the deadline, but not edit it. The entry form is a
+plain `POST` to `/account/submissions/<task>`, so it needs a signed-in player
+and works without JavaScript. The entry count and the insert are one
+statement, so double-submits can't go over the limit.
+
+Until the deadline only the player (or squad) and admins can see an entry.
+Afterwards every entry shows in a gallery on the task page, unless an admin
+hid it. Photos are served through `/submissions/<id>/media`, which checks
+access and redirects to a short-lived presigned URL, so the bucket stays
+private.
+
+Admins review entries at `/admin/submissions/<task>`: one card per player
+(or squad) with their entries and a points + note box that saves through the
+same score sheet (and audit log) as `/admin/scores`. Entries can be hidden
+from the public gallery or deleted. Deleting an entry, task, player or team
+also deletes its photos from storage.
+
 ## 🔔 Notifications
 
 Signed-in **players** get a bell in the navbar with an unread count. It opens
@@ -310,16 +355,24 @@ Pushing to `main` runs [`deploy.yml`](.github/workflows/deploy.yml), which
 builds the site and runs `wrangler deploy`. Configure these repository
 secrets:
 
-| Secret                    | Value                                                 |
-| :------------------------ | :---------------------------------------------------- |
-| `CLOUDFLARE_API_TOKEN`    | API token with the "Edit Cloudflare Workers" template |
-| `CLOUDFLARE_ACCOUNT_ID`   | Your Cloudflare account id                            |
-| `DATABASE_URL`            | Pooled connection string for the `production` branch  |
-| `NEON_AUTH_BASE_URL`      | `neon neon-auth status --branch production` base URL  |
-| `NEON_AUTH_COOKIE_SECRET` | `openssl rand -base64 32`                             |
+| Secret                    | Value                                                                       |
+| :------------------------ | :-------------------------------------------------------------------------- |
+| `CLOUDFLARE_API_TOKEN`    | API token with the "Edit Cloudflare Workers" template                       |
+| `CLOUDFLARE_ACCOUNT_ID`   | Your Cloudflare account id                                                  |
+| `DATABASE_URL`            | Pooled connection string for the `production` branch                        |
+| `NEON_AUTH_BASE_URL`      | `neon neon-auth status --branch production` base URL                        |
+| `NEON_AUTH_COOKIE_SECRET` | `openssl rand -base64 32`                                                   |
+| `AWS_ENDPOINT_URL_S3`     | `production` branch Object Storage endpoint                                 |
+| `AWS_ACCESS_KEY_ID`       | `token_id` of a `storage:read` + `storage:write` credential on `production` |
+| `AWS_SECRET_ACCESS_KEY`   | that credential's `s3_secret_access_key`                                    |
 
-The last three are synced to the Worker as secrets on each deploy (the site
-fails closed if any is missing). Then, once:
+Create the storage credential with
+`neon credentials create --scope storage:read --scope storage:write --name taskmaster-site --branch production`
+(the secret is shown once). The endpoint is in `neon config status` or the
+console's **Connect → Storage** tab.
+
+Everything except the Cloudflare values is synced to the Worker as secrets on
+each deploy (the site fails closed if any is missing). Then, once:
 
 1. Remove any old DNS records for `eayltaskmaster.co.uk` and
    `www.eayltaskmaster.co.uk` (e.g. GitHub Pages). `wrangler deploy` attaches
@@ -330,7 +383,7 @@ fails closed if any is missing). Then, once:
    `neon neon-auth domain add https://<name>.workers.dev --branch production`
    (`https://eayltaskmaster.co.uk` is already trusted).
 
-To test the built Worker locally, put the three secrets in
+To test the built Worker locally, put the Neon and storage secrets in
 `dist/server/.dev.vars` (git-ignored) after `npm run build`, then run
 `npx wrangler dev --config dist/server/wrangler.json`.
 
@@ -370,4 +423,4 @@ Before committing, keep `npm run check` and `npm run format:check` clean.
 ## 🔭 Roadmap
 
 Competition data is live and editable from `/admin`. Next steps: recaps in
-the database and player submissions.
+the database.

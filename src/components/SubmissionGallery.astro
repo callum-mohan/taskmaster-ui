@@ -1,0 +1,49 @@
+---
+import SubmissionEntryCard from "./SubmissionEntryCard.astro";
+import type { SubmissionGalleryGroup } from "../types";
+
+interface Props {
+  groups: SubmissionGalleryGroup[];
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  class?: string;
+}
+
+const { groups, formatStamp, class: className } = Astro.props;
+---
+
+<ul class:list={["space-y-6", className]}>
+  {
+    groups.map((group) => (
+      <li>
+        <h3 class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <a
+            href={group.owner.href}
+            class:list={[
+              "text-sm font-extrabold hover:underline",
+              group.owner.type === "team" ? "text-magenta" : "text-ink",
+            ]}
+          >
+            {group.owner.name}
+          </a>
+          <span class="text-[10px] tracking-widest text-ink-faint uppercase">
+            {group.entries.length}{" "}
+            {group.entries.length === 1 ? "entry" : "entries"}
+          </span>
+        </h3>
+        <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {group.entries.map((entry) => (
+            <li class="min-w-0">
+              <SubmissionEntryCard
+                entry={entry}
+                formatStamp={formatStamp}
+                showSubmitter={group.owner.type === "team"}
+                class="h-full"
+              />
+            </li>
+          ))}
+        </ul>
+      </li>
+    ))
+  }
+</ul>

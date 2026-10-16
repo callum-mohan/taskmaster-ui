@@ -65,6 +65,10 @@ export function mapTasks(
       status: deriveTaskStatus(dates, now),
       passwordProtected: row.revealPassword !== null,
       revealedToAll: row.revealedAt !== null,
+      submissions: {
+        max: row.maxSubmissions,
+        kinds: row.maxSubmissions > 0 ? row.submissionKinds : [],
+      },
     };
     if (isTaskLocked(base, reveal)) {
       return { ...base, title: "???", description: "", locked: true };

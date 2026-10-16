@@ -9,6 +9,7 @@ import {
   notInArray,
   or,
   sql,
+  type SQL,
 } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -20,6 +21,7 @@ import {
   pollVotes,
   scoreAuditLog,
   taskScores,
+  taskSubmissions,
   tasks,
   teamMembers,
   teamScores,
@@ -28,6 +30,7 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import type { AdminUser, ScoreAuditEntry } from "../types";
 import { timestamptzToIso } from "../lib/time";
+import { deleteObjects } from "../lib/storage";
 import type {
   BonusInput,
   PlayerInput,
@@ -55,6 +58,30 @@ export interface DeleteImpact {
   label: string;
   count: number;
 }
+
+/**
+ * Deletes a parent row together with the submissions it owns, in one
+ * transaction, then removes their photos from storage. The submissions are
+ * deleted explicitly (rather than left to the cascade) so their object keys
+ * come back.
+ */
+async function deleteWithSubmissions(
+  owned: SQL | undefined,
+  parent: BatchItem<"pg">,
+): Promise<void> {
+  const db = getDb();
+  const [removed] = await db.batch([
+    db
+      .delete(taskSubmissions)
+      .where(owned)
+      .returning({ objectKey: taskSubmissions.objectKey }),
+    parent,
+  ]);
+  await deleteObjects(removed.flatMap((r) => r.objectKey ?? []));
+}
+
+const countSubmissions = (owned: SQL | undefined) =>
+  getDb().select({ n: count() }).from(taskSubmissions).where(owned);
 
 const nextSortOrder = (table: typeof players | typeof teams) =>
   sql<number>`(select coalesce(max(${table.sortOrder}), 0) + 1 from ${table})`;
@@ -124,7 +151,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a]] = await db.batch([
+  const [[s], [b], [m], [a], [e]] = await db.batch([
     db
       .select({ n: count() })
       .from(taskScores)
@@ -141,17 +168,22 @@ export async function getPlayerDeleteImpact(
       .select({ n: count() })
       .from(playerAccounts)
       .where(eq(playerAccounts.playerId, id)),
+    countSubmissions(eq(taskSubmissions.playerId, id)),
   ]);
   return [
     { label: "individual score", count: s.n },
     { label: "bonus / deduction", count: b.n },
     { label: "team membership", count: m.n },
     { label: "sign-in account link", count: a.n },
+    { label: "task submission", count: e.n },
   ];
 }
 
 export async function deletePlayer(id: string): Promise<void> {
-  await getDb().delete(players).where(eq(players.id, id));
+  await deleteWithSubmissions(
+    eq(taskSubmissions.playerId, id),
+    getDb().delete(players).where(eq(players.id, id)),
+  );
 }
 
 // ── Teams ─────────────────────────────────────────────────────────────
@@ -234,21 +266,26 @@ export async function updateTeam(id: string, input: TeamInput): Promise<void> {
 
 export async function getTeamDeleteImpact(id: string): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [m]] = await db.batch([
+  const [[s], [m], [e]] = await db.batch([
     db.select({ n: count() }).from(teamScores).where(eq(teamScores.teamId, id)),
     db
       .select({ n: count() })
       .from(teamMembers)
       .where(eq(teamMembers.teamId, id)),
+    countSubmissions(eq(taskSubmissions.teamId, id)),
   ]);
   return [
     { label: "team score", count: s.n },
     { label: "team membership", count: m.n },
+    { label: "squad submission", count: e.n },
   ];
 }
 
 export async function deleteTeam(id: string): Promise<void> {
-  await getDb().delete(teams).where(eq(teams.id, id));
+  await deleteWithSubmissions(
+    eq(taskSubmissions.teamId, id),
+    getDb().delete(teams).where(eq(teams.id, id)),
+  );
 }
 
 // ── Tasks ─────────────────────────────────────────────────────────────
@@ -271,6 +308,8 @@ const taskValues = (input: TaskInput) => ({
   deadline: input.deadline,
   format: input.format,
   revealPassword: input.revealPassword,
+  maxSubmissions: input.maxSubmissions,
+  submissionKinds: input.submissionKinds,
 });
 
 export async function createTask(input: TaskInput): Promise<void> {
@@ -305,23 +344,74 @@ export async function setTaskRevealed(
 
 export async function getTaskDeleteImpact(id: string): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [t], [b]] = await db.batch([
+  const [[s], [t], [b], [e]] = await db.batch([
     db.select({ n: count() }).from(taskScores).where(eq(taskScores.taskId, id)),
     db.select({ n: count() }).from(teamScores).where(eq(teamScores.taskId, id)),
     db
       .select({ n: count() })
       .from(bonusPoints)
       .where(eq(bonusPoints.taskId, id)),
+    countSubmissions(eq(taskSubmissions.taskId, id)),
   ]);
   return [
     { label: "individual score", count: s.n },
     { label: "team score", count: t.n },
     { label: "bonus / deduction", count: b.n },
+    { label: "submission", count: e.n },
   ];
 }
 
 export async function deleteTask(id: string): Promise<void> {
-  await getDb().delete(tasks).where(eq(tasks.id, id));
+  await deleteWithSubmissions(
+    eq(taskSubmissions.taskId, id),
+    getDb().delete(tasks).where(eq(tasks.id, id)),
+  );
+}
+
+// ── Submissions ───────────────────────────────────────────────────────
+
+/** Entry counts per task id, for the submissions index. */
+export async function getSubmissionCountsByTask(): Promise<
+  Map<string, { total: number; hidden: number }>
+> {
+  const rows = await getDb()
+    .select({
+      taskId: taskSubmissions.taskId,
+      total: count(),
+      hidden: count(taskSubmissions.hiddenAt),
+    })
+    .from(taskSubmissions)
+    .groupBy(taskSubmissions.taskId);
+  return new Map(
+    rows.map(({ taskId, total, hidden }) => [taskId, { total, hidden }]),
+  );
+}
+
+const submissionOf = (taskId: string, id: number) =>
+  and(eq(taskSubmissions.taskId, taskId), eq(taskSubmissions.id, id));
+
+/** Hides an entry from the public gallery (or shows it again). */
+export async function setSubmissionHidden(
+  taskId: string,
+  id: number,
+  hidden: boolean,
+): Promise<void> {
+  await getDb()
+    .update(taskSubmissions)
+    .set({ hiddenAt: hidden ? sql`now()` : null })
+    .where(submissionOf(taskId, id));
+}
+
+/** Deletes an entry and its photo. */
+export async function deleteSubmission(
+  taskId: string,
+  id: number,
+): Promise<void> {
+  const removed = await getDb()
+    .delete(taskSubmissions)
+    .where(submissionOf(taskId, id))
+    .returning({ objectKey: taskSubmissions.objectKey });
+  await deleteObjects(removed.flatMap((r) => r.objectKey ?? []));
 }
 
 // ── Scores ────────────────────────────────────────────────────────────

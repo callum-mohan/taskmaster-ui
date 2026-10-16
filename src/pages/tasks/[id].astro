@@ -12,13 +12,16 @@ import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
 import DecryptReveal from "../../components/DecryptReveal.astro";
+import SubmissionPanel from "../../components/SubmissionPanel.astro";
+import SubmissionGallery from "../../components/SubmissionGallery.astro";
+import { loadTaskSubmissions } from "../../data/submissions";
 import { getRevealPassword } from "../../data/task-reveal";
 import {
   allowRevealAttempt,
   passwordMatches,
   setRevealCookie,
 } from "../../lib/task-reveal";
-import type { RevealError } from "../../types";
+import type { RevealError, SubmissionOutcome } from "../../types";
 import { ukDateFormat } from "../../lib/time";
 
 const {
@@ -28,6 +31,8 @@ const {
   getRecapTaskIds,
   getTeamResults,
   getTaskBonuses,
+  getSubmissionPanel,
+  getPublicSubmissionGallery,
   teams,
 } = await Astro.locals.getQueries();
 
@@ -94,6 +99,48 @@ const pager = getTaskPager(task.id);
 const hasRecap = getRecapTaskIds().includes(task.id);
 const bonuses = getTaskBonuses(task.id);
 
+// Entries: the viewer's own slots while the task is live, then a public
+// gallery once the deadline passes. Only loaded when something will show.
+const viewer = await Astro.locals.getViewer();
+const takesEntries =
+  task.status === "live" && !task.locked && task.submissions.max > 0;
+const submissions =
+  task.status === "completed" || (takesEntries && viewer?.playerId)
+    ? await loadTaskSubmissions(task.id)
+    : [];
+const submissionPanel = takesEntries
+  ? getSubmissionPanel(task, submissions, {
+      signedIn: viewer !== undefined,
+      isAdmin: viewer?.isAdmin ?? false,
+      ...(viewer?.playerId && { playerId: viewer.playerId }),
+    })
+  : undefined;
+const gallery = getPublicSubmissionGallery(task, submissions);
+const entryCount = gallery.reduce((n, g) => n + g.entries.length, 0);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const squadCount = gallery.filter((g) => g.owner.type === "team").length;
+const entrantsLabel = [
+  squadCount > 0 && plural(squadCount, "squad"),
+  gallery.length > squadCount && plural(gallery.length - squadCount, "player"),
+]
+  .filter(Boolean)
+  .join(" and ");
+// The submission endpoint redirects back with `?entry=<outcome>`.
+const submissionOutcomes: SubmissionOutcome[] = [
+  "submitted",
+  "deleted",
+  "closed",
+  "full",
+  "kind",
+  "invalid",
+  "too-large",
+  "bad-type",
+  "heic",
+  "upload-failed",
+];
+const entryParam = Astro.url.searchParams.get("entry");
+const submissionOutcome = submissionOutcomes.find((o) => o === entryParam);
+
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const isLocked = task.status === "upcoming";
 const briefFile = `${task.id}.brief`;
@@ -126,8 +173,11 @@ const formatStamp = (iso: string) => {
 
 // Standard competition rules shown on every brief (presentational content,
 // identical for all tasks — not per-task entity data).
+const { max: maxEntries, kinds: entryKinds } = task.submissions;
 const rules = [
-  "One submission per player, before the deadline.",
+  maxEntries > 0
+    ? `${maxEntries === 1 ? "One entry" : `Up to ${maxEntries} entries`} per ${isTeam ? "squad" : "player"} (${entryKinds.join(" or ")}), submitted here before the deadline.`
+    : "One submission per player, before the deadline.",
   "No external help unless the brief explicitly allows it.",
   "Points are awarded by the Taskmaster. The Taskmaster's decision is final.",
   "Creativity is rewarded. Literalism is... noted.",
@@ -388,6 +438,28 @@ const medal = (position: number) =>
       )
     }
 
+    <!-- Entries — submit while the task is live -->
+    {
+      submissionPanel && (
+        <section id="entries" class="mt-8 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            entries --submit
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}/entries`}
+            meta={`closes ${formatStamp(task.deadline)}`}
+          >
+            <SubmissionPanel
+              taskId={task.id}
+              panel={submissionPanel}
+              outcome={submissionOutcome}
+              formatStamp={formatStamp}
+            />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
     <!-- Results — individual tasks (completed only) -->
     {
       task.status === "completed" && !isTeam && winner && (
@@ -566,6 +638,22 @@ const medal = (position: number) =>
               </tbody>
             </table>
           </div>
+        </section>
+      )
+    }
+
+    <!-- Entries — public once the deadline has passed -->
+    {
+      gallery.length > 0 && (
+        <section id="entries" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            entries --gallery
+          </h2>
+          <p class="mb-4 text-[11px] text-ink-faint">
+            <span class="text-acid">$</span> {entryCount}{" "}
+            {entryCount === 1 ? "entry" : "entries"} from {entrantsLabel}
+          </p>
+          <SubmissionGallery groups={gallery} formatStamp={formatStamp} />
         </section>
       )
     }

@@ -70,6 +70,8 @@ export interface Task {
    * "???", `description` is empty and `brief` is absent.
    */
   locked: boolean;
+  /** Who may submit entries on the site, and how many (see `task_submissions`). */
+  submissions: TaskSubmissionSettings;
 }
 
 /**
@@ -840,3 +842,117 @@ export interface NotificationFeed {
   items: NotificationItem[];
   unreadCount: number;
 }
+
+// ── Task submissions ──────────────────────────────────────────────────
+
+/** "photo" → an image in Object Storage (with an optional caption); "text" → a written entry. */
+export type SubmissionKind = "photo" | "text";
+
+/** A task's submission rules, set by an admin. */
+export interface TaskSubmissionSettings {
+  /** Entries allowed per player (or per squad on team tasks); 0 = closed. */
+  max: number;
+  /** Which kinds of entry are accepted. Empty when closed. */
+  kinds: SubmissionKind[];
+}
+
+/** One entry from `task_submissions`. */
+export interface TaskSubmission {
+  id: number;
+  taskId: string;
+  /** The player who submitted it. */
+  playerId: string;
+  /** The squad that owns it, on team tasks. */
+  teamId?: string;
+  kind: SubmissionKind;
+  /** The text entry, or a photo's caption. */
+  text?: string;
+  /** Photos only: where the image lives in the storage bucket. */
+  objectKey?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  /** An admin hid it from the public gallery. */
+  hidden: boolean;
+  /** When it was submitted (ISO 8601). */
+  createdAt: string;
+}
+
+/** Whose entry slots a submission uses: the player's, or their squad's. */
+export type SubmissionOwnerRef =
+  { type: "player"; id: string } | { type: "team"; id: string };
+
+/** A submission owner ready to render. */
+export interface SubmissionOwner {
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+}
+
+/** A submission ready to render, with its submitter and image link. */
+export interface SubmissionEntry extends TaskSubmission {
+  submitterName: string;
+  /** Base-prefixed, access-checked image URL (photos only). */
+  mediaUrl?: string;
+}
+
+/** Who is looking at a task's submissions. */
+export interface SubmissionViewer {
+  signedIn: boolean;
+  isAdmin: boolean;
+  /** Set when the account is linked to a player profile. */
+  playerId?: string;
+}
+
+/**
+ * Why a viewer can't submit right now:
+ *   "upcoming" / "completed" → outside the task window;
+ *   "encrypted" → the brief is still password-locked for them;
+ *   "closed"    → the task doesn't take entries on the site;
+ *   "guest"     → not signed in; "no-player" → account has no player profile;
+ *   "no-team"   → team task, but the player isn't in a squad;
+ *   "full"      → every entry slot is used.
+ */
+export type SubmissionBlockReason =
+  | "upcoming"
+  | "completed"
+  | "encrypted"
+  | "closed"
+  | "guest"
+  | "no-player"
+  | "no-team"
+  | "full";
+
+/** The "your entries" panel on a task page. */
+export interface SubmissionPanel {
+  settings: TaskSubmissionSettings;
+  /** Set when the viewer has entry slots on this task. */
+  owner?: SubmissionOwner;
+  /** The owner's own entries, oldest first. */
+  entries: SubmissionEntry[];
+  remaining: number;
+  canSubmit: boolean;
+  blockedBy?: SubmissionBlockReason;
+  /** Entries can still be withdrawn (the task is live). */
+  canDelete: boolean;
+}
+
+/** One player's or squad's entries in a gallery. */
+export interface SubmissionGalleryGroup {
+  owner: SubmissionOwner;
+  entries: SubmissionEntry[];
+}
+
+/** What happened to a player's submission attempt (shown on the task page). */
+export type SubmissionOutcome =
+  | "submitted"
+  | "deleted"
+  | "closed"
+  | "full"
+  | "kind"
+  | "invalid"
+  | "too-large"
+  | "bad-type"
+  | "heic"
+  | "upload-failed";

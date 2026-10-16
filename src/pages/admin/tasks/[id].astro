@@ -42,6 +42,8 @@ let values: FormValues = {
   deadline: toDateTimeLocal(task.deadline),
   format: task.format,
   revealPassword: task.revealPassword ?? "",
+  maxSubmissions: String(task.maxSubmissions),
+  submissionKinds: task.submissionKinds.join(","),
 };
 let errors: FieldErrors = {};
 let formError: string | undefined;

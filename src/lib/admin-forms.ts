@@ -1,6 +1,7 @@
 import { z } from "astro/zod";
 import type { PollRecord } from "../data/admin";
 import { toWallClock } from "./time";
+import { MAX_SUBMISSIONS_PER_TASK, SUBMISSION_KINDS } from "./submission-forms";
 
 // Validation for the admin forms. Each parser takes the submitted FormData
 // and returns either typed input for `src/data/admin.ts` or per-field error
@@ -224,10 +225,30 @@ const taskSchema = z
     deadline: localDateTime,
     format: z.enum(["individual", "team"], { error: "Pick a format." }),
     revealPassword: optionalText(60),
+    maxSubmissions: z
+      .string()
+      .trim()
+      .min(1, "Required.")
+      .transform(Number)
+      .pipe(
+        z
+          .number({ error: "Enter a whole number." })
+          .int("Enter a whole number.")
+          .min(0, "Use 0 to keep submissions closed.")
+          .max(
+            MAX_SUBMISSIONS_PER_TASK,
+            `Keep it to ${MAX_SUBMISSIONS_PER_TASK} or fewer.`,
+          ),
+      ),
+    submissionKinds: z.array(z.enum(SUBMISSION_KINDS)),
   })
   .refine((t) => t.deadline > t.releaseDate, {
     path: ["deadline"],
     message: "The deadline must be after the release date.",
+  })
+  .refine((t) => t.maxSubmissions === 0 || t.submissionKinds.length > 0, {
+    path: ["submissionKinds"],
+    message: "Pick at least one kind of entry, or set entries to 0.",
   })
   .transform(({ briefMode, brief, ...task }) => {
     const text = brief.trim();
@@ -250,6 +271,11 @@ export type TaskInput = z.output<typeof taskSchema>;
 
 export function parseTaskForm(form: FormData): ParseResult<TaskInput> {
   const values = formValues(form);
+  const submissionKinds = [
+    ...new Set(
+      form.getAll("submissionKinds").filter((v) => typeof v === "string"),
+    ),
+  ];
   return parseWith(
     taskSchema,
     {
@@ -263,8 +289,10 @@ export function parseTaskForm(form: FormData): ParseResult<TaskInput> {
       deadline: values.deadline ?? "",
       format: values.format ?? "",
       revealPassword: values.revealPassword ?? "",
+      maxSubmissions: values.maxSubmissions ?? "0",
+      submissionKinds,
     },
-    values,
+    { ...values, submissionKinds: submissionKinds.join(",") },
   );
 }
 

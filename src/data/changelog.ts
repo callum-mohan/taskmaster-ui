@@ -5,6 +5,14 @@ import type { FeatureUpdate } from "../types";
 // keep the shape stable and add new entries at the top.
 export const changelog: FeatureUpdate[] = [
   {
+    id: "task-submissions",
+    date: "2026-10-16",
+    title: "Submit entries on the site",
+    description:
+      "Tasks can now take entries right here: upload a photo or write a text entry from the task page (your squad shares entries on team tasks). Only you and the Taskmaster see them until the deadline, then every entry goes up in a gallery on the task page.",
+    category: "new",
+  },
+  {
     id: "personal-notifications",
     date: "2026-10-16",
     title: "Results, rank & bonus alerts",

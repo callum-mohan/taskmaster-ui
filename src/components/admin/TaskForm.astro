@@ -4,6 +4,11 @@ import Notice from "./Notice.astro";
 import { btnPrimary, btnGhost, labelClass } from "./styles";
 import type { FieldErrors, FormValues } from "../../lib/admin-forms";
 import { withBase } from "../../lib/url";
+import {
+  MAX_PHOTO_BYTES,
+  MAX_SUBMISSIONS_PER_TASK,
+  MAX_TEXT_LENGTH,
+} from "../../lib/submission-forms";
 
 interface Props {
   mode: "create" | "edit";
@@ -35,6 +40,22 @@ const briefModes = [
   { value: "prose", label: "prose" },
   { value: "bullets", label: "bullet list (one per line)" },
 ];
+const submissionKinds = [
+  {
+    value: "photo",
+    label: "photo",
+    hint: `JPEG, PNG, WebP, GIF or AVIF, up to ${MAX_PHOTO_BYTES / (1024 * 1024)} MB`,
+  },
+  {
+    value: "text",
+    label: "text",
+    hint: `a written entry, up to ${MAX_TEXT_LENGTH} characters`,
+  },
+];
+const checkbox = "h-4 w-4 accent-[var(--color-acid)]";
+const kinds = new Set(
+  (values.submissionKinds ?? "").split(",").filter(Boolean),
+);
 const format = values.format ?? "individual";
 const briefMode = values.briefMode ?? "prose";
 ---
@@ -151,6 +172,50 @@ const briefMode = values.briefMode ?? "prose";
           </label>
         ))
       }
+    </div>
+  </fieldset>
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>submissions</legend>
+    <AdminField
+      label="entries allowed"
+      name="maxSubmissions"
+      type="number"
+      min={0}
+      max={MAX_SUBMISSIONS_PER_TASK}
+      value={values.maxSubmissions}
+      error={errors.maxSubmissions}
+      required
+      hint="Per player, or per squad on team tasks. 0 keeps on-site submissions closed."
+      class="sm:max-w-xs"
+    />
+    <div>
+      <p class="text-xs text-ink-dim">accepted kinds</p>
+      {
+        errors.submissionKinds && (
+          <p class="mt-1.5 text-xs text-danger" role="alert">
+            {errors.submissionKinds}
+          </p>
+        )
+      }
+      <div class="mt-2 grid gap-2 sm:grid-cols-2">
+        {
+          submissionKinds.map((k) => (
+            <label class={choice}>
+              <input
+                type="checkbox"
+                name="submissionKinds"
+                value={k.value}
+                checked={kinds.has(k.value)}
+                class={checkbox}
+              />
+              <span>
+                {k.label}
+                <span class="block text-xs text-ink-faint">{k.hint}</span>
+              </span>
+            </label>
+          ))
+        }
+      </div>
     </div>
   </fieldset>
   <AdminField

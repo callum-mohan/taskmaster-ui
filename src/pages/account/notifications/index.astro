@@ -13,7 +13,10 @@ if (!player || player.mustChangePassword) {
 }
 
 const { getNotifications } = await Astro.locals.getQueries();
-const feed = getNotifications({ readAt: player.notificationsReadAt });
+const feed = getNotifications({
+  playerId: player.playerId,
+  readAt: player.notificationsReadAt,
+});
 const justRead = Astro.url.searchParams.get("done") === "read";
 ---
 

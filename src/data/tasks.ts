@@ -1,5 +1,6 @@
 import type { Task, TaskRevealContext, TaskStatus } from "../types";
 import type { tasks as tasksTable } from "../db/schema";
+import { wallClockToIso } from "../lib/time";
 
 type TaskRow = typeof tasksTable.$inferSelect;
 
@@ -24,11 +25,6 @@ export function deriveTaskStatus(
   }
   return now < deadline ? "live" : "completed";
 }
-
-// Timestamps are zone-less wall-clock times, returned as
-// "YYYY-MM-DD HH:MM:SS" and normalised to the ISO form the site expects
-// ("YYYY-MM-DDTHH:MM:SS", parsed as local time).
-const toLocalIso = (timestamp: string) => timestamp.replace(" ", "T");
 
 /**
  * Whether a password-protected task still withholds its content from this
@@ -58,8 +54,8 @@ export function mapTasks(
 ): Task[] {
   return rows.map((row) => {
     const dates = {
-      releaseDate: toLocalIso(row.releaseDate),
-      deadline: toLocalIso(row.deadline),
+      releaseDate: wallClockToIso(row.releaseDate),
+      deadline: wallClockToIso(row.deadline),
     };
     const base = {
       id: row.id,

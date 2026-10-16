@@ -29,6 +29,7 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { resolveBonusTask } from "../../../data/polls";
+import { ukDateFormat, wallClockToIso } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -115,7 +116,7 @@ const notices: Record<string, string> = {
 };
 const notice = done ? notices[done] : undefined;
 
-const stamp = new Intl.DateTimeFormat("en-GB", {
+const stamp = ukDateFormat({
   weekday: "short",
   day: "2-digit",
   month: "short",
@@ -126,7 +127,7 @@ const stamp = new Intl.DateTimeFormat("en-GB", {
 const fmt = (iso: string) => stamp.format(new Date(iso));
 const weeks = pollBonusWeeks(tasks);
 const autoWeekId = values.opensAt
-  ? resolveBonusTask(values.opensAt, tasks)
+  ? resolveBonusTask(wallClockToIso(values.opensAt), tasks)
   : undefined;
 const autoWeekLabel = weeks.find((w) => w.id === autoWeekId)?.label;
 const onHomepage = poll.published && poll.status !== "scheduled";

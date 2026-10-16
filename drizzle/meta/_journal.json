@@ -43,6 +43,27 @@
       "when": 1792073881639,
       "tag": "0005_notifications_read_at",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792180768322,
+      "tag": "0006_team_score_comment",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792181932827,
+      "tag": "0007_score_timestamps_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792181935175,
+      "tag": "0008_backfill_score_timestamps",
+      "breakpoints": true
     }
   ]
 }

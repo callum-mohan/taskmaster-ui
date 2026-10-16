@@ -8,21 +8,13 @@ import type {
   SessionPlayer,
 } from "../types";
 import type { ProfileInput } from "../lib/account-forms";
+import { timestamptzToIso } from "../lib/time";
 
 // Player sign-in accounts. Neon Auth owns the credentials; this table links
 // an auth user to exactly one player. Accounts themselves are created by
 // `scripts/create-player-accounts.mjs`, since sign-up is disabled.
 
 type AccountRow = typeof playerAccounts.$inferSelect;
-
-// Postgres renders `timestamptz` as e.g. "2026-10-15 13:55:43.12+00"; turn it
-// into a standard ISO instant so `new Date()` parses it everywhere.
-const toInstantIso = (timestamp: string) =>
-  new Date(
-    timestamp
-      .replace(" ", "T")
-      .replace(/([+-]\d{2})(\d{2})?$/, (_, h, m) => `${h}:${m ?? "00"}`),
-  ).toISOString();
 
 const toAccount = (row: AccountRow): PlayerAccount => ({
   playerId: row.playerId,
@@ -64,7 +56,7 @@ export async function getSessionPlayer(
     mustChangePassword: row.mustChangePassword,
     isAdmin: user.isAdmin,
     ...(row.notificationsReadAt && {
-      notificationsReadAt: toInstantIso(row.notificationsReadAt),
+      notificationsReadAt: timestamptzToIso(row.notificationsReadAt),
     }),
   };
 }

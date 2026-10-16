@@ -1,5 +1,6 @@
 ---
 import type { FeatureCategory, FeatureUpdate } from "../types";
+import { ukDateFormat } from "../lib/time";
 
 interface Props {
   /** Changelog entries to list, newest-first. */
@@ -9,7 +10,7 @@ interface Props {
 
 const { entries, class: className = "" } = Astro.props;
 
-const dateFmt = new Intl.DateTimeFormat("en-GB", {
+const dateFmt = ukDateFormat({
   day: "2-digit",
   month: "short",
   year: "numeric",

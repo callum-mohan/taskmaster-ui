@@ -1,15 +1,27 @@
 ---
-import type { TaskSummary } from "../types";
+import type { PlayerTaskResult, TaskSummary } from "../types";
 import TaskStatusBadge from "./TaskStatusBadge.astro";
 import ScoreBadge from "./ScoreBadge.astro";
 import { withBase } from "../lib/url";
+import { ukDateFormat } from "../lib/time";
 
 interface Props {
   summary: TaskSummary;
+  /**
+   * The signed-in player's own result, shown on completed tasks. `null` means
+   * a player is signed in but wasn't scored; omit it for everyone else.
+   */
+  yourResult?: PlayerTaskResult | null;
   class?: string;
 }
 
-const { summary, class: className = "" } = Astro.props;
+const { summary, yourResult, class: className = "" } = Astro.props;
+
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
 const { task, winner, winningScore, winningTeam } = summary;
 
 const status = task.status;
@@ -29,7 +41,7 @@ const numberColor = {
   upcoming: "text-ink-faint",
 } as const;
 
-const dayFmt = new Intl.DateTimeFormat("en-GB", {
+const dayFmt = ukDateFormat({
   day: "2-digit",
   month: "short",
 });
@@ -143,6 +155,27 @@ const releaseLabel = dayFmt.format(new Date(task.releaseDate));
               <ScoreBadge points={winningScore} position={1} />
             )}
           </div>
+        )}
+
+        {status === "completed" && yourResult !== undefined && (
+          <p
+            class="mt-3 flex items-center justify-between gap-3 rounded border border-cyan/30 bg-cyan/5 px-3 py-2 text-xs"
+            data-your-result
+          >
+            <span class="tracking-[0.2em] text-cyan uppercase">
+              {isTeam ? "Your squad" : "You"}
+            </span>
+            {yourResult ? (
+              <span class="font-bold tabular-nums">
+                <span class="text-ink">{ordinal(yourResult.position)}</span>
+                <span class="text-ink-faint"> · </span>
+                <span class="text-acid">{yourResult.points}</span>
+                <span class="font-medium text-ink-faint"> pts</span>
+              </span>
+            ) : (
+              <span class="text-ink-faint">not scored</span>
+            )}
+          </p>
         )}
 
         <a

@@ -19,11 +19,9 @@ interface Props {
   errors?: FieldErrors;
   /** Column heading for the row names. */
   entity: "player" | "team";
-  /** Show the optional per-row note column (individual tasks only). */
-  withComment?: boolean;
 }
 
-const { rows, values, errors = {}, entity, withComment = false } = Astro.props;
+const { rows, values, errors = {}, entity } = Astro.props;
 ---
 
 <div class="overflow-x-auto">
@@ -32,13 +30,7 @@ const { rows, values, errors = {}, entity, withComment = false } = Astro.props;
       <tr>
         <th scope="col" class={tableHead}>{entity}</th>
         <th scope="col" class:list={[tableHead, "w-32"]}>points</th>
-        {
-          withComment && (
-            <th scope="col" class={tableHead}>
-              note
-            </th>
-          )
-        }
+        <th scope="col" class={tableHead}>note</th>
       </tr>
     </thead>
     <tbody>
@@ -79,30 +71,28 @@ const { rows, values, errors = {}, entity, withComment = false } = Astro.props;
                   </p>
                 )}
               </td>
-              {withComment && (
-                <td class={tableCell}>
-                  <input
-                    type="text"
-                    name={commentKey}
-                    value={values[commentKey] ?? ""}
-                    aria-label={`Note for ${row.name}`}
-                    aria-invalid={commentError ? "true" : undefined}
-                    aria-describedby={
-                      commentError ? `${commentKey}-error` : undefined
-                    }
-                    placeholder="optional"
-                    class:list={[inputClass(Boolean(commentError)), "min-w-48"]}
-                  />
-                  {commentError && (
-                    <p
-                      id={`${commentKey}-error`}
-                      class="mt-1 text-xs text-danger"
-                    >
-                      {commentError}
-                    </p>
-                  )}
-                </td>
-              )}
+              <td class={tableCell}>
+                <input
+                  type="text"
+                  name={commentKey}
+                  value={values[commentKey] ?? ""}
+                  aria-label={`Note for ${row.name}`}
+                  aria-invalid={commentError ? "true" : undefined}
+                  aria-describedby={
+                    commentError ? `${commentKey}-error` : undefined
+                  }
+                  placeholder="optional"
+                  class:list={[inputClass(Boolean(commentError)), "min-w-48"]}
+                />
+                {commentError && (
+                  <p
+                    id={`${commentKey}-error`}
+                    class="mt-1 text-xs text-danger"
+                  >
+                    {commentError}
+                  </p>
+                )}
+              </td>
             </tr>
           );
         })

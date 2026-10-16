@@ -105,6 +105,12 @@ export interface BonusPoint {
   points: number;
   /** Why the bonus or deduction was given. */
   reason: string;
+  /**
+   * The `bonus_points` row and when it was recorded (ISO 8601). Unset for
+   * bonuses derived from poll votes, which aren't stored as rows.
+   */
+  id?: number;
+  awardedAt?: string;
 }
 
 /**
@@ -129,6 +135,30 @@ export interface AdminUser {
   name: string;
   email: string;
   isAdmin: boolean;
+}
+
+export type ScoreAuditEntity = "task_score" | "team_score" | "bonus";
+export type ScoreAuditAction = "created" | "updated" | "deleted";
+
+/**
+ * One change to a week's scores or bonuses, from `score_audit_log`. Points and
+ * notes are unset on the side that didn't exist (before a create, after a
+ * delete).
+ */
+export interface ScoreAuditEntry {
+  id: number;
+  /** When the change was made (ISO 8601). */
+  at: string;
+  actorName: string;
+  entity: ScoreAuditEntity;
+  action: ScoreAuditAction;
+  /** Player id (task scores, bonuses) or team id (team scores). */
+  subjectId: string;
+  pointsBefore?: number;
+  pointsAfter?: number;
+  /** Score comment or bonus reason. */
+  noteBefore?: string;
+  noteAfter?: string;
 }
 
 /**
@@ -189,6 +219,11 @@ export interface CompetitionData {
   scores: Score[];
   teamScores: TeamScore[];
   bonusPoints: BonusPoint[];
+  /**
+   * When each task's results were first recorded (ISO 8601), keyed by task id.
+   * Only tasks with scores for their format appear.
+   */
+  resultsPostedAt: Record<string, string>;
   /** Every poll (drafts included), newest opening first. */
   polls: Poll[];
 }
@@ -444,6 +479,15 @@ export interface PlayerCompareOptions {
   rival?: CompareOpponent;
   /** Every other player, ordered by rank, for the dropdown. */
   opponents: CompareOpponent[];
+}
+
+/** A player's rank before and straight after one week's results. */
+export interface PlayerRankChange {
+  task: Task;
+  rank: number;
+  previousRank: number;
+  /** When the week's results were posted (ISO 8601). */
+  at: string;
 }
 
 /** A single player's outcome on one task, for the player detail page. */
@@ -762,18 +806,28 @@ export interface PollSummary {
 
 // ── Notifications ─────────────────────────────────────────────────────
 
-/** What happened; each kind is derived from records already in the snapshot. */
-export type NotificationKind = "task-released" | "poll-opened";
+/**
+ * What happened; each kind is derived from records already in the snapshot.
+ * Results, rank, bonus and deduction notifications are personal to a player.
+ */
+export type NotificationKind =
+  | "task-released"
+  | "poll-opened"
+  | "deadline-soon"
+  | "results-posted"
+  | "rank-up"
+  | "bonus-awarded"
+  | "points-deducted";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
-  /** Stable per event, e.g. `task:week-05` or `poll:best-egg`. */
+  /** Stable per event, e.g. `task:week-05`, `poll:best-egg` or `bonus:12`. */
   id: string;
   kind: NotificationKind;
   title: string;
   /** Secondary line, e.g. "Week 05 · team task". */
   detail?: string;
-  /** Base-prefixed link to the task or poll. */
+  /** Base-prefixed link to what the notification is about. */
   href: string;
   /** When it happened (ISO 8601). */
   at: string;

@@ -38,8 +38,12 @@ if (Astro.request.method === "POST") {
         email: signedIn.email,
         isAdmin: hasAdminRole((signedIn as { role?: string | null }).role),
       });
+      // Players land on the homepage, unless they were sent here from an
+      // account page or still have to replace their temporary password.
       const target = player
-        ? (safeNext(String(form.get("next") ?? "")) ?? "/account")
+        ? player.mustChangePassword
+          ? "/account/password"
+          : (safeNext(String(form.get("next") ?? "")) ?? "/")
         : // Signed in, but not as a player: the GET explains what to do.
           "/login";
       return Astro.redirect(withBase(target));
@@ -52,7 +56,7 @@ if (Astro.request.method === "POST") {
 
 const viewer = await Astro.locals.getViewer();
 if (viewer?.playerId && Astro.request.method === "GET") {
-  return Astro.redirect(withBase(next ?? "/account"));
+  return Astro.redirect(withBase(next ?? "/"));
 }
 
 // Signed in, but with an account that has no player profile.

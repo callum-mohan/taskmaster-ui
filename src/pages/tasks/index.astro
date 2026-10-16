@@ -1,23 +1,101 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import TaskCard from "../../components/TaskCard.astro";
-import type { TaskStatus } from "../../types";
+import { withBase } from "../../lib/url";
+import type { PlayerTaskResult, TaskStatus, TaskSummary } from "../../types";
 
-const { getTaskSummaries } = await Astro.locals.getQueries();
+type TaskFilter = "all" | TaskStatus;
+
+const { getTaskSummaries, getPlayerResults } = await Astro.locals.getQueries();
+const viewer = await Astro.locals.getViewer();
 
 const summaries = getTaskSummaries();
 
-const live = summaries.filter((s) => s.task.status === "live");
-const upcoming = summaries.filter((s) => s.task.status === "upcoming");
+const byWeek = (a: TaskSummary, b: TaskSummary) =>
+  a.task.weekNumber - b.task.weekNumber;
+
+// Soonest deadline first, so the most urgent live task leads.
+const live = summaries
+  .filter((s) => s.task.status === "live")
+  .sort(
+    (a, b) =>
+      Date.parse(a.task.deadline) - Date.parse(b.task.deadline) || byWeek(a, b),
+  );
+const upcoming = summaries
+  .filter((s) => s.task.status === "upcoming")
+  .sort(byWeek);
 const completed = summaries
   .filter((s) => s.task.status === "completed")
-  .sort((a, b) => b.task.weekNumber - a.task.weekNumber);
+  .sort((a, b) => byWeek(b, a));
 
 const counts: Record<TaskStatus, number> = {
   live: live.length,
   upcoming: upcoming.length,
   completed: completed.length,
 };
+
+// `?filter=` and `?q=` make a filtered view shareable and survive a refresh.
+const filterParam = Astro.url.searchParams.get("filter");
+const filter: TaskFilter =
+  filterParam === "live" ||
+  filterParam === "completed" ||
+  filterParam === "upcoming"
+    ? counts[filterParam] > 0
+      ? filterParam
+      : "all"
+    : "all";
+const query = (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 80);
+
+// Only text the visitor can already see on the card is searchable, so a
+// search can never confirm an encrypted title or a locked brief.
+function searchText({ task, winner, winningTeam }: TaskSummary): string {
+  const week = String(task.weekNumber).padStart(2, "0");
+  const parts = [`week ${week}`, `week ${task.weekNumber}`, task.format];
+  if (!task.locked) parts.push(task.title);
+  if (!task.locked && task.status !== "upcoming") parts.push(task.description);
+  if (task.status === "completed") {
+    if (winner) parts.push(winner.name);
+    if (winningTeam) parts.push(winningTeam.name);
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+const matches = (text: string) => terms.every((term) => text.includes(term));
+
+const sections = (
+  [
+    { status: "live", label: "live", items: live },
+    { status: "completed", label: "completed", items: completed },
+    { status: "upcoming", label: "upcoming", items: upcoming },
+  ] as const
+).map((section) => {
+  const items = section.items.map((summary) => {
+    const text = searchText(summary);
+    return { summary, text, visible: matches(text) };
+  });
+  const visibleCount = items.filter((item) => item.visible).length;
+  return {
+    ...section,
+    items,
+    hidden:
+      (filter !== "all" && filter !== section.status) || visibleCount === 0,
+  };
+});
+const anyVisible = sections.some((section) => !section.hidden);
+
+// A signed-in player sees their own finish on each completed task.
+const yourResults: Map<string, PlayerTaskResult> | undefined = viewer?.playerId
+  ? new Map(getPlayerResults(viewer.playerId).map((r) => [r.task.id, r]))
+  : undefined;
+const yourResultFor = (summary: TaskSummary) =>
+  yourResults && summary.task.status === "completed"
+    ? (yourResults.get(summary.task.id) ?? null)
+    : undefined;
+
+const clearSearchHref = withBase(
+  filter === "all" ? "/tasks" : `/tasks?filter=${filter}`,
+);
 ---
 
 <Layout
@@ -41,8 +119,8 @@ const counts: Record<TaskStatus, number> = {
         class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim sm:text-base"
       >
         <span class="text-acid">// </span>
-        {summaries.length} weekly challenges. One released every Friday at 13:00.
-        Upcoming briefs stay encrypted until release.
+        {summaries.length} weekly challenges. One released every Friday. Upcoming
+        briefs stay encrypted until release.
       </p>
 
       <div
@@ -54,7 +132,7 @@ const counts: Record<TaskStatus, number> = {
         <button
           type="button"
           data-filter="all"
-          aria-pressed="true"
+          aria-pressed={filter === "all" ? "true" : "false"}
           class="task-chip flex items-center gap-2 rounded border border-ink-faint/50 bg-ink/5 px-3 py-1.5 text-ink transition-colors"
         >
           <span class="tracking-widest">ALL</span>
@@ -63,7 +141,7 @@ const counts: Record<TaskStatus, number> = {
         <button
           type="button"
           data-filter="live"
-          aria-pressed="false"
+          aria-pressed={filter === "live" ? "true" : "false"}
           disabled={counts.live === 0}
           class="task-chip flex items-center gap-2 rounded border border-amber/40 bg-amber/5 px-3 py-1.5 text-amber transition-colors disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -76,7 +154,7 @@ const counts: Record<TaskStatus, number> = {
         <button
           type="button"
           data-filter="completed"
-          aria-pressed="false"
+          aria-pressed={filter === "completed" ? "true" : "false"}
           disabled={counts.completed === 0}
           class="task-chip flex items-center gap-2 rounded border border-acid-dim bg-acid/5 px-3 py-1.5 text-acid transition-colors disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -87,104 +165,219 @@ const counts: Record<TaskStatus, number> = {
         <button
           type="button"
           data-filter="upcoming"
-          aria-pressed="false"
+          aria-pressed={filter === "upcoming" ? "true" : "false"}
           disabled={counts.upcoming === 0}
           class="task-chip flex items-center gap-2 rounded border border-grid bg-term-panel px-3 py-1.5 text-ink-faint transition-colors disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <span class="tracking-widest">LOCKED</span>
+          <span class="tracking-widest">UPCOMING</span>
           <span class="font-bold tabular-nums text-ink">{counts.upcoming}</span>
         </button>
       </div>
+
+      <form
+        method="get"
+        role="search"
+        aria-label="Search tasks"
+        class="mt-4 max-w-md"
+        data-task-search
+      >
+        <label for="task-search" class="sr-only">Search tasks</label>
+        <div
+          class="flex items-center gap-2 rounded border border-grid bg-term-panel px-3 py-2 text-sm transition-colors focus-within:border-acid"
+        >
+          <span class="shrink-0 text-acid" aria-hidden="true">$ grep -i</span>
+          <input
+            id="task-search"
+            type="search"
+            name="q"
+            value={query}
+            maxlength="80"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="title, week or winner"
+            class="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-ink-faint"
+          />
+        </div>
+        <input
+          type="hidden"
+          name="filter"
+          value={filter}
+          disabled={filter === "all"}
+          data-filter-input
+        />
+        <button type="submit" class="sr-only">Search</button>
+      </form>
       <p class="sr-only" aria-live="polite" data-filter-status></p>
     </header>
 
-    <!-- Live task(s) -->
     {
-      live.length > 0 && (
-        <section class="mt-12" data-status-section="live">
+      sections.map((section) => (
+        <section
+          class="mt-12"
+          data-status-section={section.status}
+          hidden={section.hidden}
+        >
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
-            tasks --filter live
+            tasks --filter {section.label}
           </h2>
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {live.map((summary) => (
-              <TaskCard summary={summary} />
+            {section.items.map(({ summary, text, visible }) => (
+              <div
+                class="grid"
+                data-task-item
+                data-search={text}
+                hidden={!visible}
+              >
+                <TaskCard
+                  summary={summary}
+                  yourResult={yourResultFor(summary)}
+                />
+              </div>
             ))}
           </div>
         </section>
-      )
+      ))
     }
 
-    <!-- Completed tasks -->
-    {
-      completed.length > 0 && (
-        <section class="mt-12" data-status-section="completed">
-          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
-            tasks --filter completed
-          </h2>
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {completed.map((summary) => (
-              <TaskCard summary={summary} />
-            ))}
-          </div>
-        </section>
-      )
-    }
-
-    <!-- Upcoming / locked tasks -->
-    {
-      upcoming.length > 0 && (
-        <section class="mt-12" data-status-section="upcoming">
-          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
-            tasks --filter locked
-          </h2>
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {upcoming.map((summary) => (
-              <TaskCard summary={summary} />
-            ))}
-          </div>
-        </section>
-      )
-    }
+    <div
+      class="mt-12 rounded-lg border border-dashed border-grid p-6 text-sm text-ink-dim"
+      data-empty-state
+      hidden={anyVisible}
+    >
+      <p>
+        <span class="text-acid">$</span> grep -i "<span
+          class="text-ink"
+          data-empty-query>{query}</span
+        >" tasks/ &rarr; <span class="text-amber">no matches</span>
+      </p>
+      <a
+        href={clearSearchHref}
+        class="mt-3 inline-block text-cyan hover:underline"
+        data-clear-search>clear search</a
+      >
+    </div>
   </div>
 </Layout>
 
 <script>
-  const root = document.querySelector<HTMLElement>("[data-task-filter]");
-  const sections = Array.from(
-    document.querySelectorAll<HTMLElement>("[data-status-section]"),
-  );
-  const statusEl = document.querySelector<HTMLElement>("[data-filter-status]");
+  type TaskFilter = "all" | "live" | "completed" | "upcoming";
 
-  if (root) {
+  const filterGroup = document.querySelector<HTMLElement>("[data-task-filter]");
+  const searchForm = document.querySelector<HTMLFormElement>(
+    "form[data-task-search]",
+  );
+
+  if (filterGroup && searchForm) {
     const buttons = Array.from(
-      root.querySelectorAll<HTMLButtonElement>("button[data-filter]"),
+      filterGroup.querySelectorAll<HTMLButtonElement>("button[data-filter]"),
+    );
+    const sections = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-status-section]"),
+    );
+    const searchInput =
+      searchForm.querySelector<HTMLInputElement>("input[name=q]");
+    const filterInput = searchForm.querySelector<HTMLInputElement>(
+      "[data-filter-input]",
+    );
+    const statusEl = document.querySelector<HTMLElement>(
+      "[data-filter-status]",
+    );
+    const emptyState =
+      document.querySelector<HTMLElement>("[data-empty-state]");
+    const emptyQuery =
+      document.querySelector<HTMLElement>("[data-empty-query]");
+    const clearLink = document.querySelector<HTMLAnchorElement>(
+      "[data-clear-search]",
     );
 
-    const labels: Record<string, string> = {
-      all: "all tasks",
+    const labels: Record<TaskFilter, string> = {
+      all: "tasks",
       live: "live tasks",
       completed: "completed tasks",
-      upcoming: "locked tasks",
+      upcoming: "upcoming tasks",
     };
 
-    function setFilter(filter: string) {
-      sections.forEach((section) => {
-        section.hidden = !(
-          filter === "all" || section.dataset.statusSection === filter
-        );
-      });
+    const isFilter = (value: string | undefined): value is TaskFilter =>
+      value === "all" ||
+      value === "live" ||
+      value === "completed" ||
+      value === "upcoming";
+
+    const initial = buttons.find(
+      (btn) => btn.getAttribute("aria-pressed") === "true",
+    )?.dataset.filter;
+    let filter: TaskFilter = isFilter(initial) ? initial : "all";
+
+    // Mirrors the server-side matching in the page frontmatter.
+    function apply(announce: boolean) {
+      const query = (searchInput?.value ?? "").trim();
+      const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+
+      for (const section of sections) {
+        const inFilter =
+          filter === "all" || section.dataset.statusSection === filter;
+        let visibleInSection = 0;
+        section
+          .querySelectorAll<HTMLElement>("[data-task-item]")
+          .forEach((item) => {
+            const text = item.dataset.search ?? "";
+            const visible = terms.every((term) => text.includes(term));
+            item.hidden = !visible;
+            if (visible) visibleInSection++;
+          });
+        section.hidden = !inFilter || visibleInSection === 0;
+        if (!section.hidden) shown += visibleInSection;
+      }
+
       buttons.forEach((btn) =>
         btn.setAttribute("aria-pressed", String(btn.dataset.filter === filter)),
       );
-      if (statusEl)
-        statusEl.textContent = `Showing ${labels[filter] ?? filter}`;
+      if (filterInput) {
+        filterInput.value = filter;
+        filterInput.disabled = filter === "all";
+      }
+      if (emptyState) emptyState.hidden = shown > 0;
+      if (emptyQuery) emptyQuery.textContent = query;
+
+      const url = new URL(window.location.href);
+      if (filter === "all") url.searchParams.delete("filter");
+      else url.searchParams.set("filter", filter);
+      if (query) url.searchParams.set("q", query);
+      else url.searchParams.delete("q");
+      history.replaceState(history.state, "", url);
+      if (clearLink) {
+        const clearUrl = new URL(url);
+        clearUrl.searchParams.delete("q");
+        clearLink.href = clearUrl.pathname + clearUrl.search;
+      }
+
+      if (announce && statusEl) {
+        const what = labels[filter];
+        statusEl.textContent = query
+          ? `Showing ${shown} ${what} matching "${query}"`
+          : `Showing ${shown} ${what}`;
+      }
     }
 
     buttons.forEach((btn) => {
       btn.addEventListener("click", () => {
-        if (btn.disabled) return;
-        setFilter(btn.dataset.filter ?? "all");
+        if (btn.disabled || !isFilter(btn.dataset.filter)) return;
+        filter = btn.dataset.filter;
+        apply(true);
       });
+    });
+
+    searchInput?.addEventListener("input", () => apply(true));
+    searchForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      apply(true);
+    });
+    clearLink?.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (searchInput) searchInput.value = "";
+      apply(true);
+      searchInput?.focus();
     });
   }
 </script>

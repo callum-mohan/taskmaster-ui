@@ -20,6 +20,7 @@ import {
   type FieldErrors,
   type FormValues,
 } from "../../../lib/admin-forms";
+import { wallClockToIso, ukDateFormat } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -82,19 +83,18 @@ if (Astro.request.method === "POST") {
 
 const impact = await getTaskDeleteImpact(id);
 
-const toIso = (timestamp: string) => timestamp.replace(" ", "T");
 const status = deriveTaskStatus({
-  releaseDate: toIso(task.releaseDate),
-  deadline: toIso(task.deadline),
+  releaseDate: wallClockToIso(task.releaseDate),
+  deadline: wallClockToIso(task.deadline),
 });
 const revealedAt = task.revealedAt
-  ? `at ${new Intl.DateTimeFormat("en-GB", {
+  ? `at ${ukDateFormat({
       day: "2-digit",
       month: "short",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }).format(new Date(toIso(task.revealedAt)))}`
+    }).format(new Date(wallClockToIso(task.revealedAt)))}`
   : undefined;
 const doneParam = Astro.url.searchParams.get("done");
 const revealDone =

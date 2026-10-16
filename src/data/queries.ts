@@ -35,6 +35,7 @@ import type {
   WhatsNewInfo,
   FeatureUpdate,
   CompetitionData,
+  PlayerRankChange,
 } from "../types";
 import { getRecapContent } from "./recaps";
 import { changelog } from "./changelog";
@@ -51,7 +52,15 @@ export type Queries = ReturnType<typeof createQueries>;
 
 /** Binds every selector to one request's competition snapshot. */
 export function createQueries(data: CompetitionData) {
-  const { players, teams, tasks, scores, teamScores, bonusPoints } = data;
+  const {
+    players,
+    teams,
+    tasks,
+    scores,
+    teamScores,
+    bonusPoints,
+    resultsPostedAt,
+  } = data;
 
   function getPlayerById(id: string): Player | undefined {
     return players.find((p) => p.id === id);
@@ -205,6 +214,31 @@ export function createQueries(data: CompetitionData) {
           previousRank !== undefined ? previousRank - row.rank : undefined,
       };
     });
+  }
+
+  /**
+   * A player's rank straight after each week's results compared with just
+   * before them, oldest week first. Only weeks with results count. Like the
+   * leaderboard's movement, a week's bonuses count with that week.
+   */
+  function getPlayerRankHistory(playerId: string): PlayerRankChange[] {
+    const weekOf = (taskId: string) =>
+      completedWeekByTask.get(taskId) ?? Infinity;
+    const rankWhere = (include: (week: number) => boolean) =>
+      computeStandings(
+        scores.filter((s) => include(weekOf(s.taskId))),
+        bonusPoints.filter((b) => include(weekOf(b.taskId))),
+      ).find((row) => row.player.id === playerId)?.rank;
+
+    return tasks
+      .filter((task) => resultsPostedAt[task.id] !== undefined)
+      .sort((a, b) => a.weekNumber - b.weekNumber)
+      .flatMap((task) => {
+        const rank = rankWhere((week) => week <= task.weekNumber);
+        const previousRank = rankWhere((week) => week < task.weekNumber);
+        if (rank === undefined || previousRank === undefined) return [];
+        return [{ task, rank, previousRank, at: resultsPostedAt[task.id] }];
+      });
   }
 
   /** Top N leaderboard rows (defaults to 5 for the homepage). */
@@ -1545,6 +1579,7 @@ export function createQueries(data: CompetitionData) {
     getPlayerCompareOptions,
     getLostArchive,
     ...createPollQueries(data),
-    ...createNotificationQueries(data),
+    getPlayerRankHistory,
+    ...createNotificationQueries(data, { getPlayerRankHistory }),
   };
 }

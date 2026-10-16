@@ -19,6 +19,7 @@ import {
   setRevealCookie,
 } from "../../lib/task-reveal";
 import type { RevealError } from "../../types";
+import { ukDateFormat } from "../../lib/time";
 
 const {
   getTaskSummary,
@@ -108,12 +109,12 @@ const pageDescription = isLocked
       ? `${task.description} Won by ${winner.name}${winningScore ? ` with ${winningScore} pts` : ""}.`
       : task.description;
 
-const dayFmt = new Intl.DateTimeFormat("en-GB", {
+const dayFmt = ukDateFormat({
   weekday: "long",
   day: "2-digit",
   month: "long",
 });
-const timeFmt = new Intl.DateTimeFormat("en-GB", {
+const timeFmt = ukDateFormat({
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -390,7 +391,7 @@ const medal = (position: number) =>
     <!-- Results — individual tasks (completed only) -->
     {
       task.status === "completed" && !isTeam && winner && (
-        <section class="mt-10">
+        <section id="results" class="mt-10 scroll-mt-24">
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
             results --final
           </h2>
@@ -482,7 +483,7 @@ const medal = (position: number) =>
     <!-- Results — team tasks (completed only) -->
     {
       task.status === "completed" && isTeam && winningTeam && (
-        <section class="mt-10">
+        <section id="results" class="mt-10 scroll-mt-24">
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
             results --team --final
           </h2>

@@ -4,6 +4,7 @@ import type {
   polls as pollsTable,
   pollVotes as pollVotesTable,
 } from "../db/schema";
+import { wallClockToIso } from "../lib/time";
 
 type PollRow = typeof pollsTable.$inferSelect;
 type OptionRow = typeof pollOptionsTable.$inferSelect;
@@ -42,10 +43,6 @@ export function resolveBonusTask(
   return (live ?? released.at(-1) ?? tasks[0])?.id;
 }
 
-// Zone-less wall-clock timestamps, normalised to the site's ISO form (see
-// `tasks.ts`).
-const toLocalIso = (timestamp: string) => timestamp.replace(" ", "T");
-
 /** Rows → `Poll` records, with options in display order and status derived. */
 export function mapPolls(
   pollRows: PollRow[],
@@ -68,8 +65,8 @@ export function mapPolls(
           minChoices,
           Math.min(row.maxChoices ?? options.length, options.length),
         );
-    const opensAt = toLocalIso(row.opensAt);
-    const closesAt = toLocalIso(row.closesAt);
+    const opensAt = wallClockToIso(row.opensAt);
+    const closesAt = wallClockToIso(row.closesAt);
     const pinned = row.bonusTaskId !== null && taskIds.has(row.bonusTaskId);
     const bonusTaskId = pinned
       ? row.bonusTaskId!

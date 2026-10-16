@@ -9,6 +9,7 @@ import {
   tableHead,
 } from "../../../components/admin/styles";
 import { withBase } from "../../../lib/url";
+import { ukDateFormat } from "../../../lib/time";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
@@ -17,7 +18,7 @@ const { tasks } = await Astro.locals.getQueries();
 const done = Astro.url.searchParams.get("done");
 const subject = Astro.url.searchParams.get("name");
 
-const stamp = new Intl.DateTimeFormat("en-GB", {
+const stamp = ukDateFormat({
   day: "2-digit",
   month: "short",
   hour: "2-digit",

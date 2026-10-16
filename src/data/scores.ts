@@ -11,15 +11,18 @@ import type {
   taskScores as taskScoresTable,
   teamScores as teamScoresTable,
 } from "../db/schema";
+import { timestamptzToIso } from "../lib/time";
 
 export interface ScoreRows {
   taskScores: (typeof taskScoresTable.$inferSelect)[];
   teamScores: (typeof teamScoresTable.$inferSelect)[];
   /** In recorded order (stored rows, then derived poll-vote bonuses). */
-  bonusPoints: Pick<
+  bonusPoints: (Pick<
     typeof bonusPointsTable.$inferSelect,
     "taskId" | "playerId" | "points" | "reason"
-  >[];
+  > &
+    // Only stored rows have these; poll-vote bonuses are derived.
+    Partial<Pick<typeof bonusPointsTable.$inferSelect, "id" | "createdAt">>)[];
 }
 
 export interface ScoreRecords {
@@ -29,6 +32,8 @@ export interface ScoreRecords {
   teamScores: TeamScore[];
   /** All bonus points and deductions. */
   bonusPoints: BonusPoint[];
+  /** When each scored task's results were first recorded (ISO 8601). */
+  resultsPostedAt: Record<string, string>;
 }
 
 /**
@@ -89,20 +94,31 @@ export function buildScoreRecords(
   );
 
   /** Bonus points and deductions per task, in the order they were recorded. */
-  const weeklyBonusPoints: Record<
-    string,
-    { playerId: string; points: number; reason: string }[]
-  > = groupByTask(rows.bonusPoints, ({ playerId, points, reason }) => ({
-    playerId,
-    points,
-    reason,
-  }));
+  const weeklyBonusPoints: Record<string, Omit<BonusPoint, "taskId">[]> =
+    groupByTask(
+      rows.bonusPoints,
+      ({ playerId, points, reason, id, createdAt }) => ({
+        playerId,
+        points,
+        reason,
+        ...(id !== undefined && { id }),
+        ...(createdAt !== undefined && {
+          awardedAt: timestamptzToIso(createdAt),
+        }),
+      }),
+    );
 
-  // Optional notes explaining how a player's task points were made up.
+  // Optional notes explaining how a player's or squad's task points were made up.
   const scoreComments = new Map(
     rows.taskScores
       .filter((row) => row.comment !== null)
       .map((row) => [`${row.taskId}:${row.playerId}`, row.comment as string]),
+  );
+
+  const teamScoreComments = new Map(
+    rows.teamScores
+      .filter((row) => row.comment !== null)
+      .map((row) => [`${row.taskId}:${row.teamId}`, row.comment as string]),
   );
 
   // Roster order, used only as a deterministic tie-breaker when two players
@@ -160,11 +176,13 @@ export function buildScoreRecords(
       );
 
       for (const entry of ranked) {
+        const comment = teamScoreComments.get(`${task.id}:${entry.id}`);
         result.push({
           taskId: task.id,
           teamId: entry.id,
           points: entry.points,
           position: entry.position,
+          ...(comment !== undefined && { comment }),
         });
       }
     }
@@ -248,10 +266,36 @@ export function buildScoreRecords(
     return result;
   }
 
+  /**
+   * A task's results are "in" from the first score recorded for its format;
+   * later additions and edits keep that time.
+   */
+  function buildResultsPostedAt(): Record<string, string> {
+    const earliest = new Map<string, number>();
+    const formatOf = new Map(tasks.map((t) => [t.id, t.format]));
+    const consider = (taskId: string, format: Task["format"], at: string) => {
+      if (formatOf.get(taskId) !== format) return;
+      const time = new Date(timestamptzToIso(at)).getTime();
+      const current = earliest.get(taskId);
+      if (current === undefined || time < current) earliest.set(taskId, time);
+    };
+    for (const row of rows.taskScores)
+      consider(row.taskId, "individual", row.createdAt);
+    for (const row of rows.teamScores)
+      consider(row.taskId, "team", row.createdAt);
+    return Object.fromEntries(
+      [...earliest].map(([taskId, time]) => [
+        taskId,
+        new Date(time).toISOString(),
+      ]),
+    );
+  }
+
   const teamScores = buildTeamScores();
   return {
     teamScores,
     scores: buildScores(),
     bonusPoints: buildBonusPoints(),
+    resultsPostedAt: buildResultsPostedAt(),
   };
 }

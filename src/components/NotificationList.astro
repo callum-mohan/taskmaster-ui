@@ -1,5 +1,6 @@
 ---
 import type { NotificationItem, NotificationKind } from "../types";
+import { ukDateFormat } from "../lib/time";
 
 interface Props {
   items: NotificationItem[];
@@ -8,7 +9,7 @@ interface Props {
 
 const { items, class: className = "" } = Astro.props;
 
-const dateFmt = new Intl.DateTimeFormat("en-GB", {
+const dateFmt = ukDateFormat({
   day: "2-digit",
   month: "short",
   hour: "2-digit",
@@ -24,6 +25,26 @@ const kindConfig: Record<NotificationKind, { label: string; classes: string }> =
     "poll-opened": {
       label: "POLL",
       classes: "border-cyan/40 bg-cyan/10 text-cyan",
+    },
+    "deadline-soon": {
+      label: "DEADLINE",
+      classes: "border-amber/40 bg-amber/10 text-amber",
+    },
+    "results-posted": {
+      label: "RESULTS",
+      classes: "border-ink-faint/50 bg-ink/5 text-ink",
+    },
+    "rank-up": {
+      label: "RANK ▲",
+      classes: "border-magenta/40 bg-magenta/10 text-magenta",
+    },
+    "bonus-awarded": {
+      label: "BONUS",
+      classes: "border-acid/40 bg-acid/10 text-acid",
+    },
+    "points-deducted": {
+      label: "DEDUCTION",
+      classes: "border-danger/40 bg-danger/10 text-danger",
     },
   };
 ---

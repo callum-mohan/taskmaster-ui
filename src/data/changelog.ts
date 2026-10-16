@@ -5,6 +5,22 @@ import type { FeatureUpdate } from "../types";
 // keep the shape stable and add new entries at the top.
 export const changelog: FeatureUpdate[] = [
   {
+    id: "personal-notifications",
+    date: "2026-10-16",
+    title: "Results, rank & bonus alerts",
+    description:
+      "Your notification bell now tells you when a week's results are in (and where you finished), when you climb the leaderboard, when you're given bonus points or a deduction, and when a live task has 24 hours left.",
+    category: "improved",
+  },
+  {
+    id: "task-search",
+    date: "2026-10-16",
+    title: "Task search & your results",
+    description:
+      "Search the tasks page by title, week or winner, and share a filtered view: the status filter and search now live in the URL. Signed-in players also see their own finish on every completed task.",
+    category: "improved",
+  },
+  {
     id: "notifications",
     date: "2026-10-15",
     title: "Notifications",

@@ -3,6 +3,7 @@ import {
   asc,
   count,
   countDistinct,
+  desc,
   eq,
   inArray,
   notInArray,
@@ -17,12 +18,16 @@ import {
   pollOptions,
   polls,
   pollVotes,
+  scoreAuditLog,
   taskScores,
   tasks,
   teamMembers,
   teamScores,
   teams,
 } from "../db/schema";
+import type { BatchItem } from "drizzle-orm/batch";
+import type { AdminUser, ScoreAuditEntry } from "../types";
+import { timestamptzToIso } from "../lib/time";
 import type {
   BonusInput,
   PlayerInput,
@@ -290,7 +295,10 @@ export async function setTaskRevealed(
   await getDb()
     .update(tasks)
     .set({
-      revealedAt: revealed ? sql`date_trunc('second', localtimestamp)` : null,
+      // Zone-less like the other task times, so store UK wall-clock time.
+      revealedAt: revealed
+        ? sql`date_trunc('second', timezone('Europe/London', now()))`
+        : null,
     })
     .where(eq(tasks.id, id));
 }
@@ -362,68 +370,356 @@ export async function getScoreCountsByTask(): Promise<
   return counts;
 }
 
-/** Replaces every individual score for a task in one transaction. */
+// Score and bonus writes diff against what's stored rather than replacing it,
+// so `createdAt` (when results first arrived, which drives notifications)
+// survives edits, and every change is written to `score_audit_log` in the
+// same transaction.
+
+type AuditRow = typeof scoreAuditLog.$inferInsert;
+
+const actorFields = (actor: AdminUser) => ({
+  actorId: actor.id,
+  actorName: actor.name || actor.email,
+});
+
+/** Runs the statements as one transaction; does nothing if there are none. */
+async function runBatch(statements: BatchItem<"pg">[]): Promise<void> {
+  if (statements.length === 0) return;
+  await getDb().batch(statements as [BatchItem<"pg">, ...BatchItem<"pg">[]]);
+}
+
+/** A score grid row keyed by player or team id. */
+interface GridScore {
+  id: string;
+  points: number;
+  comment: string | null;
+}
+
+interface ScoreDiff {
+  created: GridScore[];
+  updated: { before: GridScore; after: GridScore }[];
+  deleted: GridScore[];
+}
+
+function diffScores(stored: GridScore[], submitted: GridScore[]): ScoreDiff {
+  const before = new Map(stored.map((row) => [row.id, row]));
+  const after = new Set(submitted.map((row) => row.id));
+  const diff: ScoreDiff = { created: [], updated: [], deleted: [] };
+  for (const row of submitted) {
+    const previous = before.get(row.id);
+    if (!previous) diff.created.push(row);
+    else if (
+      previous.points !== row.points ||
+      previous.comment !== row.comment
+    ) {
+      diff.updated.push({ before: previous, after: row });
+    }
+  }
+  diff.deleted = stored.filter((row) => !after.has(row.id));
+  return diff;
+}
+
+function scoreAuditRows(
+  actor: AdminUser,
+  taskId: string,
+  entity: "task_score" | "team_score",
+  diff: ScoreDiff,
+): AuditRow[] {
+  const base = { ...actorFields(actor), taskId, entity };
+  return [
+    ...diff.created.map((row): AuditRow => ({
+      ...base,
+      action: "created",
+      subjectId: row.id,
+      pointsAfter: row.points,
+      noteAfter: row.comment,
+    })),
+    ...diff.updated.map(({ before, after }): AuditRow => ({
+      ...base,
+      action: "updated",
+      subjectId: after.id,
+      pointsBefore: before.points,
+      pointsAfter: after.points,
+      noteBefore: before.comment,
+      noteAfter: after.comment,
+    })),
+    ...diff.deleted.map((row): AuditRow => ({
+      ...base,
+      action: "deleted",
+      subjectId: row.id,
+      pointsBefore: row.points,
+      noteBefore: row.comment,
+    })),
+  ];
+}
+
+/** Saves a week's individual scores: only changed rows are touched. */
 export async function saveTaskScores(
   taskId: string,
   entries: TaskScoreInput[],
+  actor: AdminUser,
 ): Promise<void> {
   const db = getDb();
-  const clear = db.delete(taskScores).where(eq(taskScores.taskId, taskId));
-  if (entries.length === 0) {
-    await clear;
-    return;
+  const stored = await db
+    .select({
+      id: taskScores.playerId,
+      points: taskScores.points,
+      comment: taskScores.comment,
+    })
+    .from(taskScores)
+    .where(eq(taskScores.taskId, taskId));
+  const diff = diffScores(
+    stored,
+    entries.map(({ playerId, points, comment }) => ({
+      id: playerId,
+      points,
+      comment,
+    })),
+  );
+  const ofTask = eq(taskScores.taskId, taskId);
+  const statements: BatchItem<"pg">[] = [];
+  if (diff.created.length > 0) {
+    statements.push(
+      db.insert(taskScores).values(
+        diff.created.map(({ id, points, comment }) => ({
+          taskId,
+          playerId: id,
+          points,
+          comment,
+        })),
+      ),
+    );
   }
-  await db.batch([
-    clear,
-    db
-      .insert(taskScores)
-      .values(entries.map((entry) => ({ taskId, ...entry }))),
-  ]);
+  for (const { after } of diff.updated) {
+    statements.push(
+      db
+        .update(taskScores)
+        .set({ points: after.points, comment: after.comment })
+        .where(and(ofTask, eq(taskScores.playerId, after.id))),
+    );
+  }
+  if (diff.deleted.length > 0) {
+    statements.push(
+      db.delete(taskScores).where(
+        and(
+          ofTask,
+          inArray(
+            taskScores.playerId,
+            diff.deleted.map((row) => row.id),
+          ),
+        ),
+      ),
+    );
+  }
+  const audit = scoreAuditRows(actor, taskId, "task_score", diff);
+  if (audit.length > 0) statements.push(db.insert(scoreAuditLog).values(audit));
+  await runBatch(statements);
 }
 
-/** Replaces every squad score for a team task in one transaction. */
+/** Saves a team task's squad scores: only changed rows are touched. */
 export async function saveTeamScores(
   taskId: string,
   entries: TeamScoreInput[],
+  actor: AdminUser,
 ): Promise<void> {
   const db = getDb();
-  const clear = db.delete(teamScores).where(eq(teamScores.taskId, taskId));
-  if (entries.length === 0) {
-    await clear;
-    return;
+  const stored = await db
+    .select({
+      id: teamScores.teamId,
+      points: teamScores.points,
+      comment: teamScores.comment,
+    })
+    .from(teamScores)
+    .where(eq(teamScores.taskId, taskId));
+  const diff = diffScores(
+    stored,
+    entries.map(({ teamId, points, comment }) => ({
+      id: teamId,
+      points,
+      comment,
+    })),
+  );
+  const ofTask = eq(teamScores.taskId, taskId);
+  const statements: BatchItem<"pg">[] = [];
+  if (diff.created.length > 0) {
+    statements.push(
+      db.insert(teamScores).values(
+        diff.created.map(({ id, points, comment }) => ({
+          taskId,
+          teamId: id,
+          points,
+          comment,
+        })),
+      ),
+    );
   }
-  await db.batch([
-    clear,
-    db
-      .insert(teamScores)
-      .values(entries.map((entry) => ({ taskId, ...entry }))),
-  ]);
+  for (const { after } of diff.updated) {
+    statements.push(
+      db
+        .update(teamScores)
+        .set({ points: after.points, comment: after.comment })
+        .where(and(ofTask, eq(teamScores.teamId, after.id))),
+    );
+  }
+  if (diff.deleted.length > 0) {
+    statements.push(
+      db.delete(teamScores).where(
+        and(
+          ofTask,
+          inArray(
+            teamScores.teamId,
+            diff.deleted.map((row) => row.id),
+          ),
+        ),
+      ),
+    );
+  }
+  const audit = scoreAuditRows(actor, taskId, "team_score", diff);
+  if (audit.length > 0) statements.push(db.insert(scoreAuditLog).values(audit));
+  await runBatch(statements);
 }
 
 export async function addBonus(
   taskId: string,
   input: BonusInput,
+  actor: AdminUser,
 ): Promise<void> {
-  await getDb()
-    .insert(bonusPoints)
-    .values({ taskId, ...input });
+  const { actorId, actorName } = actorFields(actor);
+  // One statement, so the audit row can reference the new bonus's id.
+  await getDb().execute(sql`
+    with added as (
+      insert into ${bonusPoints} (task_id, player_id, points, reason)
+      values (${taskId}, ${input.playerId}, ${input.points}, ${input.reason})
+      returning id, player_id, points, reason
+    )
+    insert into ${scoreAuditLog}
+      (actor_id, actor_name, task_id, entity, action, subject_id, bonus_id,
+       points_after, note_after)
+    select ${actorId}, ${actorName}, ${taskId}, 'bonus', 'created',
+      player_id, id, points, reason
+    from added
+  `);
+}
+
+async function getBonusRow(
+  taskId: string,
+  id: number,
+): Promise<BonusRecord | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(bonusPoints)
+    .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId)));
+  return row;
 }
 
 export async function updateBonus(
   taskId: string,
   id: number,
   input: BonusInput,
+  actor: AdminUser,
 ): Promise<void> {
-  await getDb()
-    .update(bonusPoints)
-    .set(input)
-    .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId)));
+  const before = await getBonusRow(taskId, id);
+  if (
+    !before ||
+    (before.playerId === input.playerId &&
+      before.points === input.points &&
+      before.reason === input.reason)
+  ) {
+    return;
+  }
+  const db = getDb();
+  const base = { ...actorFields(actor), taskId, entity: "bonus" as const };
+  const moved = before.playerId !== input.playerId;
+  // Moving a bonus to someone else is, to both players, a removal and a new
+  // award, so it's logged that way and the new recipient gets notified.
+  const audit: AuditRow[] = moved
+    ? [
+        {
+          ...base,
+          action: "deleted",
+          subjectId: before.playerId,
+          bonusId: id,
+          pointsBefore: before.points,
+          noteBefore: before.reason,
+        },
+        {
+          ...base,
+          action: "created",
+          subjectId: input.playerId,
+          bonusId: id,
+          pointsAfter: input.points,
+          noteAfter: input.reason,
+        },
+      ]
+    : [
+        {
+          ...base,
+          action: "updated",
+          subjectId: input.playerId,
+          bonusId: id,
+          pointsBefore: before.points,
+          pointsAfter: input.points,
+          noteBefore: before.reason,
+          noteAfter: input.reason,
+        },
+      ];
+  await runBatch([
+    db
+      .update(bonusPoints)
+      .set({ ...input, ...(moved && { createdAt: sql`now()` }) })
+      .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId))),
+    db.insert(scoreAuditLog).values(audit),
+  ]);
 }
 
-export async function deleteBonus(taskId: string, id: number): Promise<void> {
-  await getDb()
-    .delete(bonusPoints)
-    .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId)));
+export async function deleteBonus(
+  taskId: string,
+  id: number,
+  actor: AdminUser,
+): Promise<void> {
+  const before = await getBonusRow(taskId, id);
+  if (!before) return;
+  const db = getDb();
+  await runBatch([
+    db
+      .delete(bonusPoints)
+      .where(and(eq(bonusPoints.id, id), eq(bonusPoints.taskId, taskId))),
+    db.insert(scoreAuditLog).values({
+      ...actorFields(actor),
+      taskId,
+      entity: "bonus",
+      action: "deleted",
+      subjectId: before.playerId,
+      bonusId: id,
+      pointsBefore: before.points,
+      noteBefore: before.reason,
+    }),
+  ]);
+}
+
+/** A week's score and bonus history, newest change first. */
+export async function getScoreAuditLog(
+  taskId: string,
+  limit = 100,
+): Promise<ScoreAuditEntry[]> {
+  const rows = await getDb()
+    .select()
+    .from(scoreAuditLog)
+    .where(eq(scoreAuditLog.taskId, taskId))
+    .orderBy(desc(scoreAuditLog.at), desc(scoreAuditLog.id))
+    .limit(limit);
+  return rows.map((row) => ({
+    id: row.id,
+    at: timestamptzToIso(row.at),
+    actorName: row.actorName,
+    entity: row.entity,
+    action: row.action,
+    subjectId: row.subjectId,
+    ...(row.pointsBefore !== null && { pointsBefore: row.pointsBefore }),
+    ...(row.pointsAfter !== null && { pointsAfter: row.pointsAfter }),
+    ...(row.noteBefore !== null && { noteBefore: row.noteBefore }),
+    ...(row.noteAfter !== null && { noteAfter: row.noteAfter }),
+  }));
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────

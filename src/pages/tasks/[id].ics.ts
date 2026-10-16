@@ -9,9 +9,8 @@ const escapeICS = (value: string) =>
     .replace(/,/g, "\\,")
     .replace(/\r?\n/g, "\\n");
 
-// "2026-10-09T15:00:00" → "20261009T150000" (floating local time).
-const toICSLocal = (iso: string) => iso.replace(/[-:]/g, "").slice(0, 15);
-
+// UTC form ("20261009T140000Z"), so calendars place the deadline at the
+// right UK time (GMT or BST) wherever the subscriber is.
 const toICSStamp = (date: Date) =>
   date
     .toISOString()
@@ -68,7 +67,7 @@ export const GET: APIRoute = async ({ params, site, locals }) => {
     "BEGIN:VEVENT",
     `UID:${task.id}-deadline@eayl-taskmaster`,
     `DTSTAMP:${toICSStamp(new Date())}`,
-    `DTSTART:${toICSLocal(task.deadline)}`,
+    `DTSTART:${toICSStamp(new Date(task.deadline))}`,
     `DURATION:PT30M`,
     `SUMMARY:${escapeICS(summary)}`,
     `DESCRIPTION:${escapeICS(description)}`,

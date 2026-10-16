@@ -27,6 +27,29 @@ export const pollResultsVisibility = pgEnum("poll_results_visibility", [
   "after_close",
   "admin_only",
 ]);
+export const scoreAuditEntity = pgEnum("score_audit_entity", [
+  "task_score",
+  "team_score",
+  "bonus",
+]);
+export const scoreAuditAction = pgEnum("score_audit_action", [
+  "created",
+  "updated",
+  "deleted",
+]);
+
+// When a score or bonus was first recorded and last changed. Real instants
+// (unlike the UK wall-clock task dates), so they carry a time zone. Notifications
+// use `createdAt` to say when results and bonuses arrived.
+const recordedTimestamps = () => ({
+  createdAt: timestamp({ withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp({ withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => sql`now()`),
+});
 
 export const players = pgTable("players", {
   id: text().primaryKey(),
@@ -70,7 +93,7 @@ export const tasks = pgTable(
     description: text().notNull().default(""),
     // Prose (string) or a bullet list (string[]); see `Task.brief`.
     brief: jsonb().$type<string | string[]>(),
-    // Wall-clock (local) times with no zone, matching the site's ISO strings.
+    // UK wall-clock times (Europe/London, GMT/BST) with no zone; see `lib/time`.
     releaseDate: timestamp({ mode: "string" }).notNull(),
     deadline: timestamp({ mode: "string" }).notNull(),
     format: taskFormat().notNull().default("individual"),
@@ -101,6 +124,7 @@ export const taskScores = pgTable(
       .references(() => players.id, { onDelete: "cascade" }),
     points: integer().notNull(),
     comment: text(),
+    ...recordedTimestamps(),
   },
   (t) => [
     primaryKey({ columns: [t.taskId, t.playerId] }),
@@ -119,6 +143,8 @@ export const teamScores = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: "cascade" }),
     points: integer().notNull(),
+    comment: text(),
+    ...recordedTimestamps(),
   },
   (t) => [
     primaryKey({ columns: [t.taskId, t.teamId] }),
@@ -140,11 +166,44 @@ export const bonusPoints = pgTable(
       .references(() => players.id, { onDelete: "cascade" }),
     points: integer().notNull(),
     reason: text().notNull(),
+    ...recordedTimestamps(),
   },
   (t) => [
     index("bonus_points_task_id_idx").on(t.taskId),
     index("bonus_points_player_id_idx").on(t.playerId),
   ],
+);
+
+/**
+ * Who changed which score or bonus, and how. Append-only, written in the same
+ * transaction as the change. Ids are plain text (no foreign keys) and the
+ * actor's name is copied in, so the history outlives deleted players, teams,
+ * tasks and admin accounts.
+ */
+export const scoreAuditLog = pgTable(
+  "score_audit_log",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    at: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    // The Neon Auth user who made the change, and their name at the time.
+    actorId: text().notNull(),
+    actorName: text().notNull(),
+    taskId: text().notNull(),
+    entity: scoreAuditEntity().notNull(),
+    action: scoreAuditAction().notNull(),
+    // The player (task score, bonus) or team (team score) affected.
+    subjectId: text().notNull(),
+    // The bonus row, for bonus entries.
+    bonusId: integer(),
+    pointsBefore: integer(),
+    pointsAfter: integer(),
+    // The score comment or bonus reason, before and after.
+    noteBefore: text(),
+    noteAfter: text(),
+  },
+  (t) => [index("score_audit_log_task_id_at_idx").on(t.taskId, t.at)],
 );
 
 /**
@@ -189,7 +248,7 @@ export const polls = pgTable(
     minChoices: integer().notNull().default(1),
     // Null means "up to every option".
     maxChoices: integer(),
-    // Wall-clock (local) times with no zone, like `tasks`.
+    // UK wall-clock times with no zone, like `tasks`.
     opensAt: timestamp({ mode: "string" }).notNull(),
     closesAt: timestamp({ mode: "string" }).notNull(),
     resultsVisibility: pollResultsVisibility().notNull().default("after_vote"),

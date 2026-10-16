@@ -4,6 +4,7 @@ import TerminalWindow from "../../../components/TerminalWindow.astro";
 import TaskStatusBadge from "../../../components/TaskStatusBadge.astro";
 import Notice from "../../../components/admin/Notice.astro";
 import ScoreGrid from "../../../components/admin/ScoreGrid.astro";
+import ScoreHistory from "../../../components/admin/ScoreHistory.astro";
 import BonusForm from "../../../components/admin/BonusForm.astro";
 import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
 import { btnPrimary, btnGhost } from "../../../components/admin/styles";
@@ -11,6 +12,7 @@ import {
   addBonus,
   deleteBonus,
   describeWriteError,
+  getScoreAuditLog,
   getTaskScoreSheet,
   saveTaskScores,
   saveTeamScores,
@@ -28,7 +30,8 @@ import {
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/admin/login"));
 
 const { taskId } = Astro.params;
 const { players, teams, getTaskById, getPlayerById, getPollBonusesForTask } =
@@ -60,7 +63,7 @@ if (Astro.request.method === "POST") {
           teams.map((t) => t.id),
         );
         if (parsed.ok) {
-          await saveTeamScores(task.id, parsed.data);
+          await saveTeamScores(task.id, parsed.data, admin);
           return Astro.redirect(`${selfUrl}?done=scores`);
         }
         ({ values: gridValues, errors: gridErrors } = parsed);
@@ -70,7 +73,7 @@ if (Astro.request.method === "POST") {
           players.map((p) => p.id),
         );
         if (parsed.ok) {
-          await saveTaskScores(task.id, parsed.data);
+          await saveTaskScores(task.id, parsed.data, admin);
           return Astro.redirect(`${selfUrl}?done=scores`);
         }
         ({ values: gridValues, errors: gridErrors } = parsed);
@@ -78,7 +81,7 @@ if (Astro.request.method === "POST") {
     } else if (intent === "add-bonus") {
       const parsed = parseBonusForm(form);
       if (parsed.ok) {
-        await addBonus(task.id, parsed.data);
+        await addBonus(task.id, parsed.data, admin);
         return Astro.redirect(`${selfUrl}?done=bonus-added#bonuses`);
       }
       newBonusValues = parsed.values;
@@ -88,12 +91,12 @@ if (Astro.request.method === "POST") {
       if (rowId === undefined) {
         formError = "That bonus no longer exists.";
       } else if (intent === "delete-bonus") {
-        await deleteBonus(task.id, rowId);
+        await deleteBonus(task.id, rowId, admin);
         return Astro.redirect(`${selfUrl}?done=bonus-deleted#bonuses`);
       } else {
         const parsed = parseBonusForm(form);
         if (parsed.ok) {
-          await updateBonus(task.id, rowId, parsed.data);
+          await updateBonus(task.id, rowId, parsed.data, admin);
           return Astro.redirect(`${selfUrl}?done=bonus-saved#bonuses`);
         }
         bonusEdit = { rowId, values: parsed.values, errors: parsed.errors };
@@ -105,14 +108,17 @@ if (Astro.request.method === "POST") {
   }
 }
 
-const sheet = await getTaskScoreSheet(task.id);
+const [sheet, history] = await Promise.all([
+  getTaskScoreSheet(task.id),
+  getScoreAuditLog(task.id),
+]);
 
 // Saved values pre-fill the grid unless a rejected submission is being shown.
 gridValues ??= Object.fromEntries(
   isTeam
-    ? sheet.team.map((row) => [
-        scoreField.points(row.teamId),
-        String(row.points),
+    ? sheet.team.flatMap((row) => [
+        [scoreField.points(row.teamId), String(row.points)],
+        [scoreField.comment(row.teamId), row.comment ?? ""],
       ])
     : sheet.individual.flatMap((row) => [
         [scoreField.points(row.playerId), String(row.points)],
@@ -135,6 +141,11 @@ const scoredCount = isTeam ? sheet.team.length : sheet.individual.length;
 const hiddenCount = isTeam ? sheet.individual.length : sheet.team.length;
 
 const playerName = (id: string) => getPlayerById(id)?.name ?? id;
+
+const subjectNames: Record<string, string> = Object.fromEntries([
+  ...players.map((p) => [p.id, p.name]),
+  ...teams.map((t) => [t.id, t.name]),
+]);
 
 const done = Astro.url.searchParams.get("done");
 const doneMessage: Record<string, string> = {
@@ -210,7 +221,7 @@ const doneMessage: Record<string, string> = {
     <p class="mb-4 text-sm text-ink-dim">
       {
         isTeam
-          ? "Points per squad. Every member is credited with their squad's points. Leave a cell blank if a squad hasn't been scored."
+          ? "Points per squad. Every member is credited with their squad's points. Leave a cell blank if a squad hasn't been scored. Notes record how the points were made up."
           : "Points per player. Leave a cell blank if a player hasn't been scored. Notes record how the points were made up."
       }{" "}
       Positions are worked out from the points.
@@ -232,7 +243,6 @@ const doneMessage: Record<string, string> = {
         values={gridValues}
         errors={gridErrors}
         entity={isTeam ? "team" : "player"}
-        withComment={!isTeam}
       />
       <div class="mt-5 flex flex-wrap items-center gap-3">
         <button type="submit" class={btnPrimary}>save scores</button>
@@ -324,6 +334,21 @@ const doneMessage: Record<string, string> = {
           errors={newBonusErrors}
         />
       </div>
+    </TerminalWindow>
+  </section>
+
+  <section id="history" aria-labelledby="history-heading" class="mt-8">
+    <TerminalWindow
+      title={`~/scores/${task.id}.log`}
+      meta={`${history.length} ${history.length === 1 ? "change" : "changes"}`}
+    >
+      <h2 id="history-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> tail scores.log
+      </h2>
+      <p class="mt-1 mb-5 text-sm text-ink-dim">
+        Who changed this week's scores and bonuses, newest first.
+      </p>
+      <ScoreHistory entries={history} names={subjectNames} />
     </TerminalWindow>
   </section>
 </AdminLayout>

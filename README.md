@@ -58,7 +58,7 @@ src/
 │   ├── scores.ts      # rows → Score  ─┤  (points → positions; bonus points)
 │   ├── polls.ts       # rows → Poll   ─┘  (status, voting bonuses derived)
 │   ├── poll-queries.ts # poll selectors: who can vote / see results
-│   ├── notification-queries.ts # a player's feed (new tasks + polls), derived
+│   ├── notification-queries.ts # a player's feed (tasks, polls, results, bonuses), derived
 │   ├── votes.ts       # a player's own poll votes
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
@@ -151,6 +151,13 @@ their members), tasks and [polls](#️-polls), enter a week's scores in one
 grid, and record bonus points or deductions. Deletes ask for confirmation and list what else will be
 removed. Forms are plain HTML posts, so they work without JavaScript.
 
+- **Score history:** every saved change to a week's scores or bonuses is
+  written to `score_audit_log` (who, when, and the points and note before
+  and after) in the same transaction, and listed newest first at the bottom
+  of that week's admin scores page. Saving the grid only touches rows that
+  changed, so each score keeps its `created_at` (when it was first recorded)
+  and gets a fresh `updated_at` when edited.
+
 - Admins sign in at the **admin portal**, `/admin/login` (email + password
   via Neon Auth). Only users with the `admin` role get in; anyone else (e.g.
   a player at the wrong portal) is told so and, if they're a player, pointed
@@ -227,11 +234,23 @@ requires a signed-in player who has replaced their temporary password.
 
 Signed-in **players** get a bell in the navbar with an unread count. It opens
 a dropdown (a full-height drawer on phones) listing the newest 20 events:
-**tasks** once their release date passes and published **polls** once they
-open. Guests and admin accounts without a player profile don't see it.
+
+- **Tasks** once their release date passes, and published **polls** once
+  they open.
+- **Deadline reminders** from 24 hours before a live task closes, until it
+  does.
+- **Results**, once the first score for a week is saved, with the player's
+  own finish.
+- **Rank climbs** ("You moved up to #3"), when a week's results lift the
+  player up the leaderboard.
+- **Bonuses and deductions** the player is given (not the automatic
+  poll-voting bonus).
+
+Guests and admin accounts without a player profile don't see it.
 
 The feed is derived from the competition snapshot, so nothing is written
-when a task or poll goes live. The only stored fact is
+when a task or poll goes live. Results and bonuses are dated by the
+`created_at` of their score and bonus rows. The only stored fact is
 `player_accounts.notifications_read_at`: opening the panel `POST`s to
 `/account/notifications/read`, which sets it to `now()`, and anything newer
 is unread. Without JavaScript the bell links to `/account/notifications`,
@@ -240,7 +259,9 @@ which lists the feed with a "mark all read" button.
 ## 👤 Player accounts
 
 Players sign in at the **player portal**, `/login`, with an email and
-password and edit **their own bio and avatar URL** at `/account`; changes are
+password. Signing in takes them straight to the homepage (or back to the
+`/account` page that sent them to sign in). They edit **their own bio and
+avatar URL** at `/account`; changes are
 live immediately. Name, id, roster position, team and scores stay admin-only.
 There is no public sign-up: admins invite players. An admin account without
 a player profile is turned away from `/login` with a link to `/admin`; an

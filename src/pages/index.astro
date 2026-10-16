@@ -16,6 +16,7 @@ import {
   type VoteOutcome,
 } from "../lib/account-forms";
 import type { PollViewer } from "../types";
+import { ukDateFormat } from "../lib/time";
 
 const {
   getCurrentTask,
@@ -48,12 +49,12 @@ const voteOutcome: VoteOutcome | undefined = VOTE_OUTCOMES.find(
   (o) => o === voteParam,
 );
 
-const dayFmt = new Intl.DateTimeFormat("en-GB", {
+const dayFmt = ukDateFormat({
   weekday: "short",
   day: "2-digit",
   month: "short",
 });
-const timeFmt = new Intl.DateTimeFormat("en-GB", {
+const timeFmt = ukDateFormat({
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -156,7 +157,7 @@ const btnGhost =
             title={`~/tasks/${currentTask.id}.md`}
             meta={weekLabel(currentTask.weekNumber)}
           >
-            <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+            <div class="grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
               <div>
                 <div class="flex items-center gap-3">
                   <span class="text-sm font-bold tracking-[0.3em] text-magenta">
@@ -251,7 +252,10 @@ const btnGhost =
             polls --open
           </h2>
           <div
-            class:list={["grid gap-6", polls.length > 1 && "lg:grid-cols-2"]}
+            class:list={[
+              "grid grid-cols-1 gap-6",
+              polls.length > 1 && "lg:grid-cols-2",
+            ]}
           >
             {polls.map((card) => (
               <PollCard
@@ -270,7 +274,7 @@ const btnGhost =
     }
 
     <!-- ============== LEADERBOARD + RECENT RESULTS ============== -->
-    <div class="mt-14 grid gap-8 lg:grid-cols-2">
+    <div class="mt-14 grid grid-cols-1 gap-8 lg:grid-cols-2">
       <!-- Current leaderboard -->
       <section>
         <div class="mb-4 flex items-end justify-between gap-4">

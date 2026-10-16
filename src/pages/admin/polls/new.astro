@@ -16,6 +16,7 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { resolveBonusTask } from "../../../data/polls";
+import { wallClockToIso } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -68,7 +69,7 @@ if (Astro.request.method === "POST") {
 
 const weeks = pollBonusWeeks(tasks);
 const autoWeekId = values.opensAt
-  ? resolveBonusTask(values.opensAt, tasks)
+  ? resolveBonusTask(wallClockToIso(values.opensAt), tasks)
   : undefined;
 const autoWeekLabel = weeks.find((w) => w.id === autoWeekId)?.label;
 ---

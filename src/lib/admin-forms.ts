@@ -1,5 +1,6 @@
 import { z } from "astro/zod";
 import type { PollRecord } from "../data/admin";
+import { toWallClock } from "./time";
 
 // Validation for the admin forms. Each parser takes the submitted FormData
 // and returns either typed input for `src/data/admin.ts` or per-field error
@@ -283,6 +284,7 @@ export interface TaskScoreInput {
 export interface TeamScoreInput {
   teamId: string;
   points: number;
+  comment: string | null;
 }
 
 /** Field names used by the score grid for a given row id. */
@@ -304,20 +306,27 @@ const optionalPoints = z
       .nullable(),
   );
 
+interface ScoreGridEntry {
+  id: string;
+  points: number;
+  comment: string | null;
+}
+
 /**
- * Parses the per-week grid. A blank points cell means "not scored" and is
- * dropped; a comment without points is rejected so nothing is silently lost.
+ * Parses the per-week grid (one row per player or squad). A blank points cell
+ * means "not scored" and is dropped; a comment without points is rejected so
+ * nothing is silently lost.
  */
-export function parseTaskScoresForm(
+function parseScoreGrid(
   form: FormData,
-  playerIds: string[],
-): ParseResult<TaskScoreInput[]> {
+  rowIds: string[],
+): ParseResult<ScoreGridEntry[]> {
   const values = formValues(form);
   const errors: FieldErrors = {};
-  const data: TaskScoreInput[] = [];
-  for (const playerId of playerIds) {
-    const pointsKey = scoreField.points(playerId);
-    const commentKey = scoreField.comment(playerId);
+  const data: ScoreGridEntry[] = [];
+  for (const id of rowIds) {
+    const pointsKey = scoreField.points(id);
+    const commentKey = scoreField.comment(id);
     const points = optionalPoints.safeParse(values[pointsKey] ?? "");
     const comment = optionalText(500).safeParse(values[commentKey] ?? "");
     if (!points.success) {
@@ -333,29 +342,35 @@ export function parseTaskScoresForm(
         errors[pointsKey] = "Add points for this note.";
       continue;
     }
-    data.push({ playerId, points: points.data, comment: comment.data });
+    data.push({ id, points: points.data, comment: comment.data });
   }
   return Object.keys(errors).length > 0
     ? { ok: false, errors, values }
     : { ok: true, data, values };
 }
 
+export function parseTaskScoresForm(
+  form: FormData,
+  playerIds: string[],
+): ParseResult<TaskScoreInput[]> {
+  const parsed = parseScoreGrid(form, playerIds);
+  if (!parsed.ok) return parsed;
+  return {
+    ...parsed,
+    data: parsed.data.map(({ id, ...entry }) => ({ playerId: id, ...entry })),
+  };
+}
+
 export function parseTeamScoresForm(
   form: FormData,
   teamIds: string[],
 ): ParseResult<TeamScoreInput[]> {
-  const values = formValues(form);
-  const errors: FieldErrors = {};
-  const data: TeamScoreInput[] = [];
-  for (const teamId of teamIds) {
-    const key = scoreField.points(teamId);
-    const points = optionalPoints.safeParse(values[key] ?? "");
-    if (!points.success) errors[key] = points.error.issues[0].message;
-    else if (points.data !== null) data.push({ teamId, points: points.data });
-  }
-  return Object.keys(errors).length > 0
-    ? { ok: false, errors, values }
-    : { ok: true, data, values };
+  const parsed = parseScoreGrid(form, teamIds);
+  if (!parsed.ok) return parsed;
+  return {
+    ...parsed,
+    data: parsed.data.map(({ id, ...entry }) => ({ teamId: id, ...entry })),
+  };
 }
 
 // ── Bonus points ──────────────────────────────────────────────────────
@@ -628,17 +643,12 @@ export function addPollOptionRows(
 }
 
 /**
- * The runtime's current wall-clock time as a Postgres timestamp. Stored
- * times are zone-less and read back in the runtime's local zone, so "now"
- * must be expressed the same way.
+ * The current UK wall-clock time as a Postgres timestamp. Stored times are
+ * zone-less UK time (GMT/BST), so "now" must be expressed the same way rather
+ * than in the runtime's zone (UTC on Workers).
  */
 export function wallClockNow(offsetMs = 0): string {
-  const d = new Date(Date.now() + offsetMs);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
-    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  );
+  return toWallClock(new Date(Date.now() + offsetMs));
 }
 
 /** Initial form values for a new poll: opens now, closes in a week. */

@@ -44,7 +44,7 @@ const rules = [
 ];
 ---
 
-<div id={`poll-${poll.id}`} class:list={["scroll-mt-24", className]}>
+<div id={`poll-${poll.id}`} class:list={["min-w-0 scroll-mt-24", className]}>
   <TerminalWindow title={`~/polls/${poll.id}.poll`} meta={rules.join(" · ")}>
     <div class="flex flex-wrap items-center gap-3">
       <PollStatusBadge status={poll.status} />
@@ -59,13 +59,13 @@ const rules = [
 
     <h3
       id={legendId}
-      class="mt-3 text-xl font-extrabold leading-snug text-ink sm:text-2xl"
+      class="mt-3 break-words text-xl font-extrabold leading-snug text-ink sm:text-2xl"
     >
       {poll.question}
     </h3>
     {
       poll.description && (
-        <p class="mt-2 max-w-prose whitespace-pre-line text-sm leading-relaxed text-ink-dim">
+        <p class="mt-2 max-w-prose whitespace-pre-line break-words text-sm leading-relaxed text-ink-dim">
           {poll.description}
         </p>
       )

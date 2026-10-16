@@ -38,7 +38,10 @@ const paletteItems = getCommandPaletteItems();
 const whatsNew = getWhatsNew();
 // Only players get notifications: their read marker lives on the account.
 const notifications = viewer?.playerId
-  ? getNotifications({ readAt: viewer.notificationsReadAt })
+  ? getNotifications({
+      playerId: viewer.playerId,
+      readAt: viewer.notificationsReadAt,
+    })
   : undefined;
 ---
 

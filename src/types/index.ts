@@ -1195,3 +1195,26 @@ export interface LiveRunStep {
   points: number;
   revealed: boolean;
 }
+
+// ── Rules ─────────────────────────────────────────────────────────────
+
+/**
+ * The competition facts the rules page quotes, read from the same constants
+ * and data the app enforces so the copy can't drift from the real rules.
+ */
+export interface GameRules {
+  totalWeeks: number;
+  individualTasks: number;
+  teamTasks: number;
+  playerCount: number;
+  teamCount: number;
+  /** Smallest and largest squad sizes (equal when every squad matches). */
+  teamSize: { min: number; max: number };
+  peoplesChoice: { bonusPoints: number; windowDays: number };
+  predictionBonusPoints: number;
+  submissions: {
+    maxPhotoMb: number;
+    maxTextChars: number;
+    maxCaptionChars: number;
+  };
+}

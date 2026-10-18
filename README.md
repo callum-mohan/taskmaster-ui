@@ -73,6 +73,7 @@ src/
 │   ├── prediction-queries.ts # prediction panel: options, secrecy, tally
 │   ├── live.ts        # results night: loads a held week's scores
 │   ├── live-queries.ts # live board + admin running order (bottom first)
+│   ├── rules-queries.ts # facts quoted on /rules (bonus values, limits, squads)
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
 │   └── accounts.ts    # player sign-in accounts + self-service profile edits
@@ -95,6 +96,7 @@ src/
 │   ├── leaderboard.astro      # full standings (with rank movement)
 │   ├── recaps/                # /recaps and /recaps/[id] weekly episode recaps
 │   ├── live.astro             # /live — results night, revealed bottom first
+│   ├── rules.astro            # /rules — how to play, scoring, bonuses, the prize
 │   ├── compare/               # /compare head-to-head (+ /compare/[a]/[b])
 │   ├── stats.astro            # stats & Hall of Fame awards
 │   └── 404.astro
@@ -320,7 +322,8 @@ vote counts stay hidden until it closes. The most-voted entry's owner (every
 member, for a squad entry; ties all win) then earns +1 bonus point in that
 week. Like poll-voting bonuses, it's derived from the votes rather than
 stored, so a withdrawn vote or a hidden entry never leaves stray points.
-The window and points are constants in `src/data/peoples-choice.ts`.
+The window and points are constants in `src/data/peoples-choice.ts` (the
+`/rules` page reads them from there too).
 
 ## 🔮 Predictions
 

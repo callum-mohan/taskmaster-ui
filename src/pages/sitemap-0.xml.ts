@@ -4,6 +4,7 @@ import { withBase } from "../lib/url";
 const STATIC_PATHS = [
   "/",
   "/about",
+  "/rules",
   "/leaderboard",
   "/stats",
   "/tasks",

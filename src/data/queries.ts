@@ -43,6 +43,7 @@ import { createSubmissionQueries } from "./submission-queries";
 import { createGalleryQueries } from "./gallery-queries";
 import { createPredictionQueries } from "./prediction-queries";
 import { createLiveQueries } from "./live-queries";
+import { createRulesQueries } from "./rules-queries";
 import { withBase } from "../lib/url";
 
 // This module is the single "data layer" the UI talks to. Pages read these
@@ -1084,6 +1085,15 @@ export function createQueries(data: CompetitionData) {
       keywords: "weeks briefs challenges",
     },
     {
+      id: "page-rules",
+      label: "Rules",
+      group: "page",
+      href: withBase("/rules"),
+      hint: "how to play",
+      keywords:
+        "rules how to play scoring points bonus polls people's choice predictions faq help",
+    },
+    {
       id: "page-leaderboard",
       label: "Leaderboard",
       group: "page",
@@ -1587,5 +1597,6 @@ export function createQueries(data: CompetitionData) {
     ...createGalleryQueries(data),
     ...createPredictionQueries(data),
     ...createLiveQueries(data),
+    ...createRulesQueries(data),
   };
 }

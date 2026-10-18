@@ -1,0 +1,615 @@
+---
+import Layout from "../layouts/Layout.astro";
+import TerminalWindow from "../components/TerminalWindow.astro";
+import StatCard from "../components/StatCard.astro";
+import RulesSection from "../components/RulesSection.astro";
+import RuleItem from "../components/RuleItem.astro";
+import { withBase } from "../lib/url";
+
+const { getGameRules } = await Astro.locals.getQueries();
+const rules = getGameRules();
+
+const pts = (n: number) => `${n} ${n === 1 ? "point" : "points"}`;
+const squadSize =
+  rules.teamSize.min === rules.teamSize.max
+    ? `${rules.teamSize.min}`
+    : `${rules.teamSize.min}–${rules.teamSize.max}`;
+const squadsLine =
+  rules.teamCount > 0
+    ? `${rules.teamCount} fixed squads of ${squadSize} players`
+    : "fixed squads";
+
+const link =
+  "text-cyan underline-offset-2 transition-colors hover:text-acid hover:underline";
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-5 py-2.5 text-sm font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg focus-visible:outline-none";
+const btnGhost =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-grid px-4 py-2 text-xs font-bold tracking-widest text-ink-dim transition-colors hover:border-ink-faint hover:text-ink";
+
+interface ContentsItem {
+  id: string;
+  label: string;
+}
+
+const contents: ContentsItem[] = [
+  { id: "quick-start", label: "quick start" },
+  { id: "tasks", label: "tasks" },
+  { id: "entries", label: "submitting entries" },
+  { id: "scoring", label: "scoring" },
+  { id: "teams", label: "team tasks" },
+  { id: "bonus-points", label: "bonus points" },
+  { id: "polls", label: "polls" },
+  { id: "peoples-choice", label: "people's choice" },
+  { id: "predictions", label: "predictions" },
+  { id: "results-night", label: "results night" },
+  { id: "account", label: "your account" },
+  { id: "the-prize", label: "the prize" },
+];
+
+// The weekly loop, rendered as a terminal "process" like the about page.
+const loop: { cmd: string; text: string }[] = [
+  {
+    cmd: "release --task",
+    text: "A new task drops every Friday. Read the brief on its task page — some are locked behind a password until you're told it.",
+  },
+  {
+    cmd: "submit --before-deadline",
+    text: "You have one week. Upload a photo or text entry on the task page before the deadline (or do whatever the brief demands).",
+  },
+  {
+    cmd: "vote --while-you-wait",
+    text: "Call the winner, answer polls on the homepage, then react to and vote on everyone's entries once the gallery opens.",
+  },
+  {
+    cmd: "judge --taskmaster",
+    text: "The Taskmaster scores every entry. Results go out on the site — sometimes revealed live, last place first.",
+  },
+  {
+    cmd: "update --leaderboard",
+    text: "Task points and bonuses roll into the individual and team standings. Repeat until one champion remains.",
+  },
+];
+
+interface BonusRow {
+  source: string;
+  points: string;
+  how: string;
+  auto: boolean;
+  deduction?: boolean;
+}
+
+const bonusRows: BonusRow[] = [
+  {
+    source: "Poll vote",
+    points: "shown on each poll",
+    how: "Vote in a homepage poll. Earned once per poll, however many options you pick.",
+    auto: true,
+  },
+  {
+    source: "People's Choice",
+    points: `+${pts(rules.peoplesChoice.bonusPoints)}`,
+    how: "Your entry gets the most People's Choice votes. Ties all win.",
+    auto: true,
+  },
+  {
+    source: "Correct prediction",
+    points: `+${pts(rules.predictionBonusPoints)}`,
+    how: "You called the task winner. A shared first place still counts.",
+    auto: true,
+  },
+  {
+    source: "Taskmaster bonus",
+    points: "any",
+    how: "Awarded at the Taskmaster's discretion for going above and beyond.",
+    auto: false,
+  },
+  {
+    source: "Deduction",
+    points: "−any",
+    how: "Late entries, rule-bending that went too far, or general misconduct.",
+    auto: false,
+    deduction: true,
+  },
+];
+---
+
+<Layout
+  title="Rules"
+  description="How to play EAYL Taskmaster: tasks, entries, scoring, team tasks, polls, People's Choice, predictions, bonus points and the prize."
+>
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <!-- Header -->
+    <header class="mb-10">
+      <p
+        class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+      >
+        man taskmaster
+      </p>
+      <h1
+        class="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+      >
+        THE <span class="text-acid text-glow">RULES</span>
+      </h1>
+      <p
+        class="mt-3 max-w-2xl text-sm leading-relaxed text-ink-dim sm:text-base"
+      >
+        <span class="text-acid">// </span>
+        Everything you need to know to play, score and (maybe) win. Read it once,
+        then remember the only rule that really matters: the Taskmaster's word is
+        final.
+      </p>
+    </header>
+
+    <div class="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+      <!-- Contents -->
+      <nav aria-label="Rules contents">
+        <TerminalWindow title="~/rules/README.md" meta="ls -1">
+          <ol class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+            {
+              contents.map((item, i) => (
+                <li>
+                  <a
+                    href={`#${item.id}`}
+                    class="group inline-flex gap-3 text-ink-dim transition-colors hover:text-ink"
+                  >
+                    <span
+                      class="tabular-nums text-ink-faint group-hover:text-acid"
+                      aria-hidden="true"
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    {item.label}
+                  </a>
+                </li>
+              ))
+            }
+          </ol>
+        </TerminalWindow>
+      </nav>
+
+      <div class="grid grid-cols-2 gap-3 sm:gap-4">
+        <StatCard
+          value={rules.totalWeeks}
+          label="Weeks"
+          command="count weeks"
+          accent="magenta"
+        />
+        <StatCard
+          value={rules.playerCount}
+          label="Players"
+          command="count players"
+          accent="acid"
+        />
+        <StatCard
+          value={rules.teamCount}
+          label="Squads"
+          command="count squads"
+          accent="cyan"
+        />
+        <StatCard
+          value={rules.teamTasks}
+          label="Team tasks"
+          command="count tasks --team"
+          accent="amber"
+        />
+      </div>
+    </div>
+
+    <div class="mt-14 space-y-14">
+      <RulesSection
+        id="quick-start"
+        command="rules --quick-start"
+        title="How to play, in 60 seconds"
+        file="~/rules/the-weekly-loop.sh"
+      >
+        <ol class="space-y-5">
+          {
+            loop.map((step, i) => (
+              <li class="flex gap-4">
+                <span
+                  class="mt-0.5 shrink-0 text-sm font-extrabold tabular-nums text-ink-faint"
+                  aria-hidden="true"
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <p class="font-bold tracking-wide text-acid">
+                    <span class="text-ink-faint">$</span> {step.cmd}
+                  </p>
+                  <p class="mt-1">{step.text}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </RulesSection>
+
+      <RulesSection
+        id="tasks"
+        command="rules --tasks"
+        title="Tasks"
+        file="~/rules/tasks.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            There are <span class="text-ink"
+              >{rules.totalWeeks} weekly tasks</span
+            >: {rules.individualTasks} individual and {rules.teamTasks} team. A new
+            one is released every Friday and you get one week to complete it.
+          </RuleItem>
+          <RuleItem>
+            Each task has a brief on its <a
+              href={withBase("/tasks")}
+              class={link}>task page</a
+            >. Interpret it however you dare — there's rarely one right answer,
+            just the most points. If it doesn't say you can't, you probably can.
+          </RuleItem>
+          <RuleItem>
+            Tasks show as <span class="text-ink-faint">LOCKED</span> until release,
+            <span class="text-amber">LIVE</span> while they're running and <span
+              class="text-acid">COMPLETED</span
+            > once the deadline passes.
+          </RuleItem>
+          <RuleItem>
+            Some briefs are <span class="text-ink">password protected</span>:
+            the content stays encrypted until you enter the password on the task
+            page. Once you're in, you stay in on that device.
+          </RuleItem>
+          <RuleItem>
+            Add a task to your calendar from its page so the deadline doesn't
+            sneak up on you.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="entries"
+        command="rules --entries"
+        title="Submitting entries"
+        file="~/rules/entries.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            Sign in and submit from the task page while it's live. Each task
+            sets how many entries it takes and whether they're <span
+              class="text-ink">photos</span
+            > (up to {rules.submissions.maxPhotoMb} MB, with an optional {
+              rules.submissions.maxCaptionChars
+            }-character caption) or <span class="text-ink">text</span> (up to {
+              rules.submissions.maxTextChars.toLocaleString("en-GB")
+            } characters).
+          </RuleItem>
+          <RuleItem>
+            Photos can be JPEG, PNG, WebP, GIF or AVIF. iPhone HEIC photos need
+            exporting as JPEG first.
+          </RuleItem>
+          <RuleItem>
+            You can <span class="text-ink">withdraw</span> an entry (freeing the slot)
+            until the deadline, but you can't edit one. On team tasks any squad member
+            can submit or withdraw the squad's entries.
+          </RuleItem>
+          <RuleItem>
+            Entries are private — only you (or your squad) and the Taskmaster
+            see them — until the deadline. Then every entry goes up in a public
+            gallery on the task page.
+          </RuleItem>
+          <RuleItem accent="amber">
+            <span class="text-amber">Late entries</span> are accepted at the Taskmaster's
+            discretion and may be penalised. If you couldn't submit on the site, get
+            your entry to the Taskmaster another way and it can be added for you.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="scoring"
+        command="rules --scoring"
+        title="Scoring"
+        file="~/rules/scoring.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            The Taskmaster judges every entry and awards points at <span
+              class="text-ink">his own discretion</span
+            >. There's no fixed scale, so what a win is worth can change from
+            week to week.
+          </RuleItem>
+          <RuleItem>
+            Finishing positions come from the points. Players on the same points
+            share a position (…3rd, 3rd, 5th).
+          </RuleItem>
+          <RuleItem>
+            Your total is your task points plus any <a
+              href="#bonus-points"
+              class={link}>bonus points</a
+            >. Bonuses and deductions change your total but never a week's
+            finishing positions.
+          </RuleItem>
+          <RuleItem>
+            On the <a href={withBase("/leaderboard")} class={link}
+              >leaderboard</a
+            >, players level on points share a rank. Within a tie, more task
+            wins comes first, then the better average finishing position.
+          </RuleItem>
+          <RuleItem accent="danger">
+            Scores are final. Reasoning is occasionally shared and never
+            appealed.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="teams"
+        command="rules --teams"
+        title="Team tasks"
+        file="~/rules/teams.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            Players are split into {squadsLine}. Some weeks are team tasks,
+            where your squad competes and submits as one.
+          </RuleItem>
+          <RuleItem>
+            A squad's points go to the team <span class="text-ink">and</span> to every
+            one of its members, so team tasks count on the individual leaderboard
+            too.
+          </RuleItem>
+          <RuleItem>
+            Team results also build a separate <a
+              href={withBase("/teams")}
+              class={link}>team leaderboard</a
+            >, ranked the same way as the individual one.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="bonus-points"
+        command="rules --bonus-points"
+        title="Bonus points"
+        file="~/rules/bonus-points.csv"
+      >
+        <p>
+          On top of task points, there are a few ways to pick up (or lose)
+          points each week. Automatic bonuses are worked out from votes and
+          results, so withdrawing a vote also withdraws the bonus.
+        </p>
+        {
+          /* Stacks into cards on phones; explicit roles keep the table semantics
+            when the display type changes. */
+        }
+        <table
+          role="table"
+          class="mt-4 block w-full text-left text-sm sm:table"
+        >
+          <thead role="rowgroup" class="hidden sm:table-header-group">
+            <tr
+              role="row"
+              class="border-b border-grid text-[10px] tracking-[0.2em] text-ink-faint uppercase"
+            >
+              <th role="columnheader" scope="col" class="py-2 pr-4 font-bold"
+                >Source</th
+              >
+              <th role="columnheader" scope="col" class="py-2 pr-4 font-bold"
+                >Points</th
+              >
+              <th role="columnheader" scope="col" class="py-2 pr-4 font-bold"
+                >How</th
+              >
+              <th role="columnheader" scope="col" class="py-2 font-bold"
+                >Awarded</th
+              >
+            </tr>
+          </thead>
+          <tbody role="rowgroup" class="block sm:table-row-group">
+            {
+              bonusRows.map((row) => (
+                <tr
+                  role="row"
+                  class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-b border-grid/60 py-3 last:border-b-0 sm:table-row sm:py-0 sm:align-top"
+                >
+                  <th
+                    role="rowheader"
+                    scope="row"
+                    class="font-bold text-ink sm:py-3 sm:pr-4"
+                  >
+                    {row.source}
+                  </th>
+                  <td
+                    role="cell"
+                    class:list={[
+                      "text-right whitespace-nowrap tabular-nums sm:py-3 sm:pr-4 sm:text-left",
+                      row.deduction ? "text-danger" : "text-acid",
+                    ]}
+                  >
+                    {row.points}
+                  </td>
+                  <td role="cell" class="col-span-2 sm:py-3 sm:pr-4">
+                    {row.how}
+                  </td>
+                  <td
+                    role="cell"
+                    class="col-span-2 text-xs text-ink-faint sm:py-3 sm:text-sm sm:whitespace-nowrap"
+                  >
+                    <span class="sm:hidden">awarded: </span>
+                    {row.auto ? "automatic" : "by the Taskmaster"}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        <p class="mt-4 text-ink-faint">
+          Every bonus and deduction shows in that week's ledger on the task and
+          player pages.
+        </p>
+      </RulesSection>
+
+      <RulesSection
+        id="polls"
+        command="rules --polls"
+        title="Polls"
+        file="~/rules/polls.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            Polls appear on the <a href={withBase("/")} class={link}>homepage</a
+            >. Sign in as a player to vote; everyone else sees them read-only.
+          </RuleItem>
+          <RuleItem>
+            Some polls are single choice, others let you pick several options.
+            Each poll says when it closes, whether votes are anonymous or
+            public, and when the results are shown.
+          </RuleItem>
+          <RuleItem>
+            Some polls let you change your vote until they close; others lock in
+            your first vote.
+          </RuleItem>
+          <RuleItem>
+            Polls can carry a <span class="text-ink">voting bonus</span>, shown
+            on the poll, which counts towards that week's total.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="peoples-choice"
+        command="rules --peoples-choice"
+        title="People's Choice & reactions"
+        file="~/rules/peoples-choice.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            Once a task's deadline passes and its gallery goes up, every player
+            gets <span class="text-ink">one People's Choice vote</span> for their
+            favourite entry. You can't vote for your own entry or your squad's.
+          </RuleItem>
+          <RuleItem>
+            Voting stays open for {rules.peoplesChoice.windowDays} days after the
+            deadline, and vote counts stay hidden until it closes.
+          </RuleItem>
+          <RuleItem>
+            The most-voted entry's owner earns <span class="text-acid"
+              >+{pts(rules.peoplesChoice.bonusPoints)}</span
+            > in that week. On a squad entry every member gets it, and ties all win.
+          </RuleItem>
+          <RuleItem>
+            You can also leave emoji reactions on any entry in the gallery.
+            They're just for fun and don't affect scores.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="predictions"
+        command="rules --predictions"
+        title="Predictions"
+        file="~/rules/predictions.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            While a task is live, <span class="text-ink">call the winner</span> from
+            its task page: a player on individual tasks, a squad on team tasks. You
+            can't back yourself or your own squad.
+          </RuleItem>
+          <RuleItem>
+            Calls stay secret until the deadline (only the number of calls
+            shows), then everyone's picks are revealed.
+          </RuleItem>
+          <RuleItem>
+            A correct call earns <span class="text-acid"
+              >+{pts(rules.predictionBonusPoints)}</span
+            > once the results are published. A shared first place counts.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="results-night"
+        command="rules --results-night"
+        title="Results night"
+        file="~/rules/results-night.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="amber">
+            Some weeks the Taskmaster holds the results back for a live show.
+            Until then, the site behaves as if the week hasn't been scored.
+          </RuleItem>
+          <RuleItem>
+            Follow along on the <a href={withBase("/live")} class={link}>live</a
+            > page: results are revealed one at a time, last place first, until the
+            winner. The page updates itself, so no need to refresh.
+          </RuleItem>
+          <RuleItem>
+            Once the show ends the results go out everywhere, and each week gets
+            a <a href={withBase("/recaps")} class={link}>recap</a>.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="account"
+        command="rules --account"
+        title="Your account"
+        file="~/rules/account.md"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="acid">
+            There's no public sign-up: the Taskmaster invites players and sends
+            you a temporary password. <a href={withBase("/login")} class={link}
+              >Sign in</a
+            > and choose a new one before you do anything else.
+          </RuleItem>
+          <RuleItem>
+            You need to be signed in to submit entries, vote in polls, make
+            predictions, vote for People's Choice and react.
+          </RuleItem>
+          <RuleItem>
+            Edit your bio and avatar from your profile. The bell in the navbar
+            tells you about new tasks and polls, deadline reminders, results,
+            rank climbs and bonuses.
+          </RuleItem>
+          <RuleItem>
+            Press <kbd
+              class="rounded border border-grid bg-term-panel-2 px-1.5 py-0.5 text-xs text-ink"
+              >⌘ K</kbd
+            > / <kbd
+              class="rounded border border-grid bg-term-panel-2 px-1.5 py-0.5 text-xs text-ink"
+              >Ctrl K</kbd
+            > anywhere to jump to a page, task, player or team.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="the-prize"
+        command="rules --the-prize"
+        title="The prize"
+        file="~/rules/the-prize.md"
+        meta="root@taskmaster"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="magenta">
+            After {rules.totalWeeks} weeks, the player at the top of the leaderboard
+            is crowned champion and takes home the <span
+              class="text-magenta text-glow-magenta font-bold"
+              >Taskmaster golden egg trophy</span
+            >.
+          </RuleItem>
+          <RuleItem>
+            The Taskmaster writes the tasks, sets the deadlines, judges the
+            entries and awards the points. His word is law, his scoring is
+            final, and anything not covered here is decided by him.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+    </div>
+
+    <!-- CTA -->
+    <section class="mt-14 flex flex-wrap items-center gap-3">
+      <a href={withBase("/tasks")} class={btnPrimary}>&gt; BROWSE THE TASKS</a>
+      <a href={withBase("/leaderboard")} class={btnGhost}>VIEW LEADERBOARD</a>
+      <a href={withBase("/about")} class={btnGhost}>ABOUT THE CHALLENGE</a>
+    </section>
+  </div>
+</Layout>

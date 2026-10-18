@@ -1,0 +1,42 @@
+---
+// One anchored section of the rules page: a command-style eyebrow (h2), a
+// terminal window and a heading (h3) for its content.
+import TerminalWindow from "./TerminalWindow.astro";
+
+interface Props {
+  /** Anchor id, linked from the page's contents list. */
+  id: string;
+  /** Command-style eyebrow, e.g. `rules --scoring`. */
+  command: string;
+  /** Section heading shown inside the window. */
+  title: string;
+  /** Filename shown in the window title bar. */
+  file: string;
+  /** Optional right-aligned window meta text. */
+  meta?: string;
+  class?: string;
+}
+
+const { id, command, title, file, meta, class: className = "" } = Astro.props;
+const headingId = `${id}-title`;
+---
+
+<section
+  id={id}
+  aria-labelledby={headingId}
+  class:list={["scroll-mt-24", className]}
+>
+  <h2
+    class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+  >
+    {command}
+  </h2>
+  <TerminalWindow title={file} meta={meta}>
+    <h3 id={headingId} class="text-xl font-extrabold text-ink sm:text-2xl">
+      {title}
+    </h3>
+    <div class="mt-4 text-sm leading-relaxed text-ink-dim">
+      <slot />
+    </div>
+  </TerminalWindow>
+</section>

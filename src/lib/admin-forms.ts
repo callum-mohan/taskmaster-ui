@@ -441,6 +441,87 @@ export function parseRowId(form: FormData, name = "rowId"): number | undefined {
   return Number.isInteger(n) && n > 0 ? n : undefined;
 }
 
+// ── Recaps ────────────────────────────────────────────────────────────
+
+const recapSchema = z
+  .object({
+    headline: optionalText(160),
+    summary: optionalText(2000),
+    moment: optionalText(500),
+    momentPlayerId: z
+      .string()
+      .trim()
+      .transform((v) => (v === "" ? null : v)),
+    quoteText: optionalText(500),
+    quoteAttribution: optionalText(100),
+  })
+  .refine((v) => v.quoteText !== null || v.quoteAttribution === null, {
+    path: ["quoteAttribution"],
+    message: "Add the quote too, or leave this blank.",
+  })
+  .refine((v) => v.moment !== null || v.momentPlayerId === null, {
+    path: ["momentPlayerId"],
+    message: "Describe the moment too, or pick nobody.",
+  });
+
+export type RecapInput = z.output<typeof recapSchema>;
+
+export function parseRecapForm(form: FormData): ParseResult<RecapInput> {
+  const values = formValues(form);
+  return parseWith(
+    recapSchema,
+    {
+      headline: values.headline ?? "",
+      summary: values.summary ?? "",
+      moment: values.moment ?? "",
+      momentPlayerId: values.momentPlayerId ?? "",
+      quoteText: values.quoteText ?? "",
+      quoteAttribution: values.quoteAttribution ?? "",
+    },
+    values,
+  );
+}
+
+// ── Changelog ─────────────────────────────────────────────────────────
+
+export const FEATURE_CATEGORIES = ["new", "improved", "fixed"] as const;
+
+const changelogSchema = z.object({
+  id: slug,
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date.")
+    .refine(
+      (v) =>
+        !Number.isNaN(Date.parse(v)) &&
+        new Date(v).toISOString().slice(0, 10) === v,
+      "Pick a real date.",
+    ),
+  title: requiredText(80),
+  description: requiredText(500),
+  category: z.enum(FEATURE_CATEGORIES, { error: "Pick a category." }),
+});
+
+export type ChangelogInput = z.output<typeof changelogSchema>;
+
+export function parseChangelogForm(
+  form: FormData,
+): ParseResult<ChangelogInput> {
+  const values = formValues(form);
+  return parseWith(
+    changelogSchema,
+    {
+      id: values.id ?? "",
+      date: values.date ?? "",
+      title: values.title ?? "",
+      description: values.description ?? "",
+      category: values.category ?? "",
+    },
+    values,
+  );
+}
+
 // ── Entries added for a player ────────────────────────────────────────
 
 export type AddEntryInput = { playerId: string } & (

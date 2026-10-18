@@ -1,0 +1,105 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import { btnGhost, btnPrimary, inputClass, labelClass } from "./styles";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  values: FormValues;
+  /** Every player, in roster order, for the "moment" picker. */
+  players: { id: string; name: string }[];
+  errors?: FieldErrors;
+  formError?: string;
+}
+
+const { values, players, errors = {}, formError } = Astro.props;
+---
+
+<form method="post" class="space-y-5">
+  <input type="hidden" name="intent" value="save" />
+  {formError && <Notice tone="error">{formError}</Notice>}
+  <p class="text-xs text-ink-faint">
+    Every field is optional: blank ones fall back to copy written from the
+    week's results. Saving an empty form removes the write-up.
+  </p>
+  <AdminField
+    label="headline"
+    name="headline"
+    value={values.headline}
+    error={errors.headline}
+    placeholder="e.g. Rose cracks the opener"
+  />
+  <AdminField
+    label="summary"
+    name="summary"
+    rows={6}
+    value={values.summary}
+    error={errors.summary}
+    hint="A short narrative paragraph recapping the week."
+  />
+  <div class="grid gap-5 sm:grid-cols-[2fr_1fr]">
+    <AdminField
+      label="funniest moment"
+      name="moment"
+      rows={3}
+      value={values.moment}
+      error={errors.moment}
+    />
+    <div class="space-y-1.5">
+      <label for="field-momentPlayerId" class={labelClass}
+        >moment is about</label
+      >
+      <select
+        id="field-momentPlayerId"
+        name="momentPlayerId"
+        aria-invalid={errors.momentPlayerId ? "true" : undefined}
+        aria-describedby={errors.momentPlayerId
+          ? "field-momentPlayerId-error"
+          : "field-momentPlayerId-hint"}
+        class={inputClass(Boolean(errors.momentPlayerId))}
+      >
+        <option value="" selected={!values.momentPlayerId}>— nobody —</option>
+        {
+          players.map((p) => (
+            <option value={p.id} selected={values.momentPlayerId === p.id}>
+              {p.name}
+            </option>
+          ))
+        }
+      </select>
+      {
+        errors.momentPlayerId ? (
+          <p id="field-momentPlayerId-error" class="text-xs text-danger">
+            <span aria-hidden="true">✗ </span>
+            {errors.momentPlayerId}
+          </p>
+        ) : (
+          <p id="field-momentPlayerId-hint" class="text-xs text-ink-faint">
+            Links the moment to their profile.
+          </p>
+        )
+      }
+    </div>
+  </div>
+  <div class="grid gap-5 sm:grid-cols-[2fr_1fr]">
+    <AdminField
+      label="quote"
+      name="quoteText"
+      rows={2}
+      value={values.quoteText}
+      error={errors.quoteText}
+      hint="An optional memorable quote from the week."
+    />
+    <AdminField
+      label="said by"
+      name="quoteAttribution"
+      value={values.quoteAttribution}
+      error={errors.quoteAttribution}
+    />
+  </div>
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" class={btnPrimary}>save recap</button>
+    <a href={withBase("/admin/recaps")} class={btnGhost}>cancel</a>
+  </div>
+</form>

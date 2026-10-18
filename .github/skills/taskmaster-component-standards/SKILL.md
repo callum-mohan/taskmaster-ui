@@ -70,7 +70,11 @@ Rules:
 - Dynamic routes have no `getStaticPaths`: look the param up and
   `return Astro.rewrite("/404")` when it's missing.
 - New initial/demo rows go in `db/seed-data.ts` (seeded with `npm run db:seed`,
-  insert-only). Editorial copy (`recaps.ts`, `changelog.ts`) stays in TS.
+  insert-only). Editorial copy (recaps, changelog) is data too: it lives in
+  the `recaps` / `changelog_entries` tables, edited in `/admin`.
+- Bonuses earned automatically (poll votes, People's Choice, predictions) are
+  derived in `competition.ts` from their votes/results, never stored, so they
+  can't go stale.
 
 ## Astro component conventions
 - **Typed props:** every component declares `interface Props { ... }` and

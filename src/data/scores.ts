@@ -58,7 +58,14 @@ export function buildScoreRecords(
     players,
     teams,
     tasks,
-  }: { players: Player[]; teams: Team[]; tasks: Task[] },
+    publishedAt = {},
+  }: {
+    players: Player[];
+    teams: Team[];
+    tasks: Task[];
+    /** When held results were published (timestamptz), keyed by task id. */
+    publishedAt?: Record<string, string>;
+  },
 ): ScoreRecords {
   /** Groups rows into `{ [taskId]: T[] }`, preserving row order. */
   function groupByTask<Row extends { taskId: string }, T>(
@@ -268,7 +275,8 @@ export function buildScoreRecords(
 
   /**
    * A task's results are "in" from the first score recorded for its format;
-   * later additions and edits keep that time.
+   * later additions and edits keep that time. Results held for a live reveal
+   * are in from when they were published, if that was later.
    */
   function buildResultsPostedAt(): Record<string, string> {
     const earliest = new Map<string, number>();
@@ -283,6 +291,13 @@ export function buildScoreRecords(
       consider(row.taskId, "individual", row.createdAt);
     for (const row of rows.teamScores)
       consider(row.taskId, "team", row.createdAt);
+    for (const [taskId, at] of Object.entries(publishedAt)) {
+      const first = earliest.get(taskId);
+      const published = new Date(timestamptzToIso(at)).getTime();
+      if (first !== undefined && published > first) {
+        earliest.set(taskId, published);
+      }
+    }
     return Object.fromEntries(
       [...earliest].map(([taskId, time]) => [
         taskId,

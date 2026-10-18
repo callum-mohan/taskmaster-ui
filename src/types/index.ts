@@ -72,6 +72,14 @@ export interface Task {
   locked: boolean;
   /** Who may submit entries on the site, and how many (see `task_submissions`). */
   submissions: TaskSubmissionSettings;
+  /**
+   * Results night: an admin is holding this week's results back. The public
+   * snapshot leaves out its scores and recorded bonuses until they're
+   * published; `/live` reveals them one at a time.
+   */
+  resultsHeld: boolean;
+  /** How many results `/live` has revealed so far (bottom first). */
+  resultsRevealCount: number;
 }
 
 /**
@@ -228,6 +236,14 @@ export interface CompetitionData {
   resultsPostedAt: Record<string, string>;
   /** Every poll (drafts included), newest opening first. */
   polls: Poll[];
+  /** Every People's Choice vote, with the entry it went to. */
+  peoplesChoiceVotes: PeoplesChoiceVote[];
+  /** Every winner prediction. */
+  predictions: Prediction[];
+  /** Editorial recap copy, keyed by task id. */
+  recaps: Record<string, WeekRecapContent>;
+  /** The site changelog, newest first. */
+  changelog: FeatureUpdate[];
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────
@@ -654,10 +670,9 @@ export interface Award {
 // everything else is derived in queries.ts from scores + standings.
 
 /**
- * Hand-written editorial colour for a week, keyed by task id in
- * `src/data/recaps.ts`. Every field is optional — the recap page falls back
- * to auto-generated text when a week has not been written up yet. Becomes a
- * Supabase table later; keep the shape stable.
+ * Hand-written editorial colour for a week, from the `recaps` table (edited
+ * in `/admin/recaps`). Every field is optional — the recap page falls back
+ * to auto-generated text when a week has not been written up yet.
  */
 export interface WeekRecapContent {
   /** Punchy episode headline, e.g. "Rose cracks the opener". */
@@ -969,3 +984,214 @@ export type SubmissionOutcome =
   | "bad-type"
   | "heic"
   | "upload-failed";
+
+// ── Reactions & People's Choice ───────────────────────────────────────
+
+/** The emoji reactions a player can leave on a gallery entry. */
+export type ReactionKind = "laugh" | "fire" | "clap" | "mind_blown" | "egg";
+
+/** One player's reaction to an entry (`submission_reactions`). */
+export interface SubmissionReaction {
+  submissionId: number;
+  playerId: string;
+  kind: ReactionKind;
+}
+
+/** One reaction button under a gallery entry. */
+export interface ReactionTally {
+  kind: ReactionKind;
+  /** Decorative glyph (pair it with `label`). */
+  emoji: string;
+  label: string;
+  count: number;
+  /** The viewer left this reaction. */
+  mine: boolean;
+  /** Who reacted, for the tooltip. */
+  names: string[];
+}
+
+/** A People's Choice vote (`peoples_choice_votes`) with the entry it went to. */
+export interface PeoplesChoiceVote {
+  taskId: string;
+  /** The voter. */
+  playerId: string;
+  submissionId: number;
+  /** Who submitted the entry, and their squad on team tasks. */
+  submitterId: string;
+  teamId?: string;
+  /** The entry was hidden by an admin, so the vote doesn't count. */
+  entryHidden: boolean;
+}
+
+/**
+ * Where a task's People's Choice vote is up to: it opens at the deadline
+ * (when the gallery goes up) and closes a fixed time later, when the bonus
+ * is awarded.
+ */
+export type PeoplesChoiceStatus = "not-open" | "open" | "closed";
+
+/** The People's Choice vote on one task, for one viewer. */
+export interface PeoplesChoiceSummary {
+  status: PeoplesChoiceStatus;
+  /** When voting closes (ISO 8601). */
+  closesAt: string;
+  /** Points each winner earns. */
+  bonusPoints: number;
+  /** Players who have voted. */
+  voterCount: number;
+  /** The viewer is a player and voting is open. */
+  canVote: boolean;
+  /** The entry the viewer voted for. */
+  myVote?: number;
+  /** Winning entry ids (closed votes with at least one vote). */
+  winners: number[];
+}
+
+/** What a viewer can do with one gallery entry, and how it's doing. */
+export interface GalleryEntrySocial {
+  reactions: ReactionTally[];
+  /** The viewer is a player, so the reaction buttons work. */
+  canReact: boolean;
+  /** The viewer may vote for this entry (open vote, not their own). */
+  canVote: boolean;
+  /** The viewer's People's Choice vote went here. */
+  votedFor: boolean;
+  /** People's Choice votes, once voting has closed. */
+  votes?: number;
+  /** Won (or tied for) People's Choice. */
+  winner: boolean;
+}
+
+/** A gallery entry with its reactions and People's Choice state. */
+export interface GalleryEntry extends SubmissionEntry {
+  social: GalleryEntrySocial;
+}
+
+/** One player's or squad's entries in the public gallery. */
+export interface PublicGalleryGroup {
+  owner: SubmissionOwner;
+  entries: GalleryEntry[];
+}
+
+/** What happened to a reaction or People's Choice vote (shown on the task page). */
+export type GalleryOutcome =
+  | "reacted"
+  | "unreacted"
+  | "voted"
+  | "vote-changed"
+  | "vote-withdrawn"
+  | "vote-closed"
+  | "own-entry"
+  | "invalid";
+
+// ── Predictions ───────────────────────────────────────────────────────
+
+/** Who a prediction backs: a player, or a squad on team tasks. */
+export type PredictionPick =
+  { type: "player"; id: string } | { type: "team"; id: string };
+
+/** A player's call on who wins a week (`predictions`). */
+export interface Prediction {
+  taskId: string;
+  /** The player making the call. */
+  playerId: string;
+  pick: PredictionPick;
+}
+
+/** A pick ready to render. */
+export interface PredictionChoice {
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+}
+
+/** Everyone who backed one pick, once predictions are revealed. */
+export interface PredictionTallyRow {
+  choice: PredictionChoice;
+  backers: Player[];
+  /** The pick won (set once results are in). */
+  correct?: boolean;
+}
+
+/**
+ * Where a week's predictions are up to:
+ *   "open"     → the task is live, calls can be made or changed;
+ *   "locked"   → the deadline passed, calls are revealed, results pending;
+ *   "settled"  → the results are in and correct calls earned their bonus;
+ *   "upcoming" → the task hasn't been released yet.
+ */
+export type PredictionStatus = "upcoming" | "open" | "locked" | "settled";
+
+/** The "call the winner" panel on a task page, for one viewer. */
+export interface PredictionPanel {
+  status: PredictionStatus;
+  /** Points a correct call earns. */
+  bonusPoints: number;
+  /** The viewer is a player and calls are open. */
+  canPredict: boolean;
+  /** Why a signed-out or non-player viewer can't predict. */
+  viewer: "guest" | "non-player" | "player";
+  /** Who the viewer can back (never themselves or their own squad). */
+  options: PredictionChoice[];
+  myPick?: PredictionChoice;
+  /** The viewer's call won (settled weeks only). */
+  myPickCorrect?: boolean;
+  /** How many players have made a call. */
+  count: number;
+  /** Every pick and its backers, once the deadline has passed. */
+  tally: PredictionTallyRow[];
+}
+
+/** What happened to a player's prediction (shown on the task page). */
+export type PredictionOutcome =
+  "saved" | "changed" | "withdrawn" | "closed" | "invalid";
+
+// ── Live results night ────────────────────────────────────────────────
+
+/** One revealed result on the live board. */
+export interface LiveResultRow {
+  position: number;
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+  points: number;
+  comment?: string;
+  /** Squad members, on team tasks. */
+  members?: Player[];
+  /** Player avatar source, on individual tasks. */
+  player?: Player;
+  /** The most recent reveal. */
+  latest: boolean;
+}
+
+/**
+ * The live results board for the week being revealed. Unrevealed results
+ * are only counted, never sent to the page.
+ */
+export interface LiveShow {
+  task: Task;
+  /** Results to reveal in total. */
+  total: number;
+  /** Revealed so far, best position first. */
+  revealed: LiveResultRow[];
+  /** Results still to come. */
+  hiddenCount: number;
+  /** Every result is out (the winner included). */
+  complete: boolean;
+  /** Changes whenever the board does; the page polls for it. */
+  version: string;
+}
+
+/** One step of an admin's reveal running order. */
+export interface LiveRunStep {
+  /** 1 = revealed first (last place). */
+  step: number;
+  position: number;
+  name: string;
+  points: number;
+  revealed: boolean;
+}

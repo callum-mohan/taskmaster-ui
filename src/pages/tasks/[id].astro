@@ -14,14 +14,22 @@ import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
 import DecryptReveal from "../../components/DecryptReveal.astro";
 import SubmissionPanel from "../../components/SubmissionPanel.astro";
 import SubmissionGallery from "../../components/SubmissionGallery.astro";
+import PeoplesChoiceBar from "../../components/PeoplesChoiceBar.astro";
+import PredictionPanel from "../../components/PredictionPanel.astro";
 import { loadTaskSubmissions, presignEntryMedia } from "../../data/submissions";
+import { loadTaskReactions } from "../../data/reactions";
 import { getRevealPassword } from "../../data/task-reveal";
 import {
   allowRevealAttempt,
   passwordMatches,
   setRevealCookie,
 } from "../../lib/task-reveal";
-import type { RevealError, SubmissionOutcome } from "../../types";
+import type {
+  GalleryOutcome,
+  PredictionOutcome,
+  RevealError,
+  SubmissionOutcome,
+} from "../../types";
 import { ukDateFormat } from "../../lib/time";
 
 const {
@@ -33,6 +41,9 @@ const {
   getTaskBonuses,
   getSubmissionPanel,
   getPublicSubmissionGallery,
+  getSocialGallery,
+  getPeoplesChoice,
+  getPredictionPanel,
   teams,
 } = await Astro.locals.getQueries();
 
@@ -109,21 +120,64 @@ const submissionViewer = {
 };
 const takesEntries =
   task.status === "live" && !task.locked && task.submissions.max > 0;
-const submissions =
-  (task.status === "completed" && viewer) || (takesEntries && viewer?.playerId)
-    ? await loadTaskSubmissions(task.id)
-    : [];
+const showGallery = task.status === "completed" && viewer !== undefined;
+const [submissions, reactions] = await Promise.all([
+  showGallery || (takesEntries && viewer?.playerId)
+    ? loadTaskSubmissions(task.id)
+    : [],
+  showGallery ? loadTaskReactions(task.id) : [],
+]);
 const submissionPanel = takesEntries
   ? getSubmissionPanel(task, submissions, submissionViewer)
   : undefined;
-const gallery = await Promise.all(
-  getPublicSubmissionGallery(task, submissions, submissionViewer).map(
-    async (group) => ({
-      ...group,
-      entries: await presignEntryMedia(group.entries),
-    }),
+const gallery = getSocialGallery(
+  task,
+  await Promise.all(
+    getPublicSubmissionGallery(task, submissions, submissionViewer).map(
+      async (group) => ({
+        ...group,
+        entries: await presignEntryMedia(group.entries),
+      }),
+    ),
   ),
+  reactions,
+  submissionViewer,
 );
+const peoplesChoice = getPeoplesChoice(task, submissionViewer);
+const peoplesChoiceWinners = gallery.flatMap((group) =>
+  group.entries.some((entry) => entry.social.winner) ? [group.owner.name] : [],
+);
+const galleryOutcomes: GalleryOutcome[] = [
+  "reacted",
+  "unreacted",
+  "voted",
+  "vote-changed",
+  "vote-withdrawn",
+  "vote-closed",
+  "own-entry",
+  "invalid",
+];
+const galleryParam = Astro.url.searchParams.get("gallery");
+const galleryOutcome = galleryOutcomes.find((o) => o === galleryParam);
+
+// "Call the winner": open while the task is live, revealed at the deadline.
+const predictionPanel =
+  task.status === "upcoming"
+    ? undefined
+    : getPredictionPanel(task, {
+        signedIn: viewer !== undefined,
+        ...(viewer?.playerId && { playerId: viewer.playerId }),
+      });
+const predictionOutcomes: PredictionOutcome[] = [
+  "saved",
+  "changed",
+  "withdrawn",
+  "closed",
+  "invalid",
+];
+const predictionParam = Astro.url.searchParams.get("prediction");
+const predictionOutcome = predictionOutcomes.find((o) => o === predictionParam);
+const resultsHeld = task.status === "completed" && task.resultsHeld;
 const entryCount = gallery.reduce((n, g) => n + g.entries.length, 0);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const squadCount = gallery.filter((g) => g.owner.type === "team").length;
@@ -468,6 +522,61 @@ const medal = (position: number) =>
       )
     }
 
+    <!-- Results held back for a live reveal -->
+    {
+      resultsHeld && (
+        <a
+          href={withBase("/live")}
+          class="group mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber/40 bg-amber/5 px-5 py-4 transition-colors hover:border-amber"
+        >
+          <span class="flex items-center gap-2 text-[11px] font-bold tracking-widest text-amber uppercase">
+            <span
+              class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+              aria-hidden="true"
+            />{" "}
+            results night
+          </span>
+          <span class="text-sm text-ink-dim">
+            The Taskmaster is holding this week's results for a live reveal.
+          </span>
+          <span
+            class="ml-auto text-xs font-bold tracking-widest text-amber uppercase group-hover:text-ink"
+            aria-hidden="true"
+          >
+            watch live &rarr;
+          </span>
+        </a>
+      )
+    }
+
+    <!-- Call the winner (live: make a call; afterwards: who backed whom) -->
+    {
+      predictionPanel && (
+        <section id="predict" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            predict --winner
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}/predictions`}
+            meta={
+              predictionPanel.status === "open"
+                ? `locks ${formatStamp(task.deadline)}`
+                : predictionPanel.status === "settled"
+                  ? "settled"
+                  : "locked"
+            }
+          >
+            <PredictionPanel
+              taskId={task.id}
+              panel={predictionPanel}
+              isTeam={isTeam}
+              outcome={predictionOutcome}
+            />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
     <!-- Results — individual tasks (completed only) -->
     {
       task.status === "completed" && !isTeam && winner && (
@@ -661,7 +770,19 @@ const medal = (position: number) =>
             <span class="text-acid">$</span> {entryCount}{" "}
             {entryCount === 1 ? "entry" : "entries"} from {entrantsLabel}
           </p>
-          <SubmissionGallery groups={gallery} formatStamp={formatStamp} />
+          <PeoplesChoiceBar
+            summary={peoplesChoice}
+            winnerNames={peoplesChoiceWinners}
+            isPlayer={submissionViewer.playerId !== undefined}
+            outcome={galleryOutcome}
+            formatStamp={formatStamp}
+            class="mb-4"
+          />
+          <SubmissionGallery
+            taskId={task.id}
+            groups={gallery}
+            formatStamp={formatStamp}
+          />
         </section>
       )
     }

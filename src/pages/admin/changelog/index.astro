@@ -1,0 +1,110 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import {
+  btnPrimary,
+  tableCell,
+  tableHead,
+} from "../../../components/admin/styles";
+import { listChangelog } from "../../../data/admin";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+
+const rows = await listChangelog();
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+const categoryClass: Record<string, string> = {
+  new: "text-acid",
+  improved: "text-cyan",
+  fixed: "text-amber",
+};
+---
+
+<AdminLayout title="Changelog">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+        <span class="text-acid">$</span> git log --oneline
+      </h1>
+      <p class="mt-1 max-w-prose text-sm text-ink-dim">
+        The "what's new" list on the homepage, newest first. Visitors see a dot
+        on the button until they've opened the newest entry.
+      </p>
+    </div>
+    <a href={withBase("/admin/changelog/new")} class={btnPrimary}>+ new entry</a
+    >
+  </div>
+
+  {
+    done && subject && (
+      <Notice tone="success" class="mt-6">
+        {done === "deleted" ? `Deleted "${subject}".` : `Saved "${subject}".`}
+      </Notice>
+    )
+  }
+
+  <TerminalWindow title="~/changelog" class="mt-6" bodyClass="p-0 sm:p-0">
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class={tableHead}>date</th>
+            <th scope="col" class={tableHead}>type</th>
+            <th scope="col" class={tableHead}>entry</th>
+            <th scope="col" class={tableHead}
+              ><span class="sr-only">actions</span></th
+            >
+          </tr>
+        </thead>
+        <tbody>
+          {
+            rows.map((row) => (
+              <tr class="transition-colors hover:bg-term-panel-2">
+                <td
+                  class:list={[
+                    tableCell,
+                    "whitespace-nowrap tabular-nums text-ink-faint",
+                  ]}
+                >
+                  {row.date}
+                </td>
+                <td
+                  class:list={[
+                    tableCell,
+                    "text-xs font-bold uppercase tracking-widest",
+                    categoryClass[row.category],
+                  ]}
+                >
+                  {row.category}
+                </td>
+                <td class={tableCell}>
+                  <span class="text-ink">{row.title}</span>
+                  <span class="block max-w-prose text-xs text-ink-faint">
+                    {row.description}
+                  </span>
+                </td>
+                <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
+                  <a
+                    href={withBase(`/admin/changelog/${row.id}`)}
+                    class="text-cyan hover:underline"
+                    aria-label={`Edit ${row.title}`}
+                  >
+                    edit
+                  </a>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+      {
+        rows.length === 0 && (
+          <p class="p-6 text-sm text-ink-dim">No entries yet.</p>
+        )
+      }
+    </div>
+  </TerminalWindow>
+</AdminLayout>

@@ -8,10 +8,10 @@ The UI has a deliberate **terminal / CRT aesthetic** — monospace, green-on-bla
 window chrome — and is built with **Astro + TypeScript + Tailwind v4**, rendered
 on request on **Cloudflare Workers**.
 
-> Competition data (players, teams, tasks, scores, bonus points) lives in
-> **Neon Postgres** and is read **on every request**, so changes made in the
-> [admin area](#-admin) appear on the public site immediately. Editorial copy
-> (weekly recaps, changelog) stays in TypeScript.
+> Competition data (players, teams, tasks, scores, bonus points) and the
+> editorial copy (weekly recaps, changelog) live in **Neon Postgres** and are
+> read **on every request**, so changes made in the [admin area](#-admin)
+> appear on the public site immediately.
 
 ## 🚀 Tech stack
 
@@ -60,32 +60,41 @@ src/
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
 │   ├── scores.ts      # rows → Score  ─┤  (points → positions; bonus points)
 │   ├── polls.ts       # rows → Poll   ─┘  (status, voting bonuses derived)
+│   ├── editorial.ts   # rows → recap copy + changelog entries
 │   ├── poll-queries.ts # poll selectors: who can vote / see results
 │   ├── notification-queries.ts # a player's feed (tasks, polls, results, bonuses), derived
 │   ├── votes.ts       # a player's own poll votes
 │   ├── submissions.ts # task entries: per-task loader + a player's own writes
 │   ├── submission-queries.ts # entry selectors: who can submit / see what
+│   ├── reactions.ts   # emoji reactions on entries: per-task loader + toggle
+│   ├── peoples-choice.ts # People's Choice votes: window, winners, bonus, writes
+│   ├── gallery-queries.ts # gallery selectors: who can react / vote, tallies
+│   ├── predictions.ts # winner predictions: mapper, bonus, writes
+│   ├── prediction-queries.ts # prediction panel: options, secrecy, tally
+│   ├── live.ts        # results night: loads a held week's scores
+│   ├── live-queries.ts # live board + admin running order (bottom first)
 │   ├── queries.ts     # createQueries(data) — derived selectors (the UI's API)
 │   ├── admin.ts       # admin reads/writes (one transaction per save)
-│   ├── accounts.ts    # player sign-in accounts + self-service profile edits
-│   └── recaps.ts      # editorial recap copy (TypeScript)
+│   └── accounts.ts    # player sign-in accounts + self-service profile edits
 ├── lib/
 │   ├── auth.ts        # Neon Auth adapter for Astro (sign in/out, session)
 │   ├── admin-forms.ts # admin form parsing + validation (zod)
 │   ├── account-forms.ts # player profile + password form validation
 │   ├── submission-forms.ts # entry form parsing, limits + photo type sniffing
+│   ├── reactions.ts   # the reaction emoji set
 │   └── storage.ts     # Object Storage client (put, presigned get, delete)
 ├── pages/
 │   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
 │   ├── login.astro            # /login — the player portal
 │   ├── logout.ts              # POST /logout — signs out (either portal)
-│   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries
+│   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries, react / vote People's Choice, predict winners
 │   ├── submissions/           # /submissions/[id]/media — access-checked photo links
 │   ├── index.astro            # homepage
 │   ├── tasks/                 # /tasks and /tasks/[id]
 │   ├── players/               # /players and /players/[id]
 │   ├── leaderboard.astro      # full standings (with rank movement)
 │   ├── recaps/                # /recaps and /recaps/[id] weekly episode recaps
+│   ├── live.astro             # /live — results night, revealed bottom first
 │   ├── compare/               # /compare head-to-head (+ /compare/[a]/[b])
 │   ├── stats.astro            # stats & Hall of Fame awards
 │   └── 404.astro
@@ -161,7 +170,9 @@ immediately; there's nothing to rebuild.
 
 `/admin` lets signed-in admins create, edit and delete players, teams (and
 their members), tasks and [polls](#️-polls), enter a week's scores in one
-grid, and record bonus points or deductions. Deletes ask for confirmation and list what else will be
+grid, record bonus points or deductions, run [results night](#-results-night),
+and write the weekly recap copy (`/admin/recaps`) and the homepage changelog
+(`/admin/changelog`). Deletes ask for confirmation and list what else will be
 removed. Forms are plain HTML posts, so they work without JavaScript.
 
 - **Score history:** every saved change to a week's scores or bonuses is
@@ -281,6 +292,45 @@ upload. On team tasks the entry goes to the player's squad. Admin-added entries
 ignore the task's entry limit and allowed kinds (they work even when on-site
 entries were closed), and they go straight into the public gallery.
 
+## 🎬 Results night
+
+Admins can **hold** a week's results (from `/admin/live/<task>` or the
+week's scores page). While held, the public snapshot leaves out that week's
+scores and recorded bonuses, so the leaderboard, task page, recap, stats and
+notifications all behave as if it hadn't been scored, while admins see
+everything as normal.
+
+Once the deadline has passed, `/live` shows the held week's board. Each
+"reveal next" in `/admin/live/<task>` uncovers one more result, **last place
+first**, until the winner; only revealed results ever reach the page, and an
+open `/live` tab polls itself so it follows the show without a reload.
+**Publish** ends the show: the results go out site-wide and the "results are
+in" notifications are dated from then (`tasks.results_published_at`).
+"Release hold" ends it without a show. The state lives on the task
+(`results_held_at`, `results_reveal_count`).
+
+## ⭐ Reactions & People's Choice
+
+Once a task's deadline passes and its gallery goes up, signed-in players can
+leave emoji reactions on entries (`submission_reactions`; the buttons update
+in place with JS and post normally without it) and cast one **People's
+Choice** vote for their favourite entry, never their own or their squad's
+(`peoples_choice_votes`). Voting stays open for 3 days after the deadline and
+vote counts stay hidden until it closes. The most-voted entry's owner (every
+member, for a squad entry; ties all win) then earns +1 bonus point in that
+week. Like poll-voting bonuses, it's derived from the votes rather than
+stored, so a withdrawn vote or a hidden entry never leaves stray points.
+The window and points are constants in `src/data/peoples-choice.ts`.
+
+## 🔮 Predictions
+
+While a task is live, players can **call the winner** from its task page: a
+player on individual tasks, a squad on team tasks, never themselves or their
+own squad (`predictions`). Calls stay secret until the deadline (only a
+count shows), then everyone's picks are revealed. A correct call (a shared
+first place counts) earns +1 bonus point once the results are published,
+derived from the results so a corrected score can't leave a stale bonus.
+
 ## 🔔 Notifications
 
 Signed-in **players** get a bell in the navbar with an unread count. It opens
@@ -290,12 +340,13 @@ a dropdown (a full-height drawer on phones) listing the newest 20 events:
   they open.
 - **Deadline reminders** from 24 hours before a live task closes, until it
   does.
-- **Results**, once the first score for a week is saved, with the player's
-  own finish.
+- **Results**, once the first score for a week is saved (or, for results
+  held for [results night](#-results-night), once they're published), with
+  the player's own finish.
 - **Rank climbs** ("You moved up to #3"), when a week's results lift the
   player up the leaderboard.
 - **Bonuses and deductions** the player is given (not the automatic
-  poll-voting bonus).
+  poll-voting, People's Choice or prediction bonuses).
 
 Guests and admin accounts without a player profile don't see it.
 
@@ -428,5 +479,4 @@ Before committing, keep `npm run check` and `npm run format:check` clean.
 
 ## 🔭 Roadmap
 
-Competition data is live and editable from `/admin`. Next steps: recaps in
-the database.
+Competition data and editorial copy are live and editable from `/admin`.

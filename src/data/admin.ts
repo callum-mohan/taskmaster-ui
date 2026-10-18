@@ -14,12 +14,17 @@ import {
 import { getDb } from "../db";
 import {
   bonusPoints,
+  changelogEntries,
   playerAccounts,
   players,
   pollOptions,
   polls,
   pollVotes,
+  peoplesChoiceVotes,
+  predictions,
+  recaps,
   scoreAuditLog,
+  submissionReactions,
   taskScores,
   taskSubmissions,
   tasks,
@@ -35,8 +40,10 @@ import { submissionObjectKey } from "../lib/submission-forms";
 import type {
   AddEntryInput,
   BonusInput,
+  ChangelogInput,
   PlayerInput,
   PollInput,
+  RecapInput,
   TaskInput,
   TaskScoreInput,
   TeamInput,
@@ -51,6 +58,8 @@ export type PlayerRecord = typeof players.$inferSelect;
 export type TeamRecord = typeof teams.$inferSelect & { memberIds: string[] };
 export type TaskRecord = typeof tasks.$inferSelect;
 export type BonusRecord = typeof bonusPoints.$inferSelect;
+export type RecapRecord = typeof recaps.$inferSelect;
+export type ChangelogRecord = typeof changelogEntries.$inferSelect;
 export type PollRecord = typeof polls.$inferSelect & {
   options: (typeof pollOptions.$inferSelect)[];
 };
@@ -153,7 +162,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a], [e]] = await db.batch([
+  const [[s], [b], [m], [a], [e], [p], [v], [r]] = await db.batch([
     db
       .select({ n: count() })
       .from(taskScores)
@@ -171,6 +180,20 @@ export async function getPlayerDeleteImpact(
       .from(playerAccounts)
       .where(eq(playerAccounts.playerId, id)),
     countSubmissions(eq(taskSubmissions.playerId, id)),
+    db
+      .select({ n: count() })
+      .from(predictions)
+      .where(
+        or(eq(predictions.playerId, id), eq(predictions.pickedPlayerId, id)),
+      ),
+    db
+      .select({ n: count() })
+      .from(peoplesChoiceVotes)
+      .where(eq(peoplesChoiceVotes.playerId, id)),
+    db
+      .select({ n: count() })
+      .from(submissionReactions)
+      .where(eq(submissionReactions.playerId, id)),
   ]);
   return [
     { label: "individual score", count: s.n },
@@ -178,6 +201,9 @@ export async function getPlayerDeleteImpact(
     { label: "team membership", count: m.n },
     { label: "sign-in account link", count: a.n },
     { label: "task submission", count: e.n },
+    { label: "winner prediction", count: p.n },
+    { label: "People's Choice vote", count: v.n },
+    { label: "reaction", count: r.n },
   ];
 }
 
@@ -268,18 +294,23 @@ export async function updateTeam(id: string, input: TeamInput): Promise<void> {
 
 export async function getTeamDeleteImpact(id: string): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [m], [e]] = await db.batch([
+  const [[s], [m], [e], [p]] = await db.batch([
     db.select({ n: count() }).from(teamScores).where(eq(teamScores.teamId, id)),
     db
       .select({ n: count() })
       .from(teamMembers)
       .where(eq(teamMembers.teamId, id)),
     countSubmissions(eq(taskSubmissions.teamId, id)),
+    db
+      .select({ n: count() })
+      .from(predictions)
+      .where(eq(predictions.pickedTeamId, id)),
   ]);
   return [
     { label: "team score", count: s.n },
     { label: "team membership", count: m.n },
     { label: "squad submission", count: e.n },
+    { label: "winner prediction", count: p.n },
   ];
 }
 
@@ -346,7 +377,7 @@ export async function setTaskRevealed(
 
 export async function getTaskDeleteImpact(id: string): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [t], [b], [e]] = await db.batch([
+  const [[s], [t], [b], [e], [p], [v], [r]] = await db.batch([
     db.select({ n: count() }).from(taskScores).where(eq(taskScores.taskId, id)),
     db.select({ n: count() }).from(teamScores).where(eq(teamScores.taskId, id)),
     db
@@ -354,12 +385,24 @@ export async function getTaskDeleteImpact(id: string): Promise<DeleteImpact[]> {
       .from(bonusPoints)
       .where(eq(bonusPoints.taskId, id)),
     countSubmissions(eq(taskSubmissions.taskId, id)),
+    db
+      .select({ n: count() })
+      .from(predictions)
+      .where(eq(predictions.taskId, id)),
+    db
+      .select({ n: count() })
+      .from(peoplesChoiceVotes)
+      .where(eq(peoplesChoiceVotes.taskId, id)),
+    db.select({ n: count() }).from(recaps).where(eq(recaps.taskId, id)),
   ]);
   return [
     { label: "individual score", count: s.n },
     { label: "team score", count: t.n },
     { label: "bonus / deduction", count: b.n },
     { label: "submission", count: e.n },
+    { label: "winner prediction", count: p.n },
+    { label: "People's Choice vote", count: v.n },
+    { label: "recap write-up", count: r.n },
   ];
 }
 
@@ -1001,6 +1044,147 @@ export async function deletePoll(id: string): Promise<void> {
   await getDb().delete(polls).where(eq(polls.id, id));
 }
 
+// ── Results night ─────────────────────────────────────────────────────
+
+/**
+ * Holds a week's results back from the public site for a live reveal, or
+ * releases the hold without a show (which, like publishing, dates the
+ * week's notifications from now). Either way the reveal starts over.
+ */
+export async function setResultsHeld(
+  taskId: string,
+  held: boolean,
+): Promise<void> {
+  await getDb()
+    .update(tasks)
+    .set(
+      held
+        ? { resultsHeldAt: sql`now()`, resultsRevealCount: 0 }
+        : {
+            resultsHeldAt: null,
+            resultsRevealCount: 0,
+            resultsPublishedAt: sql`case when ${tasks.resultsHeldAt} is not null then now() else ${tasks.resultsPublishedAt} end`,
+          },
+    )
+    .where(eq(tasks.id, taskId));
+}
+
+/**
+ * Moves the live reveal on (or back) by `step` results, never below zero
+ * or past `total`. Only held weeks are touched.
+ */
+export async function stepResultsReveal(
+  taskId: string,
+  step: number,
+  total: number,
+): Promise<void> {
+  await getDb()
+    .update(tasks)
+    .set({
+      resultsRevealCount: sql`least(greatest(${tasks.resultsRevealCount} + ${step}, 0), ${total})`,
+    })
+    .where(and(eq(tasks.id, taskId), sql`${tasks.resultsHeldAt} is not null`));
+}
+
+/**
+ * Ends the show: the held results go out across the site, dated now so the
+ * "results are in" notifications arrive after the reveal, not before.
+ */
+export async function publishHeldResults(taskId: string): Promise<void> {
+  await getDb()
+    .update(tasks)
+    .set({
+      resultsHeldAt: null,
+      resultsRevealCount: 0,
+      resultsPublishedAt: sql`now()`,
+    })
+    .where(and(eq(tasks.id, taskId), sql`${tasks.resultsHeldAt} is not null`));
+}
+
+// ── Recaps ────────────────────────────────────────────────────────────
+
+export async function listRecaps(): Promise<RecapRecord[]> {
+  return getDb().select().from(recaps);
+}
+
+export async function getRecap(
+  taskId: string,
+): Promise<RecapRecord | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(recaps)
+    .where(eq(recaps.taskId, taskId));
+  return row;
+}
+
+/** Saves a week's write-up; an all-blank form removes it. */
+export async function saveRecap(
+  taskId: string,
+  input: RecapInput,
+): Promise<void> {
+  const db = getDb();
+  if (Object.values(input).every((v) => v === null)) {
+    await db.delete(recaps).where(eq(recaps.taskId, taskId));
+    return;
+  }
+  await db
+    .insert(recaps)
+    .values({ taskId, ...input })
+    .onConflictDoUpdate({ target: recaps.taskId, set: input });
+}
+
+export async function deleteRecap(taskId: string): Promise<void> {
+  await getDb().delete(recaps).where(eq(recaps.taskId, taskId));
+}
+
+// ── Changelog ─────────────────────────────────────────────────────────
+
+export async function listChangelog(): Promise<ChangelogRecord[]> {
+  return getDb()
+    .select()
+    .from(changelogEntries)
+    .orderBy(desc(changelogEntries.date), desc(changelogEntries.createdAt));
+}
+
+export async function getChangelogEntry(
+  id: string,
+): Promise<ChangelogRecord | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(changelogEntries)
+    .where(eq(changelogEntries.id, id));
+  return row;
+}
+
+const changelogValues = (input: ChangelogInput) => ({
+  date: input.date,
+  title: input.title,
+  description: input.description,
+  category: input.category,
+});
+
+export async function createChangelogEntry(
+  input: ChangelogInput,
+): Promise<void> {
+  await getDb()
+    .insert(changelogEntries)
+    .values({ id: input.id, ...changelogValues(input) });
+}
+
+export async function updateChangelogEntry(
+  id: string,
+  input: ChangelogInput,
+): Promise<void> {
+  await getDb()
+    .update(changelogEntries)
+    .set(changelogValues(input))
+    .where(eq(changelogEntries.id, id));
+}
+
+export async function deleteChangelogEntry(id: string): Promise<void> {
+  await getDb().delete(changelogEntries).where(eq(changelogEntries.id, id));
+}
+
 // ── Errors ────────────────────────────────────────────────────────────
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
@@ -1017,6 +1201,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   polls_max_choices_at_least_min: "The maximum can't be below the minimum.",
   polls_vote_bonus_points_range: "Voting bonus must be between 0 and 100.",
   polls_bonus_task_id_tasks_id_fk: "That bonus week no longer exists.",
+  changelog_entries_pkey: "A changelog entry with that id already exists.",
+  recaps_moment_player_id_players_id_fk: "That player no longer exists.",
 };
 
 /**

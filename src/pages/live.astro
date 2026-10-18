@@ -1,0 +1,293 @@
+---
+import Layout from "../layouts/Layout.astro";
+import TerminalWindow from "../components/TerminalWindow.astro";
+import PlayerAvatar from "../components/PlayerAvatar.astro";
+import ScoreBadge from "../components/ScoreBadge.astro";
+import { loadTaskResultRows } from "../data/live";
+import { withBase } from "../lib/url";
+
+// Results night. While an admin holds a week's results, this page reveals
+// them one at a time, last place first, as the admin steps through them in
+// `/admin/live`. Only revealed results reach the HTML; the page polls itself
+// so an open tab follows the show without a reload.
+
+const { getLiveTask, getLiveShow, getRecapSummaries } =
+  await Astro.locals.getQueries();
+const task = getLiveTask();
+const show = task
+  ? getLiveShow(task, await loadTaskResultRows(task.id))
+  : undefined;
+const latestRecap = show ? undefined : getRecapSummaries()[0];
+
+// Every viewer must see the latest reveal, never a cached copy.
+Astro.response.headers.set("Cache-Control", "no-store");
+
+const weekLabel = task
+  ? `WEEK ${String(task.weekNumber).padStart(2, "0")}`
+  : undefined;
+const latest = show?.revealed.find((row) => row.latest);
+const announcement = !show
+  ? "No results show on air."
+  : show.complete && show.revealed[0]
+    ? `${show.revealed[0].name} wins ${weekLabel} with ${show.revealed[0].points} points.`
+    : latest
+      ? `Revealed: number ${latest.position}, ${latest.name}, ${latest.points} points.`
+      : `Stand by: ${show.total} results to reveal.`;
+const medal = (position: number) =>
+  position === 1 ? "🥇" : position === 2 ? "🥈" : position === 3 ? "🥉" : null;
+const winner = show?.complete ? show.revealed[0] : undefined;
+// Only the few results nearest the reveal get their own placeholder row.
+const placeholderCount = Math.min(show?.hiddenCount ?? 0, 4);
+const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
+---
+
+<Layout
+  title={weekLabel ? `Results night — ${weekLabel}` : "Results night"}
+  description="Watch the week's results revealed live, last place first."
+>
+  <div class="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+    <header>
+      <p
+        class="flex items-center gap-2 text-sm font-bold tracking-[0.3em] text-amber uppercase"
+      >
+        {
+          show && (
+            <span
+              class="live-dot h-2 w-2 rounded-full bg-amber"
+              aria-hidden="true"
+            />
+          )
+        }
+        results night
+      </p>
+      <h1
+        class="mt-3 text-4xl font-extrabold leading-tight text-ink text-glow sm:text-5xl"
+      >
+        {task ? task.title : "Off air"}
+      </h1>
+      <p class="mt-2 text-sm text-ink-dim">
+        <span class="text-acid">$</span> tail -f ~/results/{
+          task ? `${task.id}.live` : "*.live"
+        }
+      </p>
+    </header>
+
+    <p class="sr-only" aria-live="polite" data-live-announcer></p>
+
+    <div
+      class="mt-8"
+      data-live-board
+      data-live-version={show?.version ?? "off-air"}
+      data-live-announce={announcement}
+    >
+      {
+        !show ? (
+          <TerminalWindow title="~/results/off-air">
+            <div class="py-6 text-center">
+              <p class="text-sm text-ink-dim">
+                <span class="text-acid">$</span> ls ~/results/*.live
+              </p>
+              <p class="mt-1 text-sm text-ink-faint">
+                no results show on air right now
+              </p>
+              <p class="mt-4 text-xs text-ink-faint">
+                Leave this page open on results night: it goes live by itself.
+              </p>
+              {latestRecap && (
+                <a
+                  href={withBase(`/recaps/${latestRecap.task.id}`)}
+                  class="mt-6 inline-block text-xs font-bold tracking-widest text-magenta uppercase hover:text-ink"
+                >
+                  catch up: {latestRecap.weekLabel} recap &rarr;
+                </a>
+              )}
+            </div>
+          </TerminalWindow>
+        ) : (
+          <>
+            {winner && (
+              <div class="mb-6 rounded-xl border border-amber/40 bg-amber/5 p-6 text-center ring-1 ring-amber/20">
+                <p class="text-[10px] tracking-[0.4em] text-amber uppercase">
+                  {winner.type === "team" ? "Winning squad" : "Winner"}
+                </p>
+                <p class="mt-2 text-4xl" aria-hidden="true">
+                  {winner.type === "team" ? "🏆" : "🥇"}
+                </p>
+                <a
+                  href={winner.href}
+                  class="mt-1 inline-block text-3xl font-extrabold text-ink text-glow hover:text-acid"
+                >
+                  {winner.name}
+                </a>
+                <p class="mt-2 text-sm font-bold tracking-widest text-amber">
+                  {winner.points} POINTS
+                </p>
+              </div>
+            )}
+            <TerminalWindow
+              title={`~/results/${show.task.id}.live`}
+              meta={
+                show.complete
+                  ? "all results in"
+                  : `${show.revealed.length} of ${show.total} revealed`
+              }
+              bodyClass="p-0 sm:p-0"
+            >
+              {show.total === 0 ? (
+                <p class="p-6 text-sm text-ink-dim">
+                  <span class="text-amber">!</span> Stand by — the scores are
+                  still being counted.
+                </p>
+              ) : (
+                <ol aria-label="Results, best first">
+                  {collapsedCount > 0 && (
+                    <li class="border-b border-grid-soft px-4 py-3 text-center text-xs tracking-widest text-ink-faint uppercase">
+                      <span aria-hidden="true">▓▒░ </span>
+                      {collapsedCount} more still to come
+                      <span aria-hidden="true"> ░▒▓</span>
+                    </li>
+                  )}
+                  {Array.from({ length: placeholderCount }, (_, i) => (
+                    <li class="flex items-center gap-4 border-b border-grid-soft px-4 py-3 text-ink-faint">
+                      <span class="w-8 text-center font-bold tabular-nums">
+                        ??
+                      </span>
+                      <span aria-hidden="true" class="tracking-widest">
+                        ▓▓▓▓▒▒░ ▓▓▒░
+                      </span>
+                      <span class="sr-only">Not revealed yet</span>
+                      {i === placeholderCount - 1 && (
+                        <span class="caret ml-auto text-[10px] tracking-widest text-amber uppercase">
+                          up next
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {show.revealed.map((row) => (
+                    <li
+                      class:list={[
+                        "flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-grid-soft px-4 py-3 last:border-b-0",
+                        row.latest && !show.complete && "bg-amber/5",
+                      ]}
+                    >
+                      <span class="w-8 text-center font-bold tabular-nums">
+                        {medal(row.position) ?? (
+                          <span class="text-ink-faint">
+                            {String(row.position).padStart(2, "0")}
+                          </span>
+                        )}
+                      </span>
+                      <a
+                        href={row.href}
+                        class="group inline-flex min-w-0 items-center gap-3"
+                      >
+                        {row.player && (
+                          <PlayerAvatar
+                            player={row.player}
+                            class="h-8 w-8 rounded"
+                          />
+                        )}
+                        {row.members && (
+                          <span class="flex -space-x-2" aria-hidden="true">
+                            {row.members.slice(0, 5).map((member) => (
+                              <PlayerAvatar
+                                player={member}
+                                class="h-7 w-7 rounded border border-term-bg"
+                              />
+                            ))}
+                          </span>
+                        )}
+                        <span
+                          class:list={[
+                            "truncate font-semibold group-hover:text-acid",
+                            row.type === "team" ? "text-magenta" : "text-ink",
+                          ]}
+                        >
+                          {row.name}
+                        </span>
+                      </a>
+                      {row.latest && !show.complete && (
+                        <span class="text-[10px] font-bold tracking-widest text-amber uppercase">
+                          just in
+                        </span>
+                      )}
+                      <span class="ml-auto">
+                        <ScoreBadge
+                          points={row.points}
+                          position={row.position}
+                        />
+                      </span>
+                      {row.comment && (
+                        <p class="w-full pl-12 text-xs text-ink-faint">
+                          <span class="text-acid">//</span> {row.comment}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </TerminalWindow>
+            {show.complete && (
+              <p class="mt-4 text-center text-xs text-ink-faint">
+                <span class="text-acid">$</span> every result is in — the
+                leaderboard updates when the Taskmaster publishes them.
+              </p>
+            )}
+          </>
+        )
+      }
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // Follow the show: re-fetch this page and swap the board in whenever its
+  // version changes. Quicker while a show is on, and paused in background
+  // tabs. Without JS, reloading the page shows the latest reveal.
+  const board = document.querySelector<HTMLElement>("[data-live-board]");
+  const announcer = document.querySelector<HTMLElement>(
+    "[data-live-announcer]",
+  );
+
+  async function refresh(): Promise<void> {
+    if (!board || document.hidden) return;
+    try {
+      const response = await fetch(location.pathname, { cache: "no-store" });
+      if (!response.ok) return;
+      const next = new DOMParser()
+        .parseFromString(await response.text(), "text/html")
+        .querySelector<HTMLElement>("[data-live-board]");
+      if (!next || next.dataset.liveVersion === board.dataset.liveVersion) {
+        return;
+      }
+      const wasOffAir = board.dataset.liveVersion === "off-air";
+      const nowOffAir = next.dataset.liveVersion === "off-air";
+      // A show starting or ending changes the header too: reload fully.
+      if (wasOffAir !== nowOffAir) {
+        location.reload();
+        return;
+      }
+      board.innerHTML = next.innerHTML;
+      board.dataset.liveVersion = next.dataset.liveVersion;
+      if (announcer) announcer.textContent = next.dataset.liveAnnounce ?? "";
+    } catch {
+      // Offline for a moment; try again on the next tick.
+    }
+  }
+
+  function schedule(): void {
+    const onAir = board?.dataset.liveVersion !== "off-air";
+    window.setTimeout(
+      async () => {
+        await refresh();
+        schedule();
+      },
+      onAir ? 4000 : 15000,
+    );
+  }
+
+  schedule();
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refresh();
+  });
+</script>

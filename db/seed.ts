@@ -44,6 +44,7 @@ try {
         (await tx.$count(schema.bonusPoints)) === 0
           ? await insert(schema.bonusPoints, data.bonusPoints)
           : 0,
+      recaps: await insert(schema.recaps, data.recaps),
     };
   });
   console.log("Rows inserted (existing rows are left untouched):");

@@ -71,6 +71,27 @@
       "when": 1792184586554,
       "tag": "0009_task_submissions",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792350336460,
+      "tag": "0010_engagement_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792350338531,
+      "tag": "0011_peoples_choice",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792350355665,
+      "tag": "0012_move_editorial_copy",
+      "breakpoints": true
     }
   ]
 }

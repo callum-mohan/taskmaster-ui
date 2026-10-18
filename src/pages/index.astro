@@ -25,9 +25,11 @@ const {
   getCompetitionStats,
   getRecentFeatures,
   getHomePolls,
+  getLiveTask,
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
+const liveTask = getLiveTask();
 const currentEncrypted = currentTask?.status === "live" && currentTask.locked;
 const topPlayers = getTopPlayers(5);
 const recentResults = getRecentResults(3);
@@ -76,6 +78,32 @@ const btnGhost =
 
 <Layout>
   <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    {
+      liveTask && (
+        <a
+          href={withBase("/live")}
+          class="group mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber/40 bg-amber/5 px-5 py-4 transition-colors hover:border-amber"
+        >
+          <span class="flex items-center gap-2 text-[11px] font-bold tracking-widest text-amber uppercase">
+            <span
+              class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+              aria-hidden="true"
+            />{" "}
+            on air
+          </span>
+          <span class="text-sm text-ink-dim">
+            Results night: {weekLabel(liveTask.weekNumber)} is being revealed
+            live.
+          </span>
+          <span
+            class="ml-auto text-xs font-bold tracking-widest text-amber uppercase group-hover:text-ink"
+            aria-hidden="true"
+          >
+            watch live &rarr;
+          </span>
+        </a>
+      )
+    }
     <!-- ============================ HERO ============================ -->
     <section class="relative">
       <div class="mb-6 max-w-xl">
@@ -213,12 +241,22 @@ const btnGhost =
                   </div>
                 </dl>
 
-                <a
-                  href={withBase(`/tasks/${currentTask.id}`)}
-                  class={`${btnPrimary} mt-6`}
-                >
-                  {currentEncrypted ? "[ DECRYPT TASK ]" : "[ VIEW TASK ]"}
-                </a>
+                <div class="mt-6 flex flex-wrap gap-3">
+                  <a
+                    href={withBase(`/tasks/${currentTask.id}`)}
+                    class={btnPrimary}
+                  >
+                    {currentEncrypted ? "[ DECRYPT TASK ]" : "[ VIEW TASK ]"}
+                  </a>
+                  {currentTask.status === "live" && (
+                    <a
+                      href={withBase(`/tasks/${currentTask.id}#predict`)}
+                      class={btnGhost}
+                    >
+                      CALL THE WINNER
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div class="flex flex-col justify-center rounded-lg border border-grid bg-term-bg/40 p-5">

@@ -69,6 +69,8 @@ export function mapTasks(
         max: row.maxSubmissions,
         kinds: row.maxSubmissions > 0 ? row.submissionKinds : [],
       },
+      resultsHeld: row.resultsHeldAt !== null,
+      resultsRevealCount: row.resultsRevealCount,
     };
     if (isTaskLocked(base, reveal)) {
       return { ...base, title: "???", description: "", locked: true };

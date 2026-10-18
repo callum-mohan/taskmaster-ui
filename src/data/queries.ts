@@ -37,11 +37,12 @@ import type {
   CompetitionData,
   PlayerRankChange,
 } from "../types";
-import { getRecapContent } from "./recaps";
-import { changelog } from "./changelog";
 import { createPollQueries } from "./poll-queries";
 import { createNotificationQueries } from "./notification-queries";
 import { createSubmissionQueries } from "./submission-queries";
+import { createGalleryQueries } from "./gallery-queries";
+import { createPredictionQueries } from "./prediction-queries";
+import { createLiveQueries } from "./live-queries";
 import { withBase } from "../lib/url";
 
 // This module is the single "data layer" the UI talks to. Pages read these
@@ -61,6 +62,8 @@ export function createQueries(data: CompetitionData) {
     teamScores,
     bonusPoints,
     resultsPostedAt,
+    recaps,
+    changelog,
   } = data;
 
   function getPlayerById(id: string): Player | undefined {
@@ -1222,9 +1225,7 @@ export function createQueries(data: CompetitionData) {
    * "what's new" modal.
    */
   function getRecentFeatures(limit = 6): FeatureUpdate[] {
-    return [...changelog]
-      .sort((a, b) => b.date.localeCompare(a.date))
-      .slice(0, limit);
+    return changelog.slice(0, limit);
   }
 
   /**
@@ -1257,7 +1258,7 @@ export function createQueries(data: CompetitionData) {
   // ─── Weekly "episode" recaps ─────────────────────────────────────────────
   // A recap turns a completed, scored week into an episode page. Everything
   // below is derived from the week's scores and the standings before/after it;
-  // only the editorial colour comes from `recaps.ts`.
+  // only the editorial colour comes from the `recaps` table.
 
   const namedTitle = (task: Task) =>
     task.title.length > 0 && task.title !== "???"
@@ -1408,7 +1409,7 @@ export function createQueries(data: CompetitionData) {
       : undefined;
 
     // Editorial copy, with sensible auto-generated fallbacks.
-    const content = getRecapContent(taskId) ?? {};
+    const content = recaps[taskId] ?? {};
     const headline =
       content.headline ??
       (winner
@@ -1583,5 +1584,8 @@ export function createQueries(data: CompetitionData) {
     getPlayerRankHistory,
     ...createNotificationQueries(data, { getPlayerRankHistory }),
     ...createSubmissionQueries(data),
+    ...createGalleryQueries(data),
+    ...createPredictionQueries(data),
+    ...createLiveQueries(data),
   };
 }

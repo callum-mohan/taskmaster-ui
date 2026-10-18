@@ -149,7 +149,9 @@ const subjectNames: Record<string, string> = Object.fromEntries([
 
 const done = Astro.url.searchParams.get("done");
 const doneMessage: Record<string, string> = {
-  scores: "Scores saved. The leaderboard is already updated.",
+  scores: task.resultsHeld
+    ? "Scores saved. They stay off the public site until you publish them."
+    : "Scores saved. The leaderboard is already updated.",
   "bonus-added": "Bonus added.",
   "bonus-saved": "Bonus saved.",
   "bonus-deleted": "Bonus deleted.",
@@ -193,6 +195,47 @@ const doneMessage: Record<string, string> = {
   <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-ink">
     {task.title}
   </h1>
+
+  <div
+    class:list={[
+      "mt-6 flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-sm",
+      task.resultsHeld ? "border-amber/50 bg-amber/5" : "border-grid",
+    ]}
+  >
+    {
+      task.resultsHeld ? (
+        <>
+          <span class="font-bold text-amber">[held]</span>
+          <span class="text-ink-dim">
+            This week's scores and bonuses are hidden from the public site for
+            results night.
+          </span>
+          <a
+            href={withBase(`/admin/live/${task.id}`)}
+            class="ml-auto text-xs font-bold tracking-widest text-amber hover:underline"
+          >
+            run the reveal &rarr;
+          </a>
+        </>
+      ) : (
+        <>
+          <span class="text-ink-dim">
+            Saving shows results on the site straight away. Doing a live reveal?
+          </span>
+          <form
+            method="post"
+            action={withBase(`/admin/live/${task.id}`)}
+            class="ml-auto"
+          >
+            <input type="hidden" name="intent" value="hold" />
+            <button type="submit" class={btnGhost}>
+              hold for results night
+            </button>
+          </form>
+        </>
+      )
+    }
+  </div>
 
   {
     done && doneMessage[done] && (

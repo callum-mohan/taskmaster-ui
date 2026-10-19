@@ -404,7 +404,13 @@ pages are sent `Cache-Control: private, no-store`.
 3. Send each player their temporary password privately. On first sign-in
    they must choose a new password before they can do anything else.
 
-**Forgotten password / changing a player's email:**
+**Forgotten password:** in `/admin/players/<id>`, use **reset password**
+under the sign-in account. It sets a new temporary password (shown to the
+admin once, stored nowhere), signs the player out everywhere, and makes them
+choose a new password at their next sign-in. Accounts that also hold the
+`admin` role are refused.
+
+**Changing a player's email:**
 `npm run players:accounts -- --reset <player-id> [--email new@example.com]`
 deletes the player's auth user and issues a new temporary password
 (optionally under a new email). Accounts that also hold the `admin` role are

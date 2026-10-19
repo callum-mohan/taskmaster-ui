@@ -6,7 +6,11 @@ import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
 import AdminField from "../../../components/admin/AdminField.astro";
 import AccountStatusBadge from "../../../components/admin/AccountStatusBadge.astro";
 import Notice from "../../../components/admin/Notice.astro";
-import { btnGhost, btnPrimary } from "../../../components/admin/styles";
+import {
+  btnDanger,
+  btnGhost,
+  btnPrimary,
+} from "../../../components/admin/styles";
 import {
   deletePlayer,
   describeWriteError,
@@ -17,8 +21,10 @@ import {
 import {
   accountStatus,
   getPlayerAccount,
+  setMustChangePassword,
   setPlayerEmail,
 } from "../../../data/accounts";
+import { resetUserPassword, temporaryPassword } from "../../../lib/auth";
 import {
   parsePlayerEmailForm,
   parsePlayerForm,
@@ -47,6 +53,8 @@ let errors: FieldErrors = {};
 let formError: string | undefined;
 let accountEmail = account?.email ?? "";
 let accountError: string | undefined;
+// Shown once, in this response only: never put it in a redirect URL.
+let resetPassword: { password: string; signedOut: boolean } | undefined;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -56,7 +64,25 @@ if (Astro.request.method === "POST") {
     const query = new URLSearchParams({ done: "deleted", name: player.name });
     return Astro.redirect(withBase(`/admin/players?${query}`));
   }
-  if (intent === "account") {
+  if (intent === "reset-password") {
+    if (!account?.userId) {
+      accountError = "This player has no sign-in account to reset yet.";
+    } else {
+      // Flag the account first so the player can never sign in with the
+      // temporary password without being made to replace it.
+      const previous = account.mustChangePassword;
+      await setMustChangePassword(id, true);
+      const password = temporaryPassword();
+      const result = await resetUserPassword(Astro, account.userId, password);
+      if (result.ok) {
+        resetPassword = { password, signedOut: result.signedOut };
+      } else {
+        if (!previous) await setMustChangePassword(id, false);
+        accountError = result.message;
+      }
+      account = await getPlayerAccount(id);
+    }
+  } else if (intent === "account") {
     const parsed = parsePlayerEmailForm(form);
     accountEmail = parsed.values.email ?? "";
     if (!parsed.ok) {
@@ -104,13 +130,13 @@ const impact = await getPlayerDeleteImpact(id);
 const status = accountStatus(account);
 const linked = Boolean(account?.userId);
 const accountSaved = Astro.url.searchParams.get("done") === "account";
-const resetCommand = `npm run players:accounts -- --reset ${player.id} [--email new@example.com]`;
+const emailCommand = `npm run players:accounts -- --reset ${player.id} --email new@example.com`;
 const statusHelp: Record<typeof status, string> = {
   none: "Add the player's email to invite them, then run the provisioning script.",
   invited:
     "Waiting for an account. Run the script below to create it with a temporary password.",
   pending:
-    "Account created. The player must change their temporary password on first sign-in.",
+    "The player must replace their temporary password at their next sign-in.",
   active: "The player has signed in and set their own password.",
 };
 ---
@@ -156,19 +182,63 @@ const statusHelp: Record<typeof status, string> = {
         <p class="text-sm text-ink-dim">{statusHelp[status]}</p>
       </div>
       {
+        resetPassword && (
+          <Notice tone="success" class="mt-5">
+            Password reset
+            {resetPassword.signedOut
+              ? " and the player was signed out everywhere."
+              : ", but their existing sessions couldn't be signed out."}
+            <span class="mt-3 block text-ink">
+              temporary password:{" "}
+              <code class="select-all rounded border border-grid bg-term-bg px-2 py-1 text-acid">
+                {resetPassword.password}
+              </code>
+            </span>
+            <span class="mt-3 block text-ink-dim">
+              Send it to the player privately; it won't be shown again. They
+              sign in at /login and must choose a new password.
+            </span>
+          </Notice>
+        )
+      }
+      {
         linked ? (
           <div class="mt-5 space-y-3 text-sm">
             <p class="text-ink">
               <span class="text-ink-faint">email:</span> {account?.email}
             </p>
+            <details class="group">
+              <summary
+                class:list={[
+                  btnGhost,
+                  "cursor-pointer list-none hover:border-danger/60 hover:text-danger",
+                ]}
+              >
+                reset password
+              </summary>
+              <div class="mt-3 space-y-3 rounded-md border border-danger/50 bg-danger/5 p-4">
+                <p class="text-ink-dim">
+                  Issue a new temporary password for {player.name}? Their
+                  current password stops working, they're signed out everywhere,
+                  and they must choose a new password when they next sign in.
+                </p>
+                <form method="post">
+                  <input type="hidden" name="intent" value="reset-password" />
+                  <button type="submit" class={btnDanger}>
+                    confirm reset
+                  </button>
+                </form>
+              </div>
+            </details>
             <p class="text-ink-dim">
-              To reset the password (or change the email), run:
+              To change the email, run (this also issues a new temporary
+              password):
             </p>
             <p class="overflow-x-auto whitespace-nowrap rounded-md border border-grid bg-term-bg px-3 py-2 text-xs text-ink">
               <span class="text-acid" aria-hidden="true">
                 ${" "}
               </span>
-              <code>{resetCommand}</code>
+              <code>{emailCommand}</code>
             </p>
           </div>
         ) : (

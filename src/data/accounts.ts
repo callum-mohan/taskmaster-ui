@@ -116,6 +116,17 @@ export async function setPlayerEmail(
   return rows.length > 0;
 }
 
+/** Whether the player must replace their password at their next sign-in. */
+export async function setMustChangePassword(
+  playerId: string,
+  mustChangePassword: boolean,
+): Promise<void> {
+  await getDb()
+    .update(playerAccounts)
+    .set({ mustChangePassword })
+    .where(eq(playerAccounts.playerId, playerId));
+}
+
 // ── Self-service ──────────────────────────────────────────────────────
 
 /** A player editing their own public profile (bio and avatar only). */

@@ -377,6 +377,7 @@ const bonusRows: BonusRow[] = [
         {
           /* Stacks into cards on phones; explicit roles keep the table semantics
             when the display type changes. */
+          /* eslint-disable astro/jsx-a11y/no-redundant-roles, astro/jsx-a11y/no-interactive-element-to-noninteractive-role */
         }
         <table
           role="table"
@@ -439,6 +440,9 @@ const bonusRows: BonusRow[] = [
             }
           </tbody>
         </table>
+        {
+          /* eslint-enable astro/jsx-a11y/no-redundant-roles, astro/jsx-a11y/no-interactive-element-to-noninteractive-role */
+        }
         <p class="mt-4 text-ink-faint">
           Every bonus and deduction shows in that week's ledger on the task and
           player pages.

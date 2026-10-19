@@ -51,6 +51,10 @@ const message = error ? errors[error] : undefined;
         class="flex flex-1 items-center gap-2 rounded-md border border-grid bg-term-bg px-3 focus-within:border-acid"
       >
         <span class="text-acid" aria-hidden="true">&gt;</span>
+        {
+          /* Autofocus only after a failed guess, so the retry is a keystroke away. */
+          /* eslint-disable astro/jsx-a11y/no-autofocus */
+        }
         <input
           id="reveal-password"
           name="password"
@@ -66,6 +70,7 @@ const message = error ? errors[error] : undefined;
           class="w-full bg-transparent py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
           placeholder="enter password"
         />
+        {/* eslint-enable astro/jsx-a11y/no-autofocus */}
         <PasswordToggle for="reveal-password" />
       </div>
       <button

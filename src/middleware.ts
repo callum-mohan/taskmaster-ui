@@ -1,32 +1,27 @@
-import { defineMiddleware } from "astro:middleware";
+import { defineMiddleware, sequence } from "astro:middleware";
 import { loadCompetition, type CompetitionViewer } from "./data/competition";
 import { createQueries, type Queries } from "./data/queries";
 import { getSessionPlayer } from "./data/accounts";
 import { getSessionUser, hasSessionCookie } from "./lib/auth";
 import { readRevealCookies } from "./lib/task-reveal";
+import {
+  isAccountPath,
+  isAdminPath,
+  isAuthPagePath,
+  LEGACY_ADMIN_LOGIN_PATH,
+  LOGIN_PATH,
+  loginRedirectPath,
+  matchesRoute,
+  PASSWORD_PATH,
+} from "./lib/routes";
+import { withSecurityHeaders } from "./lib/security-headers";
 import type { AdminUser, SessionPlayer, Viewer } from "./types";
 
-// One sign-in page, `/login`, for players and admins alike. Guards send
-// people there with a `next` destination; the login page explains when the
-// signed-in account can't open it (e.g. a player heading for `/admin`).
-// `/admin/login` is the old admin sign-in URL, now a redirect to `/login`.
-const LEGACY_ADMIN_LOGIN_PATH = "/admin/login";
-const LOGIN_PATH = "/login";
-const PASSWORD_PATH = "/account/password";
+const securityHeaders = defineMiddleware(async (context, next) =>
+  withSecurityHeaders(await next(), context.url),
+);
 
-const normalise = (path: string) => path.replace(/\/{2,}/g, "/");
-const isAdminPath = (path: string) => /^\/admin(?:\/|$)/i.test(normalise(path));
-const isAccountPath = (path: string) =>
-  /^\/account(?:\/|$)/i.test(normalise(path));
-const isAuthPagePath = (path: string) =>
-  /^\/(?:login|logout)\/?$/i.test(normalise(path));
-
-const matchesRoute = (
-  context: { routePattern: string; url: URL },
-  test: (path: string) => boolean,
-) => test(context.routePattern) || test(context.url.pathname);
-
-export const onRequest = defineMiddleware(async (context, next) => {
+const app = defineMiddleware(async (context, next) => {
   // Send `www.` visitors to the apex domain, keeping the path and query.
   if (context.url.hostname.startsWith("www.")) {
     const target = new URL(context.url);
@@ -72,15 +67,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // Guard on the route Astro actually matched, not just the raw URL, so
   // variants like `//admin/players` can't slip past the check.
-  const { pathname } = context.url;
   const route = context.routePattern;
   const matches = (test: (path: string) => boolean) =>
     matchesRoute(context, test);
-  const loginRedirect = (loginPath: string) => {
-    const target = new URL(loginPath, context.url);
-    target.searchParams.set("next", pathname + context.url.search);
-    return context.redirect(target.pathname + target.search);
-  };
+  const loginRedirect = (loginPath: string) =>
+    context.redirect(loginRedirectPath(loginPath, context.url));
 
   if (matches(isAdminPath)) {
     if (route !== LEGACY_ADMIN_LOGIN_PATH) {
@@ -119,3 +110,5 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
   return response;
 });
+
+export const onRequest = sequence(securityHeaders, app);

@@ -422,9 +422,11 @@ and `noindex`, and a player-only account can't reach `/admin`.
 
 ## ☁️ Deployment (Cloudflare Workers)
 
-Pushing to `main` runs [`deploy.yml`](.github/workflows/deploy.yml), which
-builds the site and runs `wrangler deploy`. Configure these repository
-secrets:
+Once [CI](.github/workflows/ci.yml) (format, lint, type-check, tests, build)
+passes for a push to `main`, [`deploy.yml`](.github/workflows/deploy.yml)
+builds that same commit and runs `wrangler deploy`; a failed CI run never
+deploys. It can also be run by hand from the Actions tab. Configure these
+repository secrets:
 
 | Secret                    | Value                                                                       |
 | :------------------------ | :-------------------------------------------------------------------------- |
@@ -471,29 +473,32 @@ Tailwind turns into utilities (`text-acid`, `bg-term-panel`, `border-grid`, …)
 
 Run from the project root:
 
-| Command                    | Action                                                 |
-| :------------------------- | :----------------------------------------------------- |
-| `npm install`              | Install dependencies                                   |
-| `npm run dev`              | Start the dev server at `localhost:4321`               |
-| `npm run build`            | Build the production site to `./dist/`                 |
-| `npm run preview`          | Preview the production build locally                   |
-| `npm run deploy`           | Build and deploy to Cloudflare Workers                 |
-| `npm run admin:create`     | Create an admin account (see Admin)                    |
-| `npm run players:accounts` | Create invited players' accounts (see Player accounts) |
-| `npm run check`            | Type-check + diagnostics (`astro check`)               |
-| `npm test`                 | Run the data-layer unit tests (Vitest)                 |
-| `npm run test:watch`       | Run the unit tests in watch mode                       |
-| `npm run format`           | Format the codebase with Prettier                      |
-| `npm run format:check`     | Check formatting without writing changes               |
-| `npm run db:check`         | Run a test query against `DATABASE_URL`                |
-| `npm run db:generate`      | Generate a SQL migration from the schema               |
-| `npm run db:migrate`       | Apply pending migrations (direct URL)                  |
-| `npm run db:seed`          | Insert missing initial data (idempotent)               |
-| `npm run db:studio`        | Browse and edit data in Drizzle Studio                 |
+| Command                    | Action                                                  |
+| :------------------------- | :------------------------------------------------------ |
+| `npm install`              | Install dependencies                                    |
+| `npm run dev`              | Start the dev server at `localhost:4321`                |
+| `npm run build`            | Build the production site to `./dist/`                  |
+| `npm run preview`          | Preview the production build locally                    |
+| `npm run deploy`           | Build and deploy to Cloudflare Workers                  |
+| `npm run admin:create`     | Create an admin account (see Admin)                     |
+| `npm run players:accounts` | Create invited players' accounts (see Player accounts)  |
+| `npm run check`            | Type-check + diagnostics (`astro check`)                |
+| `npm test`                 | Run the unit tests (Vitest)                             |
+| `npm run test:watch`       | Run the unit tests in watch mode                        |
+| `npm run test:coverage`    | Run the unit tests with a coverage report (`coverage/`) |
+| `npm run lint`             | Lint TypeScript and Astro files (ESLint, incl. a11y)    |
+| `npm run format`           | Format the codebase with Prettier                       |
+| `npm run format:check`     | Check formatting without writing changes                |
+| `npm run db:check`         | Run a test query against `DATABASE_URL`                 |
+| `npm run db:generate`      | Generate a SQL migration from the schema                |
+| `npm run db:migrate`       | Apply pending migrations (direct URL)                   |
+| `npm run db:seed`          | Insert missing initial data (idempotent)                |
+| `npm run db:studio`        | Browse and edit data in Drizzle Studio                  |
 
-Before committing, keep `npm run check`, `npm test` and `npm run format:check`
-clean. Unit tests sit next to the code they cover (`src/data/*.test.ts`) and
-build their records with the helpers in `src/test/fixtures.ts`.
+Before committing, keep `npm run check`, `npm run lint`, `npm test` and
+`npm run format:check` clean. Unit tests sit next to the code they cover
+(`src/data/*.test.ts`, `src/lib/*.test.ts`) and build their records with the
+helpers in `src/test/fixtures.ts`.
 
 ## 🔭 Roadmap
 

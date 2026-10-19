@@ -178,6 +178,10 @@ const btnGhost =
         <div data-me-rival class="mt-2 flex items-center gap-3">
           <span class="text-amber" aria-hidden="true">&gt;</span>
           <p class="min-w-0 flex-1 text-sm text-ink-dim">
+            {
+              /* The script fills in both links' href before the widget shows. */
+            }
+            {/* eslint-disable-next-line astro/jsx-a11y/anchor-is-valid */}
             Catch <a
               data-me-rival-link
               href="#"
@@ -197,6 +201,7 @@ const btnGhost =
 
       <!-- Actions -->
       <div class="mt-5 flex flex-wrap items-center gap-3">
+        {/* eslint-disable-next-line astro/jsx-a11y/anchor-is-valid */}
         <a data-me-profile href="#" class={btnPrimary}>[ MY PROFILE ]</a>
         <button type="button" data-follow-change class={btnGhost}>
           not you?

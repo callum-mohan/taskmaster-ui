@@ -1,7 +1,11 @@
 name: Deploy to Cloudflare Workers
 
+# Deploy only once CI (format, type-check, tests, build) has passed on main.
+# Manual runs stay available for redeploys.
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -17,13 +21,22 @@ concurrency:
 jobs:
   deploy:
     name: Build & deploy
+    # Only successful CI runs for pushes count: `branches` matches the head
+    # branch, so a pull request from a fork's own `main` would match too.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment:
       name: production
       url: https://eayltaskmaster.co.uk
     steps:
+      # Deploy exactly the commit CI tested, not whatever main is now.
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

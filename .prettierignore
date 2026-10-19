@@ -2,6 +2,7 @@
 dist/
 node_modules/
 .astro/
+coverage/
 
 # Skill definitions (authored content, not formatted)
 .github/

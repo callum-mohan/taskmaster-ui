@@ -27,10 +27,10 @@ const storageKey = `tm-decrypted-${taskId}`;
         return;
       }
       if (play !== "always" && localStorage.getItem(storageKey)) return;
-    } catch (e) {
+    } catch {
       if (play !== "always") return;
     }
-    var root = document.documentElement;
+    const root = document.documentElement;
     root.classList.add("decrypt-pending");
     root.dataset.decryptKey = storageKey;
     // Safety net: never leave the content hidden if the animation can't run.

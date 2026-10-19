@@ -89,7 +89,7 @@ const isCreate = mode === "create";
     <button type="submit" class={btnPrimary}>
       {isCreate ? "create player" : "save changes"}
     </button>
-    <a href={withBase("/admin/players")} class={btnGhost}>cancel</a>
+    <a href={withBase("/admin/roster")} class={btnGhost}>cancel</a>
   </div>
 </form>
 {isCreate && <SlugFromName />}

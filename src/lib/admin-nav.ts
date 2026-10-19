@@ -1,81 +1,117 @@
-import type { AdminSection } from "../types";
+import type { AdminSection, WeekStepId } from "../types";
 
 export const ADMIN_HOME = "/admin";
+export const ADMIN_WEEKS = "/admin/weeks";
+export const ADMIN_ROSTER = "/admin/roster";
+export const ADMIN_SITE = "/admin/site";
+export const ADMIN_GUIDE = "/admin/guide";
 
 /**
- * Every area of the admin panel, in nav order. The single source for the
- * admin sub-nav, the dashboard shortcuts and the admin command-palette entries.
+ * Every area of the admin panel after the dashboard, in nav order. The single
+ * source for the admin sub-nav, the dashboard shortcuts and the admin
+ * command-palette entries.
  */
 export const ADMIN_SECTIONS: AdminSection[] = [
   {
-    href: "/admin/scores",
-    label: "scores",
-    title: "Record scores",
-    hint: "per-week grid + bonus points",
-    keywords: "points grid bonus results marks",
+    href: ADMIN_WEEKS,
+    label: "weeks",
+    title: "Run the weeks",
+    hint: "briefs, entries, scores, results night and recaps",
+    keywords:
+      "tasks briefs scores points bonus entries submissions judge live reveal results recaps",
   },
   {
-    href: "/admin/submissions",
-    label: "entries",
-    title: "Review entries",
-    hint: "players' photo and text entries, scored in a gallery",
-    keywords: "submissions photos gallery media",
+    href: ADMIN_ROSTER,
+    label: "roster",
+    title: "Manage the roster",
+    hint: "players, sign-in accounts and squads",
+    keywords: "players teams squads accounts invite password members",
+    match: ["/admin/players", "/admin/teams"],
   },
   {
-    href: "/admin/tasks",
-    label: "tasks",
-    title: "Manage tasks",
-    hint: "briefs, dates and formats",
-    keywords: "weeks briefs password reveal",
+    href: ADMIN_SITE,
+    label: "site",
+    title: "Polls & changelog",
+    hint: "homepage polls and the what's new list",
+    keywords: "polls votes questions changelog whats new release notes",
+    match: ["/admin/polls", "/admin/changelog"],
   },
   {
-    href: "/admin/players",
-    label: "players",
-    title: "Manage players",
-    hint: "roster, bios, avatars and accounts",
-    keywords: "roster accounts invite password",
-  },
-  {
-    href: "/admin/teams",
-    label: "teams",
-    title: "Manage teams",
-    hint: "squads and members",
-    keywords: "squads groups members",
-  },
-  {
-    href: "/admin/polls",
-    label: "polls",
-    title: "Run polls",
-    hint: "homepage polls, schedules and results",
-    keywords: "votes questions",
-  },
-  {
-    href: "/admin/live",
-    label: "live",
-    title: "Results night",
-    hint: "hold a week's results and reveal them live",
-    keywords: "reveal live show results night",
-  },
-  {
-    href: "/admin/recaps",
-    label: "recaps",
-    title: "Write recaps",
-    hint: "episode headlines, summaries and moments",
-    keywords: "episodes headlines moments",
-  },
-  {
-    href: "/admin/changelog",
-    label: "changelog",
-    title: "Edit changelog",
-    hint: "the homepage what's new list",
-    keywords: "whats new release notes",
+    href: ADMIN_GUIDE,
+    label: "guide",
+    title: "How to use the admin",
+    hint: "the weekly runbook and what every screen does",
+    keywords: "help docs manual how to instructions",
   },
 ];
 
-/** Whether `href` is the admin area the visitor is currently in. */
-export function isAdminSectionActive(pathname: string, href: string): boolean {
+/** Whether `href` (or one of `match`) is the admin area being visited. */
+export function isAdminSectionActive(
+  pathname: string,
+  href: string,
+  match: readonly string[] = [],
+): boolean {
   const path = pathname.replace(/\/$/, "");
-  return href === ADMIN_HOME
-    ? path === ADMIN_HOME
-    : path === href || path.startsWith(`${href}/`);
+  if (href === ADMIN_HOME) return path === ADMIN_HOME;
+  return [href, ...match].some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+  );
+}
+
+/** The workflow steps of a week, in order, with their tab labels. */
+export const WEEK_STEPS: { id: WeekStepId; label: string; hint: string }[] = [
+  { id: "brief", label: "brief", hint: "title, dates, format, entries" },
+  { id: "judge", label: "judge", hint: "entries, points and bonuses" },
+  { id: "live", label: "results night", hint: "optional live reveal" },
+  { id: "recap", label: "recap", hint: "episode write-up" },
+];
+
+const weekStepPath: Record<WeekStepId, string> = {
+  brief: "",
+  judge: "/judge",
+  live: "/live",
+  recap: "/recap",
+};
+
+/** Root-relative admin path of a week's tab. */
+export function weekHref(taskId: string, step: WeekStepId = "brief"): string {
+  return `${ADMIN_WEEKS}/${encodeURIComponent(taskId)}${weekStepPath[step]}`;
+}
+
+// Admin URLs from before the panel was regrouped, mapped to where that screen
+// lives now so bookmarks keep working. `:id` is a single path segment.
+const LEGACY_ROUTES: [RegExp, (id?: string) => string][] = [
+  [/^\/admin\/tasks\/new$/, () => `${ADMIN_WEEKS}/new`],
+  [/^\/admin\/tasks\/([^/]+)$/, (id) => weekHref(id!)],
+  [
+    /^\/admin\/(?:scores|submissions)\/([^/]+)$/,
+    (id) => weekHref(id!, "judge"),
+  ],
+  [/^\/admin\/live\/([^/]+)$/, (id) => weekHref(id!, "live")],
+  [/^\/admin\/recaps\/([^/]+)$/, (id) => weekHref(id!, "recap")],
+  [/^\/admin\/(?:tasks|scores|submissions|live|recaps)$/, () => ADMIN_WEEKS],
+  [/^\/admin\/players$/, () => ADMIN_ROSTER],
+  [/^\/admin\/teams$/, () => `${ADMIN_ROSTER}#squads`],
+  [/^\/admin\/polls$/, () => ADMIN_SITE],
+  [/^\/admin\/changelog$/, () => `${ADMIN_SITE}#changelog`],
+];
+
+/**
+ * Where an old admin path now lives (root-relative, before any `base`), or
+ * `undefined` when the path isn't a retired one.
+ */
+export function legacyAdminPath(pathname: string): string | undefined {
+  const path = pathname.replace(/\/{2,}/g, "/").replace(/(.)\/$/, "$1");
+  for (const [pattern, target] of LEGACY_ROUTES) {
+    const found = pattern.exec(path);
+    if (!found) continue;
+    if (found[1] === undefined) return target();
+    try {
+      return target(decodeURIComponent(found[1]));
+    } catch {
+      // A malformed escape can't name a real task; let it 404.
+      return undefined;
+    }
+  }
+  return undefined;
 }

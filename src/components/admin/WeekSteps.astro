@@ -1,0 +1,40 @@
+---
+// A week's workflow steps as linked chips (weeks list, dashboard). Each chip
+// states its progress in text, so colour is never the only signal.
+import type { WeekStep } from "../../types";
+import { withBase } from "../../lib/url";
+import { weekStepState } from "./styles";
+
+interface Props {
+  steps: WeekStep[];
+  /** Week name for the chips' accessible labels, e.g. `week 3`. */
+  weekName: string;
+  class?: string;
+}
+
+const { steps, weekName, class: className } = Astro.props;
+---
+
+<ol class:list={["flex flex-wrap gap-1.5", className]}>
+  {
+    steps.map((step) => {
+      const config = weekStepState[step.state];
+      return (
+        <li>
+          <a
+            href={withBase(step.href)}
+            class:list={[
+              "inline-flex items-baseline gap-1.5 rounded border px-2 py-1 text-[11px] transition-colors hover:bg-term-panel-2",
+              config.class,
+            ]}
+            aria-label={`${weekName} ${step.label}: ${step.detail} (${config.label})`}
+          >
+            <span aria-hidden="true">{config.icon}</span>
+            <span class="font-bold">{step.label}</span>
+            <span class="text-ink-faint">{step.detail}</span>
+          </a>
+        </li>
+      );
+    })
+  }
+</ol>

@@ -1220,8 +1220,8 @@ export function createQueries(data: CompetitionData) {
           {
             href: ADMIN_HOME,
             title: "Admin dashboard",
-            hint: "totals, current task & shortcuts",
-            keywords: "admin home overview",
+            hint: "what needs doing this week",
+            keywords: "admin home overview todo",
           },
           ...ADMIN_SECTIONS,
         ].map((section) => ({

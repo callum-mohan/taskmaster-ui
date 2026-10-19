@@ -34,7 +34,7 @@ if (Astro.request.method === "POST") {
         done: "saved",
         name: parsed.data.title,
       });
-      return Astro.redirect(withBase(`/admin/changelog?${query}`));
+      return Astro.redirect(withBase(`/admin/site?${query}#changelog`));
     } catch (error) {
       formError = describeWriteError(error);
       if (!formError) throw error;
@@ -44,7 +44,9 @@ if (Astro.request.method === "POST") {
 ---
 
 <AdminLayout title="New changelog entry">
-  <a href={withBase("/admin/changelog")} class={btnGhost}>&larr; CHANGELOG</a>
+  <a href={withBase("/admin/site#changelog")} class={btnGhost}
+    >&larr; POLLS &amp; CHANGELOG</a
+  >
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> git commit
   </h1>

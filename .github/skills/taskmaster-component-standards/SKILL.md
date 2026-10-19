@@ -99,8 +99,18 @@ Rules:
 - Admin pages render with `AdminLayout.astro` (the site `Layout` plus an
   admin sub-nav) and the `src/components/admin/*` controls (`AdminField`,
   `ScoreGrid`, `ConfirmDelete`, `Notice`, shared class strings in
-  `styles.ts`). Admin sections are defined once in `src/lib/admin-nav.ts`
-  (sub-nav, dashboard, command palette): add new sections there.
+  `styles.ts`). Admin areas are defined once in `src/lib/admin-nav.ts`
+  (sub-nav, dashboard, command palette): dashboard · weeks · roster · site ·
+  guide. Prefer extending an existing area over adding a new one, and give
+  each job one screen: don't add a second place to do the same thing.
+- Anything about a single week is a tab of its workspace,
+  `/admin/weeks/[id]/…` (brief · judge · results night · recap), rendered
+  with `WeekHeader` and linked with `weekHref(id, step)`. A week's step
+  states come from `getWeekProgress` (`src/data/week-progress.ts`); update it
+  (and its tests) when a step's meaning changes.
+- When an admin URL moves, add the old path to `legacyAdminPath` in
+  `admin-nav.ts` so bookmarks redirect, and update `/admin/guide` and the
+  README when an admin workflow changes.
 - Public detail pages show an `AdminEditLink` to their editor when
   `viewer.isAdmin`.
 - Forms are plain `method="post"` forms handled in the page frontmatter: parse

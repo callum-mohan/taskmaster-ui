@@ -33,7 +33,13 @@ import {
   teams,
 } from "../db/schema";
 import type { BatchItem } from "drizzle-orm/batch";
-import type { AdminUser, ScoreAuditEntry, SubmissionOwnerRef } from "../types";
+import type {
+  AdminUser,
+  ScoreAuditEntry,
+  SubmissionOwnerRef,
+  WeekCounts,
+} from "../types";
+import { EMPTY_WEEK_COUNTS } from "./week-progress";
 import { timestamptzToIso } from "../lib/time";
 import { deleteObjects, putObject } from "../lib/storage";
 import { submissionObjectKey } from "../lib/submission-forms";
@@ -431,23 +437,6 @@ export async function deleteTask(id: string): Promise<void> {
 
 // ── Submissions ───────────────────────────────────────────────────────
 
-/** Entry counts per task id, for the submissions index. */
-export async function getSubmissionCountsByTask(): Promise<
-  Map<string, { total: number; hidden: number }>
-> {
-  const rows = await getDb()
-    .select({
-      taskId: taskSubmissions.taskId,
-      total: count(),
-      hidden: count(taskSubmissions.hiddenAt),
-    })
-    .from(taskSubmissions)
-    .groupBy(taskSubmissions.taskId);
-  return new Map(
-    rows.map(({ taskId, total, hidden }) => [taskId, { total, hidden }]),
-  );
-}
-
 const submissionOf = (taskId: string, id: number) =>
   and(eq(taskSubmissions.taskId, taskId), eq(taskSubmissions.id, id));
 
@@ -536,12 +525,10 @@ export async function getTaskScoreSheet(taskId: string) {
   return { individual, team, bonuses };
 }
 
-/** Scored-row counts per task id, for the score index. */
-export async function getScoreCountsByTask(): Promise<
-  Map<string, { scores: number; bonuses: number }>
-> {
+/** Every week's scores, bonuses, entries and recap in one round trip. */
+export async function getWeekCounts(): Promise<Map<string, WeekCounts>> {
   const db = getDb();
-  const [individual, team, bonus] = await db.batch([
+  const [individual, team, bonus, entries, written] = await db.batch([
     db
       .select({ taskId: taskScores.taskId, n: count() })
       .from(taskScores)
@@ -554,15 +541,30 @@ export async function getScoreCountsByTask(): Promise<
       .select({ taskId: bonusPoints.taskId, n: count() })
       .from(bonusPoints)
       .groupBy(bonusPoints.taskId),
+    db
+      .select({
+        taskId: taskSubmissions.taskId,
+        n: count(),
+        hidden: count(taskSubmissions.hiddenAt),
+      })
+      .from(taskSubmissions)
+      .groupBy(taskSubmissions.taskId),
+    db.select({ taskId: recaps.taskId }).from(recaps),
   ]);
-  const counts = new Map<string, { scores: number; bonuses: number }>();
+  const counts = new Map<string, WeekCounts>();
   const entry = (taskId: string) => {
     let value = counts.get(taskId);
-    if (!value) counts.set(taskId, (value = { scores: 0, bonuses: 0 }));
+    if (!value) counts.set(taskId, (value = { ...EMPTY_WEEK_COUNTS }));
     return value;
   };
-  for (const row of [...individual, ...team]) entry(row.taskId).scores += row.n;
-  for (const row of bonus) entry(row.taskId).bonuses += row.n;
+  for (const row of individual) entry(row.taskId).individualScores = row.n;
+  for (const row of team) entry(row.taskId).teamScores = row.n;
+  for (const row of bonus) entry(row.taskId).bonuses = row.n;
+  for (const row of entries) {
+    entry(row.taskId).entries = row.n;
+    entry(row.taskId).hiddenEntries = row.hidden;
+  }
+  for (const row of written) entry(row.taskId).recapWritten = true;
   return counts;
 }
 

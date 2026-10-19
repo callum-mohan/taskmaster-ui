@@ -3,104 +3,213 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../components/TerminalWindow.astro";
 import StatCard from "../../components/StatCard.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
+import WeekSteps from "../../components/admin/WeekSteps.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
-import { getAdminCounts } from "../../data/admin";
-import { ADMIN_SECTIONS } from "../../lib/admin-nav";
+import { getAdminCounts, getWeekCounts } from "../../data/admin";
+import { getWeekProgress } from "../../data/week-progress";
+import { ADMIN_SECTIONS, ADMIN_WEEKS, weekHref } from "../../lib/admin-nav";
+import { ukDateFormat } from "../../lib/time";
 import { withBase } from "../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
-const [counts, { getCurrentTask }] = await Promise.all([
+const [counts, weekCounts, { tasks, players, teams }] = await Promise.all([
   getAdminCounts(),
+  getWeekCounts(),
   Astro.locals.getQueries(),
 ]);
-const current = getCurrentTask();
 const admin = Astro.locals.admin;
+const roster = { players: players.length, teams: teams.length };
+
+// Weeks that need something doing (live week first, then newest first),
+// plus the next week to be released so its brief can be checked.
+const MAX_FOCUS = 4;
+const weeks = tasks.map((task) => ({
+  task,
+  progress: getWeekProgress(task, weekCounts.get(task.id), roster),
+}));
+const nextUpcoming = weeks
+  .filter(({ task }) => task.status === "upcoming")
+  .sort((a, b) => a.task.weekNumber - b.task.weekNumber)[0];
+const needsAction = [
+  ...weeks.filter(({ task }) => task.status === "live"),
+  ...weeks
+    .filter(
+      ({ task, progress }) => task.status === "completed" && progress.next,
+    )
+    .sort((a, b) => b.task.weekNumber - a.task.weekNumber),
+];
+const focus = [
+  ...needsAction.slice(0, MAX_FOCUS),
+  ...(nextUpcoming ? [nextUpcoming] : []),
+];
+const hiddenCount =
+  needsAction.length - Math.min(needsAction.length, MAX_FOCUS);
+
+const stamp = ukDateFormat({
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const when = (iso: string) => stamp.format(new Date(iso));
 ---
 
 <AdminLayout title="Dashboard">
   <h1 class="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
     <span class="text-acid">$</span> whoami
   </h1>
-  <p class="mt-2 text-sm text-ink-dim">
+  <p class="mt-2 max-w-prose text-sm text-ink-dim">
     Signed in as <span class="text-ink">{admin?.email}</span>. Changes go live
-    on the public site as soon as you save. Press
+    on the public site as soon as you save. Press{" "}
     <kbd class="rounded border border-grid px-1 text-ink">⌘K</kbd> anywhere to jump
-    to an admin section.
+    to a section.
   </p>
 
+  <section aria-labelledby="todo-heading" class="mt-8">
+    <TerminalWindow
+      title="~/todo"
+      meta={needsAction.length === 0
+        ? "all clear"
+        : `${needsAction.length} ${needsAction.length === 1 ? "week" : "weeks"}`}
+    >
+      <h2 id="todo-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> what needs doing
+      </h2>
+      {
+        needsAction.length === 0 && (
+          <p class="mt-3 text-sm text-ink-dim">
+            <span class="text-acid">✓</span> Every released week is judged and
+            published.
+            {!nextUpcoming && (
+              <>
+                {" "}
+                <a
+                  href={withBase(`${ADMIN_WEEKS}/new`)}
+                  class="text-cyan hover:underline"
+                >
+                  Add the next week
+                </a>
+                .
+              </>
+            )}
+          </p>
+        )
+      }
+      {
+        focus.length > 0 && (
+          <ul class="mt-4 space-y-3">
+            {focus.map(({ task, progress }) => (
+              <li
+                class:list={[
+                  "flex flex-col gap-3 rounded-md border px-4 py-3 lg:flex-row lg:items-center lg:justify-between",
+                  task.status === "live" ? "border-amber/50" : "border-grid",
+                ]}
+              >
+                <div class="min-w-0 space-y-2">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <span class="text-xs font-bold tracking-widest text-magenta">
+                      WEEK {String(task.weekNumber).padStart(2, "0")}
+                    </span>
+                    <TaskStatusBadge status={task.status} />
+                  </div>
+                  <a
+                    href={withBase(weekHref(task.id))}
+                    class="block font-bold text-ink hover:text-acid"
+                  >
+                    {task.title}
+                  </a>
+                  <p class="text-xs text-ink-faint">
+                    {task.status === "upcoming"
+                      ? `Releases ${when(task.releaseDate)}`
+                      : task.status === "live"
+                        ? `Deadline ${when(task.deadline)}`
+                        : `Deadline passed ${when(task.deadline)}`}
+                  </p>
+                  <WeekSteps
+                    steps={progress.steps}
+                    weekName={`week ${task.weekNumber}`}
+                  />
+                </div>
+                <div class="shrink-0">
+                  {progress.next ? (
+                    <a href={withBase(progress.next.href)} class={btnPrimary}>
+                      {progress.next.label} &rarr;
+                    </a>
+                  ) : task.status === "upcoming" ? (
+                    <a href={withBase(weekHref(task.id))} class={btnGhost}>
+                      check the brief
+                    </a>
+                  ) : (
+                    <a
+                      href={withBase(weekHref(task.id, "judge"))}
+                      class={btnGhost}
+                    >
+                      {task.submissions.max > 0 ? "view entries" : "open week"}
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      {
+        hiddenCount > 0 && (
+          <p class="mt-3 text-xs text-ink-faint">
+            and {hiddenCount} more ·{" "}
+            <a href={withBase(ADMIN_WEEKS)} class="text-cyan hover:underline">
+              see all weeks
+            </a>
+          </p>
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  <section aria-labelledby="sections-heading" class="mt-8">
+    <h2
+      id="sections-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      everything else
+    </h2>
+    <ul class="grid gap-3 sm:grid-cols-2">
+      {
+        ADMIN_SECTIONS.map((s) => (
+          <li>
+            <a
+              href={withBase(s.href)}
+              class="group flex h-full flex-col gap-1 rounded-md border border-grid bg-term-panel px-4 py-3 transition-colors hover:border-acid-dim"
+            >
+              <span class="text-sm font-bold text-ink group-hover:text-acid">
+                <span class="text-acid">&gt;</span> {s.label}
+              </span>
+              <span class="text-xs text-ink-faint">{s.hint}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
   <section aria-labelledby="counts-heading" class="mt-8">
-    <h2 id="counts-heading" class="sr-only">Totals</h2>
+    <h2
+      id="counts-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      totals
+    </h2>
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard label="players" value={counts.players} />
-      <StatCard label="teams" value={counts.teams} />
-      <StatCard label="tasks" value={counts.tasks} />
+      <StatCard label="squads" value={counts.teams} />
+      <StatCard label="weeks" value={counts.tasks} />
       <StatCard label="scores" value={counts.scores} />
       <StatCard label="bonuses" value={counts.bonuses} />
       <StatCard label="polls" value={counts.polls} />
     </div>
   </section>
-
-  <div class="mt-8 grid gap-6 lg:grid-cols-2">
-    <TerminalWindow title="~/tasks/current" meta="now">
-      <h2 class="sr-only">Current task</h2>
-      {
-        current ? (
-          <div class="space-y-3">
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-bold tracking-widest text-magenta">
-                WEEK {String(current.weekNumber).padStart(2, "0")}
-              </span>
-              <TaskStatusBadge status={current.status} />
-            </div>
-            <p class="text-lg font-bold text-ink">{current.title}</p>
-            <div class="flex flex-wrap gap-3 pt-2">
-              <a
-                href={withBase(`/admin/scores/${current.id}`)}
-                class={btnPrimary}
-              >
-                score this week
-              </a>
-              <a href={withBase(`/admin/tasks/${current.id}`)} class={btnGhost}>
-                edit task
-              </a>
-            </div>
-          </div>
-        ) : (
-          <p class="text-sm text-ink-dim">
-            No live or upcoming task.{" "}
-            <a
-              href={withBase("/admin/tasks/new")}
-              class="text-cyan hover:underline"
-            >
-              Add one
-            </a>
-            .
-          </p>
-        )
-      }
-    </TerminalWindow>
-
-    <TerminalWindow title="~/admin/commands" meta="shortcuts">
-      <h2 class="sr-only">Sections</h2>
-      <ul class="space-y-2">
-        {
-          ADMIN_SECTIONS.map((s) => (
-            <li>
-              <a
-                href={withBase(s.href)}
-                class="group flex items-baseline justify-between gap-4 rounded-md border border-grid px-3 py-2 transition-colors hover:border-acid-dim"
-              >
-                <span class="text-sm text-ink group-hover:text-acid">
-                  <span class="text-acid">&gt;</span> {s.title.toLowerCase()}
-                </span>
-                <span class="text-xs text-ink-faint">{s.hint}</span>
-              </a>
-            </li>
-          ))
-        }
-      </ul>
-    </TerminalWindow>
-  </div>
 </AdminLayout>

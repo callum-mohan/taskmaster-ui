@@ -76,7 +76,10 @@ export function sniffImage(bytes: Uint8Array): ImageType | "heic" | undefined {
 
 export type SubmissionIntent = "create-photo" | "create-text" | "delete";
 
-/** An admin adding an entry for a player (`/admin/submissions/[taskId]`). */
+/**
+ * An admin adding an entry for a player (the week's judge tab,
+ * `/admin/weeks/[id]/judge`).
+ */
 export type AddEntryIntent = "add-photo" | "add-text";
 
 export const isAddEntryIntent = (value: unknown): value is AddEntryIntent =>

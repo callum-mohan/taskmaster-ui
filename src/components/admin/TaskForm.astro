@@ -229,8 +229,8 @@ const briefMode = values.briefMode ?? "prose";
   />
   <div class="flex flex-wrap gap-3 pt-2">
     <button type="submit" class={btnPrimary}>
-      {isCreate ? "create task" : "save changes"}
+      {isCreate ? "create week" : "save changes"}
     </button>
-    <a href={withBase("/admin/tasks")} class={btnGhost}>cancel</a>
+    <a href={withBase("/admin/weeks")} class={btnGhost}>cancel</a>
   </div>
 </form>

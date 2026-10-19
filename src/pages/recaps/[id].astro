@@ -10,6 +10,7 @@ import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import AdminEditLink from "../../components/AdminEditLink.astro";
+import { weekHref } from "../../lib/admin-nav";
 
 const { getWeekRecap, getRecapTaskIds } = await Astro.locals.getQueries();
 
@@ -86,7 +87,7 @@ const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
         {
           isAdmin && (
             <AdminEditLink
-              href={`/admin/recaps/${id}`}
+              href={weekHref(task.id, "recap")}
               subject={`the week ${task.weekNumber} recap`}
             />
           )

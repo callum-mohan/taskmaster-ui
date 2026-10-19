@@ -56,7 +56,7 @@ if (Astro.request.method === "POST") {
   if (intent === "delete") {
     await deletePoll(id);
     const query = new URLSearchParams({ done: "deleted", name });
-    return Astro.redirect(withBase(`/admin/polls?${query}`));
+    return Astro.redirect(withBase(`/admin/site?${query}`));
   }
   if (intent === "reset-votes") {
     await resetPollVotes(id);
@@ -150,7 +150,9 @@ const actionBtn =
 
 <AdminLayout title={`Edit ${name}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase("/admin/polls")} class={btnGhost}>&larr; ALL POLLS</a>
+    <a href={withBase("/admin/site")} class={btnGhost}
+      >&larr; POLLS &amp; CHANGELOG</a
+    >
     <span class="flex gap-4 text-xs">
       <a
         href={withBase(`/admin/polls/new?from=${id}`)}

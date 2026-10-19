@@ -9,6 +9,7 @@ import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import AdminEditLink from "../../components/AdminEditLink.astro";
+import { weekHref } from "../../lib/admin-nav";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
@@ -265,7 +266,7 @@ const medal = (position: number) =>
         {
           viewer?.isAdmin && (
             <AdminEditLink
-              href={`/admin/tasks/${task.id}`}
+              href={weekHref(task.id)}
               subject={`the week ${task.weekNumber} task`}
             />
           )

@@ -55,7 +55,7 @@ if (Astro.request.method === "POST") {
     }
     if (saved && !email) {
       const query = new URLSearchParams({ done: "saved", name });
-      return Astro.redirect(withBase(`/admin/players?${query}`));
+      return Astro.redirect(withBase(`/admin/roster?${query}`));
     }
     if (saved && email) {
       const password = temporaryPassword();
@@ -81,7 +81,7 @@ if (Astro.request.method === "POST") {
 ---
 
 <AdminLayout title="New player">
-  <a href={withBase("/admin/players")} class={btnGhost}>&larr; ALL PLAYERS</a>
+  <a href={withBase("/admin/roster")} class={btnGhost}>&larr; ROSTER</a>
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> touch ~/players/new
   </h1>
@@ -112,7 +112,7 @@ if (Astro.request.method === "POST") {
             <a href={withBase(`/admin/players/${created.id}`)} class={btnGhost}>
               edit {created.name}
             </a>
-            <a href={withBase("/admin/players")} class={btnGhost}>
+            <a href={withBase("/admin/roster")} class={btnGhost}>
               all players
             </a>
           </div>

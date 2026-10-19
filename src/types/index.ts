@@ -559,7 +559,7 @@ export type CommandPaletteGroup =
 
 /** One area of the admin panel (sub-nav tab, dashboard shortcut, palette entry). */
 export interface AdminSection {
-  /** Root-relative path, e.g. `/admin/scores`. */
+  /** Root-relative path, e.g. `/admin/weeks`. */
   href: string;
   /** Short tab label in the admin sub-nav. */
   label: string;
@@ -569,6 +569,49 @@ export interface AdminSection {
   hint: string;
   /** Extra command-palette search terms. */
   keywords?: string;
+  /** Other root-relative path prefixes that belong to this section. */
+  match?: string[];
+}
+
+/** A step of a week's admin workflow, and the tab that handles it. */
+export type WeekStepId = "brief" | "judge" | "live" | "recap";
+
+/**
+ * Where a week stands on a step: `done`; `active` (needs doing now);
+ * `waiting` (can't happen yet); `optional` (nothing required).
+ */
+export type WeekStepState = "done" | "active" | "waiting" | "optional";
+
+export interface WeekStep {
+  id: WeekStepId;
+  /** Tab label, e.g. `judge`. */
+  label: string;
+  /** Root-relative admin path of the step's tab. */
+  href: string;
+  state: WeekStepState;
+  /** Short status line, e.g. `8 / 12 scored`. */
+  detail: string;
+}
+
+/** Admin-side counts for one week, behind its workflow steps. */
+export interface WeekCounts {
+  individualScores: number;
+  teamScores: number;
+  bonuses: number;
+  entries: number;
+  hiddenEntries: number;
+  recapWritten: boolean;
+}
+
+/** A week's progress through the admin workflow (brief → recap). */
+export interface WeekProgress {
+  steps: WeekStep[];
+  /** The first step that needs doing now, if any. */
+  next?: WeekStep;
+  /** Players (or squads, on team tasks) with a score this week. */
+  scored: number;
+  /** Players (or squads) that can be scored. */
+  roster: number;
 }
 
 /** A single searchable destination in the global command palette. */
@@ -686,8 +729,9 @@ export interface Award {
 
 /**
  * Hand-written editorial colour for a week, from the `recaps` table (edited
- * in `/admin/recaps`). Every field is optional — the recap page falls back
- * to auto-generated text when a week has not been written up yet.
+ * in the week's recap tab, `/admin/weeks/<task>/recap`). Every field is
+ * optional — the recap page falls back to auto-generated text when a week
+ * has not been written up yet.
  */
 export interface WeekRecapContent {
   /** Punchy episode headline, e.g. "Rose cracks the opener". */

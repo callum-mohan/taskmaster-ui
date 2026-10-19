@@ -1,0 +1,153 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import TaskStatusBadge from "../../../components/TaskStatusBadge.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import WeekSteps from "../../../components/admin/WeekSteps.astro";
+import { btnPrimary } from "../../../components/admin/styles";
+import { getWeekCounts } from "../../../data/admin";
+import { getWeekProgress } from "../../../data/week-progress";
+import { ADMIN_GUIDE, weekHref } from "../../../lib/admin-nav";
+import { withBase } from "../../../lib/url";
+import { ukDateFormat } from "../../../lib/time";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const [{ tasks, players, teams, getCurrentTask }, counts] = await Promise.all([
+  Astro.locals.getQueries(),
+  getWeekCounts(),
+]);
+const roster = { players: players.length, teams: teams.length };
+const currentId = getCurrentTask()?.id;
+// Newest week first: that's the one usually being worked on.
+const weeks = [...tasks]
+  .sort((a, b) => b.weekNumber - a.weekNumber)
+  .map((task) => ({
+    task,
+    progress: getWeekProgress(task, counts.get(task.id), roster),
+  }));
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+
+const stamp = ukDateFormat({
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+---
+
+<AdminLayout title="Weeks">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+        <span class="text-acid">$</span> ls ~/weeks
+      </h1>
+      <p class="mt-1 max-w-prose text-sm text-ink-dim">
+        Everything about a week lives in one place. Open a week and work through
+        its tabs:{" "}
+        <span class="text-ink">brief → judge → results night → recap</span>.{
+          " "
+        }
+        <span class="text-amber" aria-hidden="true">●</span> Amber marks what needs
+        doing.{" "}
+        <a href={withBase(ADMIN_GUIDE)} class="text-cyan hover:underline"
+          >How it works</a
+        >
+      </p>
+    </div>
+    <a href={withBase("/admin/weeks/new")} class={btnPrimary}>+ new week</a>
+  </div>
+
+  {
+    done === "deleted" && subject && (
+      <Notice tone="success" class="mt-6">
+        Deleted {subject}.
+      </Notice>
+    )
+  }
+
+  <TerminalWindow
+    title="~/weeks"
+    meta={`${tasks.length} ${tasks.length === 1 ? "week" : "weeks"}`}
+    class="mt-6"
+    bodyClass="p-0 sm:p-0"
+  >
+    <ul class="divide-y divide-grid/60">
+      {
+        weeks.map(({ task, progress }) => (
+          <li
+            class:list={[
+              "flex flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between",
+              task.id === currentId && "bg-amber/5",
+            ]}
+          >
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-xs font-bold tracking-widest text-magenta">
+                  WEEK {String(task.weekNumber).padStart(2, "0")}
+                </span>
+                <TaskStatusBadge status={task.status} />
+                {task.format === "team" && (
+                  <span class="text-[10px] font-bold tracking-widest text-cyan">
+                    TEAM
+                  </span>
+                )}
+                {task.passwordProtected && task.status !== "completed" && (
+                  <span
+                    class:list={[
+                      "text-[10px] font-bold tracking-widest",
+                      task.revealedToAll ? "text-acid" : "text-amber",
+                    ]}
+                  >
+                    {task.revealedToAll ? "REVEALED" : "PASSWORD"}
+                  </span>
+                )}
+              </div>
+              <a
+                href={withBase(weekHref(task.id))}
+                class="mt-1 block font-bold text-ink hover:text-acid"
+              >
+                {task.title}
+              </a>
+              <p class="mt-0.5 text-xs text-ink-faint">
+                {stamp.format(new Date(task.releaseDate))} →{" "}
+                {stamp.format(new Date(task.deadline))}
+              </p>
+            </div>
+            <div class="flex flex-col gap-2 lg:items-end">
+              <WeekSteps
+                steps={progress.steps}
+                weekName={`week ${task.weekNumber}`}
+              />
+              {progress.next && (
+                <a
+                  href={withBase(progress.next.href)}
+                  class="text-xs font-bold tracking-widest text-amber hover:underline"
+                >
+                  next: {progress.next.label} &rarr;
+                </a>
+              )}
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+    {
+      tasks.length === 0 && (
+        <p class="p-6 text-sm text-ink-dim">
+          No weeks yet.{" "}
+          <a
+            href={withBase("/admin/weeks/new")}
+            class="text-cyan hover:underline"
+          >
+            Add the first one
+          </a>
+          .
+        </p>
+      )
+    }
+  </TerminalWindow>
+</AdminLayout>

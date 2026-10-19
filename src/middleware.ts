@@ -15,6 +15,8 @@ import {
   PASSWORD_PATH,
 } from "./lib/routes";
 import { withSecurityHeaders } from "./lib/security-headers";
+import { legacyAdminPath } from "./lib/admin-nav";
+import { withBase, withoutBase } from "./lib/url";
 import type { AdminUser, SessionPlayer, Viewer } from "./types";
 
 const securityHeaders = defineMiddleware(async (context, next) =>
@@ -79,6 +81,18 @@ const app = defineMiddleware(async (context, next) => {
       // Signed-out visitors sign in; signed-in non-admins are told why not.
       if (!admin?.isAdmin) return loginRedirect(LOGIN_PATH);
       context.locals.admin = admin;
+      // Screens from before the admin was regrouped live under new URLs.
+      const moved = legacyAdminPath(withoutBase(context.url.pathname));
+      if (moved) {
+        const [path, hash] = moved.split("#");
+        const target = `${withBase(path)}${context.url.search}${hash ? `#${hash}` : ""}`;
+        // 308 keeps a form post from an old tab a post.
+        const method = context.request.method;
+        return context.redirect(
+          target,
+          method === "GET" || method === "HEAD" ? 301 : 308,
+        );
+      }
     }
   } else if (matches(isAccountPath)) {
     if (!(await sessionUser())) return loginRedirect(LOGIN_PATH);

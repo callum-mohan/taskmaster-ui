@@ -112,7 +112,7 @@ const selected = new Set((values.memberIds ?? "").split(",").filter(Boolean));
     <button type="submit" class={btnPrimary}>
       {isCreate ? "create team" : "save changes"}
     </button>
-    <a href={withBase("/admin/teams")} class={btnGhost}>cancel</a>
+    <a href={withBase("/admin/roster#squads")} class={btnGhost}>cancel</a>
   </div>
 </form>
 {isCreate && <SlugFromName />}

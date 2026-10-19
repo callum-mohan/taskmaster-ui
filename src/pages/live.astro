@@ -8,8 +8,9 @@ import { withBase } from "../lib/url";
 
 // Results night. While an admin holds a week's results, this page reveals
 // them one at a time, last place first, as the admin steps through them in
-// `/admin/live`. Only revealed results reach the HTML; the page polls itself
-// so an open tab follows the show without a reload.
+// the week's results night tab (`/admin/weeks/<task>/live`). Only revealed
+// results reach the HTML; the page polls itself so an open tab follows the
+// show without a reload.
 
 const { getLiveTask, getLiveShow, getRecapSummaries } =
   await Astro.locals.getQueries();

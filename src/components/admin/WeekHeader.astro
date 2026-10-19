@@ -1,0 +1,98 @@
+---
+// The top of every week tab: back link, the week's badges and title, and
+// the numbered step tabs (brief → judge → results night → recap), each
+// showing where the week stands on that step.
+import TaskStatusBadge from "../TaskStatusBadge.astro";
+import { btnGhost, weekStepState } from "./styles";
+import { ADMIN_WEEKS } from "../../lib/admin-nav";
+import { withBase } from "../../lib/url";
+import type { Task, WeekProgress, WeekStepId } from "../../types";
+
+interface Props {
+  task: Task;
+  progress: WeekProgress;
+  /** The tab being shown. */
+  active: WeekStepId;
+  class?: string;
+}
+
+const { task, progress, active, class: className } = Astro.props;
+const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
+---
+
+<div class={className}>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <a href={withBase(ADMIN_WEEKS)} class={btnGhost}>&larr; ALL WEEKS</a>
+    <span class="flex flex-wrap gap-4 text-xs">
+      <slot name="links" />
+      <a
+        href={withBase(`/tasks/${task.id}`)}
+        class="text-cyan hover:underline"
+        target="_blank"
+        rel="noopener">view task page ↗</a
+      >
+    </span>
+  </div>
+
+  <div class="mt-6 flex flex-wrap items-center gap-3">
+    <span class="text-xs font-bold tracking-widest text-magenta"
+      >{weekLabel}</span
+    >
+    <TaskStatusBadge status={task.status} />
+    {
+      task.format === "team" && (
+        <span class="text-[10px] font-bold tracking-widest text-cyan">
+          TEAM TASK
+        </span>
+      )
+    }
+    {
+      task.resultsHeld && (
+        <span class="text-[10px] font-bold tracking-widest text-amber">
+          RESULTS HELD
+        </span>
+      )
+    }
+  </div>
+  <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-ink">
+    {task.title}
+  </h1>
+
+  <nav aria-label={`Week ${task.weekNumber} steps`} class="mt-6">
+    <ol class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {
+        progress.steps.map((step, index) => {
+          const current = step.id === active;
+          const state = weekStepState[step.state];
+          return (
+            <li>
+              <a
+                href={withBase(step.href)}
+                aria-current={current ? "page" : undefined}
+                class:list={[
+                  "flex h-full flex-col gap-1 rounded-md border px-3 py-2 transition-colors",
+                  current
+                    ? "border-acid bg-acid/10"
+                    : "border-grid hover:border-ink-faint",
+                ]}
+              >
+                <span
+                  class:list={[
+                    "text-xs font-bold",
+                    current ? "text-acid" : "text-ink",
+                  ]}
+                >
+                  <span class="text-ink-faint">{index + 1}.</span> {step.label}
+                </span>
+                <span class:list={["text-[11px]", state.class]}>
+                  <span aria-hidden="true">{state.icon}</span> {step.detail}
+                  <span class="sr-only">({state.label})</span>
+                </span>
+              </a>
+            </li>
+          );
+        })
+      }
+    </ol>
+  </nav>
+</div>

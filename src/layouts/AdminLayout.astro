@@ -7,7 +7,7 @@ import {
   ADMIN_SECTIONS,
   isAdminSectionActive,
 } from "../lib/admin-nav";
-import { withBase } from "../lib/url";
+import { withBase, withoutBase } from "../lib/url";
 
 interface Props {
   /** Page-specific title segment. */
@@ -17,7 +17,10 @@ interface Props {
 const { title } = Astro.props;
 const { pathname } = Astro.url;
 
-const tabs = [{ href: ADMIN_HOME, label: "dashboard" }, ...ADMIN_SECTIONS];
+const tabs: { href: string; label: string; match?: string[] }[] = [
+  { href: ADMIN_HOME, label: "dashboard" },
+  ...ADMIN_SECTIONS,
+];
 ---
 
 <Layout title={`${title} · admin`} noindex>
@@ -35,7 +38,11 @@ const tabs = [{ href: ADMIN_HOME, label: "dashboard" }, ...ADMIN_SECTIONS];
         <ul class="flex gap-1 whitespace-nowrap px-1 text-xs">
           {
             tabs.map((tab) => {
-              const active = isAdminSectionActive(pathname, tab.href);
+              const active = isAdminSectionActive(
+                withoutBase(pathname),
+                tab.href,
+                tab.match,
+              );
               return (
                 <li>
                   <a

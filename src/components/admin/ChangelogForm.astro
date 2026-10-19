@@ -125,7 +125,7 @@ const categoryHint: Record<(typeof FEATURE_CATEGORIES)[number], string> = {
     <button type="submit" class={btnPrimary}>
       {isCreate ? "add entry" : "save changes"}
     </button>
-    <a href={withBase("/admin/changelog")} class={btnGhost}>cancel</a>
+    <a href={withBase("/admin/site#changelog")} class={btnGhost}>cancel</a>
   </div>
 </form>
 {isCreate && <SlugFromName />}

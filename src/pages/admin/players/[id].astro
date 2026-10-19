@@ -62,7 +62,7 @@ if (Astro.request.method === "POST") {
   if (intent === "delete") {
     await deletePlayer(id);
     const query = new URLSearchParams({ done: "deleted", name: player.name });
-    return Astro.redirect(withBase(`/admin/players?${query}`));
+    return Astro.redirect(withBase(`/admin/roster?${query}`));
   }
   if (intent === "reset-password") {
     if (!account?.userId) {
@@ -117,7 +117,7 @@ if (Astro.request.method === "POST") {
           done: "saved",
           name: parsed.data.name,
         });
-        return Astro.redirect(withBase(`/admin/players?${query}`));
+        return Astro.redirect(withBase(`/admin/roster?${query}`));
       } catch (error) {
         formError = describeWriteError(error);
         if (!formError) throw error;
@@ -143,7 +143,7 @@ const statusHelp: Record<typeof status, string> = {
 
 <AdminLayout title={`Edit ${player.name}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase("/admin/players")} class={btnGhost}>&larr; ALL PLAYERS</a>
+    <a href={withBase("/admin/roster")} class={btnGhost}>&larr; ROSTER</a>
     <a
       href={withBase(`/players/${player.id}`)}
       class="text-xs text-cyan hover:underline"

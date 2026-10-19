@@ -1,34 +1,43 @@
 ---
-import AdminLayout from "../../../layouts/AdminLayout.astro";
-import TerminalWindow from "../../../components/TerminalWindow.astro";
-import TaskForm from "../../../components/admin/TaskForm.astro";
-import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
-import RevealControls from "../../../components/admin/RevealControls.astro";
-import { btnGhost } from "../../../components/admin/styles";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../../components/TerminalWindow.astro";
+import TaskForm from "../../../../components/admin/TaskForm.astro";
+import ConfirmDelete from "../../../../components/admin/ConfirmDelete.astro";
+import RevealControls from "../../../../components/admin/RevealControls.astro";
+import Notice from "../../../../components/admin/Notice.astro";
+import WeekHeader from "../../../../components/admin/WeekHeader.astro";
 import {
   deleteTask,
   describeWriteError,
   getTask,
   getTaskDeleteImpact,
+  getWeekCounts,
   setTaskRevealed,
   updateTask,
-} from "../../../data/admin";
-import { deriveTaskStatus } from "../../../data/tasks";
+} from "../../../../data/admin";
+import { deriveTaskStatus } from "../../../../data/tasks";
+import { getWeekProgress } from "../../../../data/week-progress";
+import { ADMIN_WEEKS, weekHref } from "../../../../lib/admin-nav";
 import {
   parseTaskForm,
   toDateTimeLocal,
   type FieldErrors,
   type FormValues,
-} from "../../../lib/admin-forms";
-import { wallClockToIso, ukDateFormat } from "../../../lib/time";
-import { withBase } from "../../../lib/url";
+} from "../../../../lib/admin-forms";
+import { wallClockToIso, ukDateFormat } from "../../../../lib/time";
+import { withBase } from "../../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const id = Astro.params.id!;
-const task = await getTask(id);
-if (!task) return Astro.rewrite("/404");
+const [task, { players, teams, getTaskById }] = await Promise.all([
+  getTask(id),
+  Astro.locals.getQueries(),
+]);
+const view = getTaskById(id);
+if (!task || !view) return Astro.rewrite("/404");
+const selfUrl = withBase(weekHref(id));
 
 const weekName = `week ${task.weekNumber}`;
 let values: FormValues = {
@@ -54,14 +63,12 @@ if (Astro.request.method === "POST") {
   if (intent === "delete") {
     await deleteTask(id);
     const query = new URLSearchParams({ done: "deleted", name: weekName });
-    return Astro.redirect(withBase(`/admin/tasks?${query}`));
+    return Astro.redirect(withBase(`${ADMIN_WEEKS}?${query}`));
   }
   if (intent === "reveal" || intent === "relock") {
     await setTaskRevealed(id, intent === "reveal");
     const done = intent === "reveal" ? "revealed" : "relocked";
-    return Astro.redirect(
-      withBase(`/admin/tasks/${id}?done=${done}#reveal-heading`),
-    );
+    return Astro.redirect(`${selfUrl}?done=${done}#reveal-heading`);
   }
   form.set("id", id);
   const parsed = parseTaskForm(form);
@@ -71,11 +78,7 @@ if (Astro.request.method === "POST") {
   } else {
     try {
       await updateTask(id, parsed.data);
-      const query = new URLSearchParams({
-        done: "saved",
-        name: `week ${parsed.data.weekNumber}`,
-      });
-      return Astro.redirect(withBase(`/admin/tasks?${query}`));
+      return Astro.redirect(`${selfUrl}?done=saved`);
     } catch (error) {
       formError = describeWriteError(error);
       if (!formError) throw error;
@@ -83,7 +86,14 @@ if (Astro.request.method === "POST") {
   }
 }
 
-const impact = await getTaskDeleteImpact(id);
+const [impact, counts] = await Promise.all([
+  getTaskDeleteImpact(id),
+  getWeekCounts(),
+]);
+const progress = getWeekProgress(view, counts.get(id), {
+  players: players.length,
+  teams: teams.length,
+});
 
 const status = deriveTaskStatus({
   releaseDate: wallClockToIso(task.releaseDate),
@@ -103,26 +113,34 @@ const revealDone =
   doneParam === "revealed" || doneParam === "relocked" ? doneParam : undefined;
 ---
 
-<AdminLayout title={`Edit ${weekName}`}>
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase("/admin/tasks")} class={btnGhost}>&larr; ALL TASKS</a>
-    <span class="flex gap-4 text-xs">
-      <a
-        href={withBase(`/admin/scores/${task.id}`)}
-        class="text-acid hover:underline">record scores</a
-      >
-      <a
-        href={withBase(`/tasks/${task.id}`)}
-        class="text-cyan hover:underline"
-        target="_blank"
-        rel="noopener">view public page ↗</a
-      >
-    </span>
-  </div>
-  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
-    <span class="text-acid">$</span> vim ~/tasks/{task.id}.brief
-  </h1>
-  <TerminalWindow title={`~/tasks/${task.id}.brief`} class="mt-6">
+<AdminLayout title={`Brief · ${weekName}`}>
+  <WeekHeader task={view} progress={progress} active="brief" />
+
+  {
+    doneParam === "saved" && (
+      <Notice tone="success" class="mt-6">
+        Brief saved. Changes are live on the site now.
+      </Notice>
+    )
+  }
+  {
+    doneParam === "created" && (
+      <Notice tone="success" class="mt-6">
+        Week created. When its deadline passes, judge the entries in the{" "}
+        <a href={withBase(weekHref(id, "judge"))} class="font-bold underline">
+          judge
+        </a>{" "}
+        tab.
+      </Notice>
+    )
+  }
+
+  <p class="mt-6 max-w-prose text-sm text-ink-dim">
+    The task as players see it. Status follows the release and deadline dates.
+    Set how many entries players can send in under{" "}
+    <span class="text-ink">entries allowed</span>; 0 means none on the site.
+  </p>
+  <TerminalWindow title={`~/weeks/${task.id}/brief.md`} class="mt-4">
     <TaskForm
       mode="edit"
       values={values}
@@ -137,7 +155,7 @@ const revealDone =
     >
       reveal password
     </h2>
-    <TerminalWindow title={`~/tasks/${task.id}.lock`}>
+    <TerminalWindow title={`~/weeks/${task.id}/brief.lock`}>
       <RevealControls
         password={task.revealPassword}
         status={status}

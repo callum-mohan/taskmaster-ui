@@ -443,7 +443,7 @@ const rowError = (i: number) => errors[pollOptionField.label(i)];
     <button type="submit" name="intent" value="save" class={btnPrimary}>
       {isCreate ? "create poll" : "save changes"}
     </button>
-    <a href={withBase("/admin/polls")} class={btnGhost}>cancel</a>
+    <a href={withBase("/admin/site")} class={btnGhost}>cancel</a>
   </div>
 </form>
 {isCreate && <SlugFromName />}

@@ -86,7 +86,7 @@ src/
 │   ├── reactions.ts   # the reaction emoji set
 │   └── storage.ts     # Object Storage client (put, presigned get, delete)
 ├── pages/
-│   ├── admin/                 # /admin — dashboard, CRUD, scores (login.ts redirects to /login)
+│   ├── admin/                 # /admin — dashboard, weeks/<id>/{judge,live,recap}, roster, site, guide (login.ts redirects to /login)
 │   ├── login.astro            # /login — sign-in for players and admins
 │   ├── logout.ts              # POST /logout — signs out
 │   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries, react / vote People's Choice, predict winners
@@ -171,23 +171,36 @@ immediately; there's nothing to rebuild.
 
 ## 🔐 Admin
 
-`/admin` lets signed-in admins create, edit and delete players, teams (and
-their members), tasks and [polls](#️-polls), enter a week's scores in one
-grid, record bonus points or deductions, run [results night](#-results-night),
-and write the weekly recap copy (`/admin/recaps`) and the homepage changelog
-(`/admin/changelog`). Deletes ask for confirmation and list what else will be
-removed. Forms are plain HTML posts, so they work without JavaScript.
+`/admin` is grouped into five areas, and `/admin/guide` explains each one
+along with the weekly runbook:
+
+| Area      | Path            | What it's for                                                                                                                                                                                                                                                                                                                                                                   |
+| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dashboard | `/admin`        | What needs doing now: the live week, finished weeks still to judge or publish, and the next week to be released, each with a button for its next step.                                                                                                                                                                                                                          |
+| weeks     | `/admin/weeks`  | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
+| roster    | `/admin/roster` | Players (with sign-in accounts) and squads; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                                           |
+| site      | `/admin/site`   | [Polls](#️-polls) and the homepage changelog; editors at `/admin/polls/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                                                                                                                        |
+| guide     | `/admin/guide`  | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
+
+Each week's progress (brief → judge → results night → recap) is worked out
+in `src/data/week-progress.ts` from the task and its counts, so it can't
+drift. URLs from before the admin was regrouped (`/admin/tasks/…`,
+`/admin/scores/…`, `/admin/submissions/…`, `/admin/live/…`,
+`/admin/recaps/…`, and the old player, team, poll and changelog lists) are
+redirected by the middleware (`legacyAdminPath` in `src/lib/admin-nav.ts`).
+Deletes ask for confirmation and list what else will be removed. Forms are
+plain HTML posts, so they work without JavaScript.
 
 - **Score history:** every saved change to a week's scores or bonuses is
   written to `score_audit_log` (who, when, and the points and note before
   and after) in the same transaction, and listed newest first at the bottom
-  of that week's admin scores page. Saving the grid only touches rows that
+  of that week's judge tab. Saving the grid only touches rows that
   changed, so each score keeps its `created_at` (when it was first recorded)
   and gets a fresh `updated_at` when edited.
 
 - The admin panel is part of the site: admin pages keep the normal navbar,
-  footer and command palette, with an admin sub-nav underneath (sections are
-  defined once in `src/lib/admin-nav.ts`). Admins also get the admin
+  footer and command palette, with an admin sub-nav underneath (areas and
+  week tabs are defined once in `src/lib/admin-nav.ts`). Admins also get the admin
   sections in the command palette (⌘K) and an **edit** shortcut on public
   player, team, task and recap pages.
 - Everyone signs in at `/login` (email + password via Neon Auth); admins land
@@ -236,7 +249,7 @@ withheld from public pages and feeds until its release date.
 
 ## 🗳️ Polls
 
-Admins run homepage polls from `/admin/polls`. Signed-in **players** vote on
+Admins run homepage polls from `/admin/site`. Signed-in **players** vote on
 the homepage; visitors see the poll read-only with a sign-in link, and admin
 accounts without a player profile can't vote. Each poll sets:
 
@@ -258,7 +271,7 @@ accounts without a player profile can't vote. Each poll sets:
   when the poll opens, or a week the admin picks, and show in that week's
   bonus ledger on player and task pages. The bonus is worked out from the
   votes, not stored: withdrawing a vote, resetting votes or deleting the poll
-  removes it. The admin scores page lists it for that week (read-only).
+  removes it. The week's judge tab lists it (read-only).
 
 The homepage shows every open poll (newest first) followed by recently closed
 ones. You can **duplicate** a poll (its votes aren't copied) or **reset votes**
@@ -291,9 +304,10 @@ hid it. Photos are served through `/submissions/<id>/media`, which checks
 access and redirects to a short-lived presigned URL, so the bucket stays
 private.
 
-Admins review entries at `/admin/submissions/<task>`: one card per player
-(or squad) with their entries and a points + note box that saves through the
-same score sheet (and audit log) as `/admin/scores`. Entries can be hidden
+Admins review entries in the week's judge tab (`/admin/weeks/<task>/judge`):
+one card per player (or squad) with their entries and a points + note box,
+all saved in one go as the week's score sheet (with its audit log). Tasks
+that take no entries get a plain points grid there instead. Entries can be hidden
 from the public gallery or deleted. Deleting an entry, task, player or team
 also deletes its photos from storage.
 
@@ -305,14 +319,14 @@ entries were closed), and they go straight into the public gallery.
 
 ## 🎬 Results night
 
-Admins can **hold** a week's results (from `/admin/live/<task>` or the
-week's scores page). While held, the public snapshot leaves out that week's
+Admins can **hold** a week's results (from the week's results night tab,
+`/admin/weeks/<task>/live`, or its judge tab). While held, the public snapshot leaves out that week's
 scores and recorded bonuses, so the leaderboard, task page, recap, stats and
 notifications all behave as if it hadn't been scored, while admins see
 everything as normal.
 
 Once the deadline has passed, `/live` shows the held week's board. Each
-"reveal next" in `/admin/live/<task>` uncovers one more result, **last place
+"reveal next" in the results night tab uncovers one more result, **last place
 first**, until the winner; only revealed results ever reach the page, and an
 open `/live` tab polls itself so it follows the show without a reload.
 **Publish** ends the show: the results go out site-wide and the "results are

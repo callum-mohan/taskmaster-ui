@@ -9,6 +9,7 @@ import {
   type FieldErrors,
   type FormValues,
 } from "../../../lib/admin-forms";
+import { ADMIN_WEEKS, weekHref } from "../../../lib/admin-nav";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -45,11 +46,9 @@ if (Astro.request.method === "POST") {
   } else {
     try {
       await createTask(parsed.data);
-      const query = new URLSearchParams({
-        done: "saved",
-        name: `week ${parsed.data.weekNumber}`,
-      });
-      return Astro.redirect(withBase(`/admin/tasks?${query}`));
+      return Astro.redirect(
+        withBase(`${weekHref(parsed.data.id)}?done=created`),
+      );
     } catch (error) {
       formError = describeWriteError(error);
       if (!formError) throw error;
@@ -58,12 +57,16 @@ if (Astro.request.method === "POST") {
 }
 ---
 
-<AdminLayout title="New task">
-  <a href={withBase("/admin/tasks")} class={btnGhost}>&larr; ALL TASKS</a>
+<AdminLayout title="New week">
+  <a href={withBase(ADMIN_WEEKS)} class={btnGhost}>&larr; ALL WEEKS</a>
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
-    <span class="text-acid">$</span> touch ~/tasks/new.brief
+    <span class="text-acid">$</span> touch ~/weeks/new.brief
   </h1>
-  <TerminalWindow title="~/tasks/new.brief" class="mt-6">
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Start with the brief. Once it's saved the week gets its own workspace for
+    judging entries, results night and the recap.
+  </p>
+  <TerminalWindow title="~/weeks/new.brief" class="mt-6">
     <TaskForm
       mode="create"
       values={values}

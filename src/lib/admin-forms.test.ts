@@ -10,6 +10,7 @@ import {
   parseAddEntryForm,
   parseBonusForm,
   parseChangelogForm,
+  parseNewPlayerForm,
   parsePlayerEmailForm,
   parsePlayerForm,
   parsePollForm,
@@ -253,6 +254,45 @@ describe("parsePlayerForm", () => {
     expect(
       dataOf(parsePlayerForm(formData({ ...valid, sortOrder: "0" }))).sortOrder,
     ).toBe(0);
+  });
+});
+
+describe("parseNewPlayerForm", () => {
+  const valid = {
+    id: "ada",
+    name: "Ada Lovelace",
+    bio: "",
+    avatarUrl: "",
+    sortOrder: "",
+  };
+
+  it("creates a player without an account when the email is blank", () => {
+    expect(dataOf(parseNewPlayerForm(formData(valid)))).toEqual({
+      id: "ada",
+      name: "Ada Lovelace",
+      bio: null,
+      avatarUrl: null,
+      sortOrder: undefined,
+      email: null,
+    });
+  });
+
+  it("lowercases and trims the email", () => {
+    expect(
+      dataOf(
+        parseNewPlayerForm(formData({ ...valid, email: " Ada@Example.COM " })),
+      ).email,
+    ).toBe("ada@example.com");
+  });
+
+  it("reports email errors alongside the player fields", () => {
+    expect(
+      errorsOf(parseNewPlayerForm(formData({ email: "not-an-email" }))),
+    ).toEqual({
+      id: "Required.",
+      name: "Required.",
+      email: "Enter a valid email address.",
+    });
   });
 });
 

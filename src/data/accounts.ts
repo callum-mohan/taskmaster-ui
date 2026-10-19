@@ -11,8 +11,9 @@ import type { ProfileInput } from "../lib/account-forms";
 import { timestamptzToIso } from "../lib/time";
 
 // Player sign-in accounts. Neon Auth owns the credentials; this table links
-// an auth user to exactly one player. Accounts themselves are created by
-// `scripts/create-player-accounts.mjs`, since sign-up is disabled.
+// an auth user to exactly one player. Sign-up is disabled, so accounts are
+// created by an admin: from the new-player form in `/admin`, or for invited
+// players by `scripts/create-player-accounts.mjs`.
 
 type AccountRow = typeof playerAccounts.$inferSelect;
 
@@ -124,6 +125,20 @@ export async function setMustChangePassword(
   await getDb()
     .update(playerAccounts)
     .set({ mustChangePassword })
+    .where(eq(playerAccounts.playerId, playerId));
+}
+
+/**
+ * Links a newly created Neon Auth user to the player's invite. They're on a
+ * temporary password, so they must replace it at their first sign-in.
+ */
+export async function linkPlayerAccount(
+  playerId: string,
+  userId: string,
+): Promise<void> {
+  await getDb()
+    .update(playerAccounts)
+    .set({ userId, mustChangePassword: true })
     .where(eq(playerAccounts.playerId, playerId));
 }
 

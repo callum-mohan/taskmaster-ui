@@ -388,6 +388,16 @@ players, `admin` for admins, and `logout`. Logging out is a `POST` to
 session cookie, so anonymous page views make no auth call, and signed-in
 pages are sent `Cache-Control: private, no-store`.
 
+**New players:** in `/admin/players/new`, fill in the optional **sign-in
+email**. Saving creates the player and their Neon Auth account together
+(using the admin's own session, so public sign-up stays disabled) and shows
+the temporary password **once** (it's stored nowhere). If that email already
+has a sign-in account, or the account can't be created, nothing is saved and
+the form says why. Send the player their temporary password privately; on
+first sign-in they must choose a new one.
+
+**Existing players** (or in bulk):
+
 1. In `/admin/players/<id>`, fill in the **sign-in account** email. Emails
    live in a separate `player_accounts` table and are never shown publicly.
 2. Create the accounts (on the linked branch, or add `--branch production`):

@@ -131,16 +131,32 @@ export async function getPlayer(id: string): Promise<PlayerRecord | undefined> {
   return row;
 }
 
-export async function createPlayer(input: PlayerInput): Promise<void> {
-  await getDb()
-    .insert(players)
-    .values({
-      id: input.id,
-      name: input.name,
-      bio: input.bio,
-      avatarUrl: input.avatarUrl,
-      sortOrder: input.sortOrder ?? nextSortOrder(players),
-    });
+/**
+ * Creates a player and, given an email, their (not yet provisioned) account
+ * invite in the same transaction. The sign-in account itself is created in
+ * Neon Auth afterwards and linked with `linkPlayerAccount`.
+ */
+export async function createPlayer(
+  input: PlayerInput & { email?: string | null },
+): Promise<void> {
+  const db = getDb();
+  const insertPlayer = db.insert(players).values({
+    id: input.id,
+    name: input.name,
+    bio: input.bio,
+    avatarUrl: input.avatarUrl,
+    sortOrder: input.sortOrder ?? nextSortOrder(players),
+  });
+  if (!input.email) {
+    await insertPlayer;
+    return;
+  }
+  await db.batch([
+    insertPlayer,
+    db
+      .insert(playerAccounts)
+      .values({ playerId: input.id, email: input.email }),
+  ]);
 }
 
 export async function updatePlayer(
@@ -1204,6 +1220,16 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   changelog_entries_pkey: "A changelog entry with that id already exists.",
   recaps_moment_player_id_players_id_fk: "That player no longer exists.",
 };
+
+/** The name of the Postgres constraint a write violated, if any. */
+export function violatedConstraint(error: unknown): string | undefined {
+  for (let e: unknown = error; e && typeof e === "object";) {
+    const { constraint } = e as { constraint?: string };
+    if (constraint) return constraint;
+    e = (e as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
 
 /**
  * Turns a Postgres constraint violation into a message an admin can act on.

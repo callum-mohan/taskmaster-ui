@@ -43,6 +43,19 @@ const isCreate = mode === "create";
       attrs={isCreate ? { "data-slug-target": "" } : {}}
     />
   </div>
+  {
+    isCreate && (
+      <AdminField
+        label="sign-in email"
+        name="email"
+        type="email"
+        value={values.email}
+        error={errors.email}
+        autocomplete="off"
+        hint="Optional. Creates the player's sign-in account with a temporary password, shown once after saving. Private: never shown publicly."
+      />
+    )
+  }
   <AdminField
     label="bio"
     name="bio"

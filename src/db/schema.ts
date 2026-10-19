@@ -381,10 +381,11 @@ export const scoreAuditLog = pgTable(
 );
 
 /**
- * A player's sign-in account. An admin sets `email` (the invite); the
- * `players:accounts` script creates the Neon Auth user with a temporary
- * password and records its id in `userId`. Kept out of `players` so emails
- * never reach the public competition snapshot.
+ * A player's sign-in account. An admin sets `email` (the invite); the Neon
+ * Auth user is created with a temporary password (from the new-player form
+ * in `/admin`, or by the `players:accounts` script) and its id recorded in
+ * `userId`. Kept out of `players` so emails never reach the public
+ * competition snapshot.
  */
 export const playerAccounts = pgTable(
   "player_accounts",

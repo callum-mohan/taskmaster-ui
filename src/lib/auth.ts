@@ -105,6 +105,65 @@ export function temporaryPassword(): string {
 export type PasswordResetResult =
   { ok: true; signedOut: boolean } | { ok: false; message: string };
 
+export type CreateAccountResult =
+  | { ok: true; userId: string }
+  | { ok: false; field?: "email"; message: string };
+
+/**
+ * An admin creates a sign-in account (Better Auth's admin plugin, called
+ * with the admin's own session, so it works while public sign-up is
+ * disabled). An email that already has an account is refused rather than
+ * linked, so an admin can't hand a player someone else's sign-in.
+ */
+export async function createUserAccount(
+  context: RequestScope,
+  user: { email: string; name: string; password: string },
+): Promise<CreateAccountResult> {
+  const auth = createAuth(context);
+  const { data, error } = await auth.admin.createUser(user);
+  if (error) {
+    if (isAuthNetworkError(error.code)) {
+      return { ok: false, message: UNREACHABLE };
+    }
+    // Neon Auth reports a taken email as a generic `validation_failed`, so
+    // look the email up rather than relying on the error code.
+    const lookup = await auth.admin.listUsers({
+      query: {
+        filterField: "email",
+        filterValue: user.email,
+        filterOperator: "eq",
+        limit: 1,
+      },
+    });
+    const existing = (lookup.data as { users?: unknown[] } | null)?.users;
+    if (existing?.length) {
+      return {
+        ok: false,
+        field: "email",
+        message: "That email already has a sign-in account.",
+      };
+    }
+    return {
+      ok: false,
+      message: error.message ?? "Couldn't create the sign-in account.",
+    };
+  }
+  const userId = (data as { user?: { id?: string } } | null)?.user?.id;
+  if (!userId) {
+    return { ok: false, message: "Couldn't create the sign-in account." };
+  }
+  return { ok: true, userId };
+}
+
+/** Deletes a sign-in account; used to undo a half-finished create. */
+export async function removeUserAccount(
+  context: RequestScope,
+  userId: string,
+): Promise<boolean> {
+  const { error } = await createAuth(context).admin.removeUser({ userId });
+  return !error;
+}
+
 /**
  * An admin sets another user's password (Better Auth's admin plugin, called
  * with the admin's own session) and signs that user out everywhere. Admin

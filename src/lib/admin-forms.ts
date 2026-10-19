@@ -148,17 +148,43 @@ export function parsePlayerForm(form: FormData): ParseResult<PlayerInput> {
   );
 }
 
+// Lower-cased to match Better Auth's normalised emails; blank → null.
+const optionalEmail = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254, "Keep it under 254 characters.")
+  .refine((v) => v === "" || z.email().safeParse(v).success, {
+    message: "Enter a valid email address.",
+  })
+  .transform((v) => (v === "" ? null : v));
+
+// A new player, optionally with a sign-in account (created on save).
+const newPlayerSchema = playerSchema.extend({ email: optionalEmail });
+
+export type NewPlayerInput = z.output<typeof newPlayerSchema>;
+
+export function parseNewPlayerForm(
+  form: FormData,
+): ParseResult<NewPlayerInput> {
+  const values = formValues(form);
+  return parseWith(
+    newPlayerSchema,
+    {
+      id: values.id ?? "",
+      name: values.name ?? "",
+      bio: values.bio ?? "",
+      avatarUrl: values.avatarUrl ?? "",
+      sortOrder: values.sortOrder ?? "",
+      email: values.email ?? "",
+    },
+    values,
+  );
+}
+
 const playerEmailSchema = z.object({
   // Blank withdraws the invite.
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .max(254, "Keep it under 254 characters.")
-    .refine((v) => v === "" || z.email().safeParse(v).success, {
-      message: "Enter a valid email address.",
-    })
-    .transform((v) => (v === "" ? null : v)),
+  email: optionalEmail,
 });
 
 export type PlayerEmailInput = z.output<typeof playerEmailSchema>;

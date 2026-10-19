@@ -481,6 +481,8 @@ Run from the project root:
 | `npm run admin:create`     | Create an admin account (see Admin)                    |
 | `npm run players:accounts` | Create invited players' accounts (see Player accounts) |
 | `npm run check`            | Type-check + diagnostics (`astro check`)               |
+| `npm test`                 | Run the data-layer unit tests (Vitest)                 |
+| `npm run test:watch`       | Run the unit tests in watch mode                       |
 | `npm run format`           | Format the codebase with Prettier                      |
 | `npm run format:check`     | Check formatting without writing changes               |
 | `npm run db:check`         | Run a test query against `DATABASE_URL`                |
@@ -489,7 +491,9 @@ Run from the project root:
 | `npm run db:seed`          | Insert missing initial data (idempotent)               |
 | `npm run db:studio`        | Browse and edit data in Drizzle Studio                 |
 
-Before committing, keep `npm run check` and `npm run format:check` clean.
+Before committing, keep `npm run check`, `npm test` and `npm run format:check`
+clean. Unit tests sit next to the code they cover (`src/data/*.test.ts`) and
+build their records with the helpers in `src/test/fixtures.ts`.
 
 ## 🔭 Roadmap
 

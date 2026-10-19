@@ -34,6 +34,9 @@ jobs:
       - name: Type-check (astro check)
         run: npm run check
 
+      - name: Unit tests
+        run: npm test
+
       # Pages render on request (Cloudflare Workers), so the build needs no
       # database access or secrets.
       - name: Build

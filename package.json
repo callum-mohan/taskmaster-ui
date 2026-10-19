@@ -11,6 +11,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:check": "node --env-file=.env.local scripts/db-check.mjs",
@@ -45,6 +47,7 @@
     "prettier-plugin-astro": "^0.14.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
+    "vitest": "^5.0.5",
     "wrangler": "^4.151.0"
   }
 }

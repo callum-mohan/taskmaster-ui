@@ -623,8 +623,10 @@ export function createQueries(data: CompetitionData) {
       .toUpperCase();
   }
 
-  // Number of generated avatar SVGs living in `public/avatars/player-NN.svg`.
+  // Generated avatars live in `public/avatars/player-NN.svg`. Photo-traced
+  // ones are pre-rendered to WebP, which is far smaller than their SVG.
   const PLAYER_ICON_COUNT = 25;
+  const WEBP_PLAYER_ICONS = new Set([13]);
 
   // FNV-1a hash — small, stable, and well-distributed for short id strings.
   function hashString(value: string): number {
@@ -655,12 +657,14 @@ export function createQueries(data: CompetitionData) {
     return assignment;
   })();
 
-  /** Root-relative path to the avatar SVG assigned to this player. */
+  /** Root-relative path to the avatar image assigned to this player. */
   function getPlayerIcon(player: Player): string {
     const index =
       playerIconIndex.get(player.id) ??
       hashString(player.id) % PLAYER_ICON_COUNT;
-    return `/avatars/player-${String(index + 1).padStart(2, "0")}.svg`;
+    const number = index + 1;
+    const extension = WEBP_PLAYER_ICONS.has(number) ? "webp" : "svg";
+    return `/avatars/player-${String(number).padStart(2, "0")}.${extension}`;
   }
 
   // Tasks that have at least one recorded score or bonus, ascending by week

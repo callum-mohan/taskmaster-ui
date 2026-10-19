@@ -195,8 +195,11 @@ const errorId = (intent: AddEntryIntent, name: string) =>
 </section>
 
 <script>
-  // Progressive enhancement: catch oversized photos before uploading and show
-  // a busy state while the form posts. The forms work without this.
+  import { optimizePhoto, setInputFile } from "../../lib/photo-optimize";
+
+  // Progressive enhancement: shrink photos to WebP in the browser, catch
+  // oversized ones before uploading and show a busy state while the form
+  // posts. The forms work without this.
   document
     .querySelectorAll<HTMLFormElement>("form[data-add-entry-form]")
     .forEach((form) => {
@@ -205,8 +208,31 @@ const errorId = (intent: AddEntryIntent, name: string) =>
       );
       const file = form.querySelector<HTMLInputElement>('input[type="file"]');
       const maxBytes = Number(form.dataset.maxBytes);
-      file?.addEventListener("change", () => {
-        const size = file.files?.[0]?.size ?? 0;
+      const buttonLabel = button?.textContent ?? "";
+      let selection = 0;
+      file?.addEventListener("change", async () => {
+        const current = ++selection;
+        file.setCustomValidity("");
+        if (button) {
+          button.disabled = false;
+          button.textContent = buttonLabel;
+        }
+        const original = file.files?.[0];
+        if (!original) return;
+        if (button) {
+          button.disabled = true;
+          button.textContent = "[ OPTIMISING… ]";
+        }
+        const optimized = await optimizePhoto(original);
+        if (current !== selection) return;
+        const size =
+          optimized !== original && setInputFile(file, optimized)
+            ? optimized.size
+            : original.size;
+        if (button) {
+          button.disabled = false;
+          button.textContent = buttonLabel;
+        }
         const mb = Math.round(maxBytes / (1024 * 1024));
         const tooBig = size > maxBytes;
         file.setCustomValidity(
@@ -214,8 +240,12 @@ const errorId = (intent: AddEntryIntent, name: string) =>
         );
         if (tooBig) file.reportValidity();
       });
-      form.addEventListener("submit", () => {
+      form.addEventListener("submit", (event) => {
         if (!button) return;
+        if (button.disabled) {
+          event.preventDefault();
+          return;
+        }
         button.disabled = true;
         button.textContent = file ? "[ UPLOADING… ]" : "[ SAVING… ]";
       });

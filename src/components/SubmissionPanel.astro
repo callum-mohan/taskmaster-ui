@@ -271,9 +271,16 @@ const field =
 </div>
 
 <script>
-  // Progressive enhancement: preview the chosen photo, catch oversized files
-  // before uploading, show a busy state while it uploads, and confirm
-  // withdrawals. The forms work without any of this.
+  import {
+    formatBytes,
+    optimizePhoto,
+    setInputFile,
+  } from "../lib/photo-optimize";
+
+  // Progressive enhancement: shrink the chosen photo to WebP in the browser,
+  // preview it, catch oversized files before uploading, show a busy state
+  // while it uploads, and confirm withdrawals. The forms work without any of
+  // this.
   document
     .querySelectorAll<HTMLFormElement>("form[data-photo-form]")
     .forEach((form) => {
@@ -287,16 +294,37 @@ const field =
       );
       const maxBytes = Number(form.dataset.maxBytes);
       if (!input || !preview || !status || !button) return;
+      const buttonLabel = button.textContent;
       let previewUrl: string | undefined;
+      // Ignores a slow optimisation once a newer file has been picked.
+      let selection = 0;
 
-      input.addEventListener("change", () => {
+      preview.addEventListener("error", () => preview.classList.add("hidden"));
+
+      input.addEventListener("change", async () => {
+        const current = ++selection;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = undefined;
         preview.classList.add("hidden");
         input.setCustomValidity("");
         status.textContent = "";
-        const file = input.files?.[0];
-        if (!file) return;
+        button.disabled = false;
+        button.textContent = buttonLabel;
+        const original = input.files?.[0];
+        if (!original) return;
+
+        button.disabled = true;
+        button.textContent = "[ OPTIMISING… ]";
+        status.textContent = `Optimising ${original.name}…`;
+        const optimized = await optimizePhoto(original);
+        if (current !== selection) return;
+        const file =
+          optimized !== original && setInputFile(input, optimized)
+            ? optimized
+            : original;
+        button.disabled = false;
+        button.textContent = buttonLabel;
+
         if (file.size > maxBytes) {
           const mb = Math.round(maxBytes / (1024 * 1024));
           input.setCustomValidity(`Photos must be ${mb} MB or smaller.`);
@@ -304,7 +332,10 @@ const field =
           input.reportValidity();
           return;
         }
-        status.textContent = `${file.name} · ${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+        status.textContent =
+          file === original
+            ? `${file.name} · ${formatBytes(file.size)}`
+            : `${original.name} · ${formatBytes(original.size)} → ${formatBytes(file.size)} ${file.type === "image/webp" ? "WebP" : "JPEG"}`;
         if (file.type.startsWith("image/")) {
           previewUrl = URL.createObjectURL(file);
           preview.src = previewUrl;
@@ -312,7 +343,11 @@ const field =
         }
       });
 
-      form.addEventListener("submit", () => {
+      form.addEventListener("submit", (event) => {
+        if (button.disabled) {
+          event.preventDefault();
+          return;
+        }
         button.disabled = true;
         button.textContent = "[ UPLOADING… ]";
         status.textContent = "Uploading. Keep this page open.";

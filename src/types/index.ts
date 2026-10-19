@@ -606,7 +606,7 @@ export interface FollowRival {
 export interface FollowStanding {
   id: string;
   name: string;
-  /** Path to the player's assigned avatar SVG (already base-prefixed). */
+  /** Path to the player's assigned avatar image (already base-prefixed). */
   icon: string;
   rank: number;
   points: number;

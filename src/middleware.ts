@@ -6,10 +6,11 @@ import { getSessionUser, hasSessionCookie } from "./lib/auth";
 import { readRevealCookies } from "./lib/task-reveal";
 import type { AdminUser, SessionPlayer, Viewer } from "./types";
 
-// Two sign-in portals: `/admin/login` for admins and `/login` for players.
-// Each guard sends people to its own portal, which explains (and links to
-// the other portal) when someone arrives with the wrong kind of account.
-const ADMIN_LOGIN_PATH = "/admin/login";
+// One sign-in page, `/login`, for players and admins alike. Guards send
+// people there with a `next` destination; the login page explains when the
+// signed-in account can't open it (e.g. a player heading for `/admin`).
+// `/admin/login` is the old admin sign-in URL, now a redirect to `/login`.
+const LEGACY_ADMIN_LOGIN_PATH = "/admin/login";
 const LOGIN_PATH = "/login";
 const PASSWORD_PATH = "/account/password";
 
@@ -41,7 +42,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   let queries: Promise<Queries> | undefined;
   const isGuardedAdmin =
     matchesRoute(context, isAdminPath) &&
-    context.routePattern !== ADMIN_LOGIN_PATH;
+    context.routePattern !== LEGACY_ADMIN_LOGIN_PATH;
   const viewer: CompetitionViewer = isGuardedAdmin
     ? { mode: "admin" }
     : { mode: "public", revealTokens: readRevealCookies(context.request) };
@@ -82,18 +83,17 @@ export const onRequest = defineMiddleware(async (context, next) => {
   };
 
   if (matches(isAdminPath)) {
-    if (route !== ADMIN_LOGIN_PATH) {
+    if (route !== LEGACY_ADMIN_LOGIN_PATH) {
       const admin = await sessionUser();
-      if (!admin) return loginRedirect(ADMIN_LOGIN_PATH);
-      // The admin portal tells non-admins where to go instead.
-      if (!admin.isAdmin) return context.redirect(ADMIN_LOGIN_PATH);
+      // Signed-out visitors sign in; signed-in non-admins are told why not.
+      if (!admin?.isAdmin) return loginRedirect(LOGIN_PATH);
       context.locals.admin = admin;
     }
   } else if (matches(isAccountPath)) {
     if (!(await sessionUser())) return loginRedirect(LOGIN_PATH);
     const linked = await sessionPlayer();
-    // The player portal explains accounts without a player profile.
-    if (!linked) return context.redirect(LOGIN_PATH);
+    // The login page explains accounts without a player profile.
+    if (!linked) return loginRedirect(LOGIN_PATH);
     // A temporary password must be replaced before anything else.
     if (linked.mustChangePassword && route !== PASSWORD_PATH) {
       return context.redirect(PASSWORD_PATH);

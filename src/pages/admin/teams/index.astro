@@ -11,7 +11,7 @@ import { listPlayers, listTeams } from "../../../data/admin";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const [rows, playerRows] = await Promise.all([listTeams(), listPlayers()]);
 const playerName = new Map(playerRows.map((p) => [p.id, p.name]));

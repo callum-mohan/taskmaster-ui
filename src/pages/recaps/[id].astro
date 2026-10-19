@@ -9,6 +9,7 @@ import ScoreBadge from "../../components/ScoreBadge.astro";
 import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
 
 const { getWeekRecap, getRecapTaskIds } = await Astro.locals.getQueries();
 
@@ -73,6 +74,7 @@ if (titleRace) {
 
 const medal = (position: number) =>
   position === 1 ? "🥇" : position === 2 ? "🥈" : position === 3 ? "🥉" : null;
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -80,12 +82,22 @@ const medal = (position: number) =>
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/recaps" label="ALL RECAPS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${weekLabel} recap · EAYL Taskmaster`}
-        shareText={headline}
-        label="SHARE RECAP"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          isAdmin && (
+            <AdminEditLink
+              href={`/admin/recaps/${id}`}
+              subject={`the week ${task.weekNumber} recap`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${weekLabel} recap · EAYL Taskmaster`}
+          shareText={headline}
+          label="SHARE RECAP"
+        />
+      </div>
     </div>
 
     <!-- Header -->

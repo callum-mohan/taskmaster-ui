@@ -48,7 +48,7 @@ src/
 │   └── admin/         # admin form controls (fields, score grid, delete confirm)
 ├── layouts/
 │   ├── Layout.astro       # <head>, nav, footer, skip link
-│   └── AdminLayout.astro  # admin chrome (noindex, admin nav, sign out)
+│   └── AdminLayout.astro  # site Layout + admin sub-nav (noindex)
 ├── db/
 │   ├── schema.ts      # Drizzle table definitions (the database schema)
 │   ├── client.ts      # createDb(url) — node-postgres client for scripts
@@ -85,9 +85,9 @@ src/
 │   ├── reactions.ts   # the reaction emoji set
 │   └── storage.ts     # Object Storage client (put, presigned get, delete)
 ├── pages/
-│   ├── admin/                 # /admin — admin portal (sign-in), dashboard, CRUD, scores
-│   ├── login.astro            # /login — the player portal
-│   ├── logout.ts              # POST /logout — signs out (either portal)
+│   ├── admin/                 # /admin — dashboard, CRUD, scores (login.ts redirects to /login)
+│   ├── login.astro            # /login — sign-in for players and admins
+│   ├── logout.ts              # POST /logout — signs out
 │   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries, react / vote People's Choice, predict winners
 │   ├── submissions/           # /submissions/[id]/media — access-checked photo links
 │   ├── index.astro            # homepage
@@ -184,10 +184,15 @@ removed. Forms are plain HTML posts, so they work without JavaScript.
   changed, so each score keeps its `created_at` (when it was first recorded)
   and gets a fresh `updated_at` when edited.
 
-- Admins sign in at the **admin portal**, `/admin/login` (email + password
-  via Neon Auth). Only users with the `admin` role get in; anyone else (e.g.
-  a player at the wrong portal) is told so and, if they're a player, pointed
-  to their profile.
+- The admin panel is part of the site: admin pages keep the normal navbar,
+  footer and command palette, with an admin sub-nav underneath (sections are
+  defined once in `src/lib/admin-nav.ts`). Admins also get the admin
+  sections in the command palette (⌘K) and an **edit** shortcut on public
+  player, team, task and recap pages.
+- Everyone signs in at `/login` (email + password via Neon Auth); admins land
+  on `/admin`. The old `/admin/login` URL redirects there. Only users with the
+  `admin` role get into `/admin`; anyone else is told so and, if they're a
+  player, pointed to their profile.
 - Public sign-up is **disabled** on the Neon Auth branch. Create admins with:
 
   ```sh
@@ -363,14 +368,14 @@ which lists the feed with a "mark all read" button.
 
 ## 👤 Player accounts
 
-Players sign in at the **player portal**, `/login`, with an email and
+Players sign in at `/login` (the same page admins use) with an email and
 password. Signing in takes them straight to the homepage (or back to the
 `/account` page that sent them to sign in). They edit **their own bio and
 avatar URL** at `/account`; changes are
 live immediately. Name, id, roster position, team and scores stay admin-only.
-There is no public sign-up: admins invite players. An admin account without
-a player profile is turned away from `/login` with a link to `/admin`; an
-admin who also plays can use either portal.
+There is no public sign-up: admins invite players. Admins (including those
+who also play) land on `/admin` after signing in; an admin account without a
+player profile that tries to open `/account` is pointed to `/admin`.
 
 The navbar shows `login` to visitors. Once signed in it becomes an
 `account` dropdown (a flat list in the mobile menu) with `profile` for

@@ -24,7 +24,7 @@ import { wallClockToIso, ukDateFormat } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const id = Astro.params.id!;
 const task = await getTask(id);

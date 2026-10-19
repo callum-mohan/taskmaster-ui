@@ -5,6 +5,7 @@ import StatCard from "../../components/StatCard.astro";
 import ComparePicker from "../../components/ComparePicker.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
 import PointsChart from "../../components/PointsChart.astro";
 import AchievementBadge from "../../components/AchievementBadge.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
@@ -67,6 +68,7 @@ const positionClasses = (position: number) => {
   if (position <= 3) return "border-cyan/40 bg-cyan/5 text-cyan";
   return "border-grid bg-term-bg text-ink-dim";
 };
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 ---
 
 <Layout title={player.name} description={pageDescription}>
@@ -75,12 +77,22 @@ const positionClasses = (position: number) => {
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/players" label="ALL PLAYERS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${player.name} · EAYL Taskmaster`}
-        shareText={pageDescription}
-        label="SHARE PROFILE"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          isAdmin && (
+            <AdminEditLink
+              href={`/admin/players/${player.id}`}
+              subject={`${player.name}'s profile`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${player.name} · EAYL Taskmaster`}
+          shareText={pageDescription}
+          label="SHARE PROFILE"
+        />
+      </div>
     </div>
 
     <!-- Header -->

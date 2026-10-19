@@ -45,6 +45,7 @@ import { createPredictionQueries } from "./prediction-queries";
 import { createLiveQueries } from "./live-queries";
 import { createRulesQueries } from "./rules-queries";
 import { withBase } from "../lib/url";
+import { ADMIN_HOME, ADMIN_SECTIONS } from "../lib/admin-nav";
 
 // This module is the single "data layer" the UI talks to. Pages read these
 // derived selectors (via `Astro.locals.getQueries()`) rather than raw
@@ -1155,8 +1156,11 @@ export function createQueries(data: CompetitionData) {
    * Flat, searchable index of every destination in the app (pages, tasks and
    * players) for the global command palette. Computing it here keeps the data
    * concerns out of the component, which renders the resulting props only.
+   * Admins also get the admin panel's sections.
    */
-  function getCommandPaletteItems(): CommandPaletteItem[] {
+  function getCommandPaletteItems({
+    admin = false,
+  }: { admin?: boolean } = {}): CommandPaletteItem[] {
     const taskItems: CommandPaletteItem[] = [...tasks]
       .sort((a, b) => a.weekNumber - b.weekNumber)
       .map((task) => {
@@ -1207,7 +1211,32 @@ export function createQueries(data: CompetitionData) {
       };
     });
 
-    return [...PALETTE_PAGES, ...taskItems, ...teamItems, ...playerItems];
+    const adminItems: CommandPaletteItem[] = admin
+      ? [
+          {
+            href: ADMIN_HOME,
+            title: "Admin dashboard",
+            hint: "totals, current task & shortcuts",
+            keywords: "admin home overview",
+          },
+          ...ADMIN_SECTIONS,
+        ].map((section) => ({
+          id: `admin-${section.href}`,
+          label: section.title,
+          group: "admin" as const,
+          href: withBase(section.href),
+          hint: section.hint,
+          keywords: `admin sudo ${section.keywords ?? ""}`,
+        }))
+      : [];
+
+    return [
+      ...PALETTE_PAGES,
+      ...taskItems,
+      ...teamItems,
+      ...playerItems,
+      ...adminItems,
+    ];
   }
 
   /**

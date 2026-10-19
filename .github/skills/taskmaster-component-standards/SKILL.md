@@ -93,11 +93,16 @@ Rules:
 
 ## Admin area (`/admin`)
 - Auth is Neon Auth (Managed Better Auth) through the small adapter in
-  `src/lib/auth.ts`. `src/middleware.ts` guards every `/admin` path except
-  `/admin/login` and sets `Astro.locals.admin`; only the `admin` role gets in.
-- Admin pages render with `AdminLayout.astro` and the `src/components/admin/*`
-  controls (`AdminField`, `ScoreGrid`, `ConfirmDelete`, `Notice`, shared
-  class strings in `styles.ts`).
+  `src/lib/auth.ts`. Everyone signs in at `/login` (`/admin/login` is a
+  legacy redirect). `src/middleware.ts` guards every `/admin` path and sets
+  `Astro.locals.admin`; only the `admin` role gets in.
+- Admin pages render with `AdminLayout.astro` (the site `Layout` plus an
+  admin sub-nav) and the `src/components/admin/*` controls (`AdminField`,
+  `ScoreGrid`, `ConfirmDelete`, `Notice`, shared class strings in
+  `styles.ts`). Admin sections are defined once in `src/lib/admin-nav.ts`
+  (sub-nav, dashboard, command palette): add new sections there.
+- Public detail pages show an `AdminEditLink` to their editor when
+  `viewer.isAdmin`.
 - Forms are plain `method="post"` forms handled in the page frontmatter: parse
   with `src/lib/admin-forms.ts` (zod), write with `src/data/admin.ts`, then
   `Astro.redirect` (post/redirect/get). On failure, re-render with the

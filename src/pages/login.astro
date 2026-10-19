@@ -8,17 +8,45 @@ import { getSessionPlayer } from "../data/accounts";
 import { createAuth, hasAdminRole, isAuthNetworkError } from "../lib/auth";
 import { withBase } from "../lib/url";
 
-// The player portal. Admins have their own at /admin/login; an admin who is
-// also a player can use either.
+// The one sign-in page for players and admins. Guards send people here with
+// a `next` destination; with none, admins land on the admin dashboard and
+// players on the homepage.
 
-// Only same-site account paths are allowed as a post-sign-in destination, so
-// `next` can't be used as an open redirect.
+const isAdminPath = (path: string) => /^\/admin(?:[/?#]|$)/.test(path);
+
+// Only same-site account and admin paths are allowed as a post-sign-in
+// destination, so `next` can't be used as an open redirect.
 const safeNext = (value: string | null | undefined) =>
-  value && /^\/account(?:[/?#]|$)/.test(value) && !value.startsWith("//")
+  value &&
+  /^\/(?:account|admin)(?:[/?#]|$)/.test(value) &&
+  !value.startsWith("//")
     ? value
     : undefined;
 
+interface Account {
+  isAdmin: boolean;
+  playerId?: string;
+  mustChangePassword?: boolean;
+}
+
+// Where a signed-in account goes next, or undefined when it can't open the
+// requested area (this page then explains why).
+const destination = (account: Account, next: string | undefined) => {
+  if (account.playerId && account.mustChangePassword) {
+    return "/account/password";
+  }
+  if (next) {
+    const allowed = isAdminPath(next) ? account.isAdmin : !!account.playerId;
+    return allowed ? next : undefined;
+  }
+  if (account.isAdmin) return "/admin";
+  if (account.playerId) return "/";
+  return undefined;
+};
+
 const next = safeNext(Astro.url.searchParams.get("next"));
+const stayHere = (target: string | undefined) =>
+  target ? `/login?${new URLSearchParams({ next: target })}` : "/login";
 let email = "";
 let error: string | undefined;
 
@@ -32,21 +60,24 @@ if (Astro.request.method === "POST") {
     const result = await createAuth(Astro).signIn.email({ email, password });
     const signedIn = result.data?.user;
     if (!result.error && signedIn) {
+      const isAdmin = hasAdminRole((signedIn as { role?: string | null }).role);
       const player = await getSessionPlayer({
         id: signedIn.id,
         name: signedIn.name,
         email: signedIn.email,
-        isAdmin: hasAdminRole((signedIn as { role?: string | null }).role),
+        isAdmin,
       });
-      // Players land on the homepage, unless they were sent here from an
-      // account page or still have to replace their temporary password.
-      const target = player
-        ? player.mustChangePassword
-          ? "/account/password"
-          : (safeNext(String(form.get("next") ?? "")) ?? "/")
-        : // Signed in, but not as a player: the GET explains what to do.
-          "/login";
-      return Astro.redirect(withBase(target));
+      const requested = safeNext(String(form.get("next") ?? ""));
+      const target = destination(
+        {
+          isAdmin,
+          playerId: player?.playerId,
+          mustChangePassword: player?.mustChangePassword,
+        },
+        requested,
+      );
+      // Signed in, but without access: the GET explains what to do.
+      return Astro.redirect(withBase(target ?? stayHere(requested)));
     }
     error = isAuthNetworkError(result.error?.code)
       ? "The sign-in service is unreachable. Try again in a moment."
@@ -55,33 +86,36 @@ if (Astro.request.method === "POST") {
 }
 
 const viewer = await Astro.locals.getViewer();
-if (viewer?.playerId && Astro.request.method === "GET") {
-  return Astro.redirect(withBase(next ?? "/"));
+const target = viewer && destination(viewer, next);
+if (target && Astro.request.method === "GET") {
+  return Astro.redirect(withBase(target));
 }
 
-// Signed in, but with an account that has no player profile.
-const wrongPortal = viewer && !viewer.playerId ? viewer : undefined;
+// Signed in, but the account can't open what it came for.
+const denied = viewer && !target ? viewer : undefined;
+const deniedAdmin = !!denied && !!next && isAdminPath(next);
 const signedOut = Astro.url.searchParams.has("signedOut");
 ---
 
 <Layout
-  title="Player sign in"
-  description="Player sign-in for EAYL Taskmaster."
+  title="Sign in"
+  description="Sign in to EAYL Taskmaster as a player or admin."
 >
   <div class="mx-auto max-w-md px-4 py-12 sm:px-6 sm:py-16">
     <p class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim">
-      ssh player@taskmaster
+      ssh you@taskmaster
     </p>
     <h1 class="mt-3 text-3xl font-extrabold tracking-tight text-ink">
-      PLAYER <span class="text-acid text-glow">LOGIN</span>
+      <span class="text-acid text-glow">LOGIN</span>
     </h1>
     <p class="mt-2 text-sm text-ink-dim">
-      <span class="text-acid">// </span>Sign in to edit your player profile. No
-      account yet? Ask the Taskmaster for an invite.
+      <span class="text-acid">// </span>Players sign in to vote, enter tasks and
+      edit their profile; admins to run the competition. No account yet? Ask the
+      Taskmaster for an invite.
     </p>
 
     {
-      signedOut && !error && !wrongPortal && (
+      signedOut && !error && !denied && (
         <Notice tone="success" class="mt-6">
           Signed out.
         </Notice>
@@ -89,22 +123,32 @@ const signedOut = Astro.url.searchParams.has("signedOut");
     }
 
     {
-      wrongPortal ? (
+      denied ? (
         <TerminalWindow title="~/login/access.log" class="mt-6">
-          {wrongPortal.isAdmin ? (
+          {deniedAdmin ? (
             <>
               <Notice tone="error">
-                {wrongPortal.name} is an admin account without a player profile.
+                {denied.name} doesn't have admin access.
               </Notice>
               <p class="mt-4 text-sm text-ink-dim">
-                This is the player portal. Head to the admin area, or sign out
-                and sign in as a player.
+                {denied.playerId
+                  ? "Your player profile is in your account area."
+                  : "Ask an existing admin to grant access, or sign in with a different account."}
+              </p>
+            </>
+          ) : denied.isAdmin ? (
+            <>
+              <Notice tone="error">
+                {denied.name} is an admin account without a player profile.
+              </Notice>
+              <p class="mt-4 text-sm text-ink-dim">
+                Head to the admin area, or sign out and sign in as a player.
               </p>
             </>
           ) : (
             <>
               <Notice tone="error">
-                {wrongPortal.name}'s account isn't linked to a player profile.
+                {denied.name}'s account isn't linked to a player profile.
               </Notice>
               <p class="mt-4 text-sm text-ink-dim">
                 Ask an admin to check the email on your player profile, or sign
@@ -113,23 +157,28 @@ const signedOut = Astro.url.searchParams.has("signedOut");
             </>
           )}
           <div class="mt-6 flex flex-wrap gap-3">
-            {wrongPortal.isAdmin && (
+            {denied.playerId && (
+              <a href={withBase("/account")} class={btnPrimary}>
+                go to your profile
+              </a>
+            )}
+            {denied.isAdmin && (
               <a href={withBase("/admin")} class={btnPrimary}>
                 go to admin
               </a>
             )}
             <form method="post" action={withBase("/logout")}>
-              <button
-                type="submit"
-                class={wrongPortal.isAdmin ? btnGhost : btnPrimary}
-              >
+              <button type="submit" class={btnGhost}>
                 sign out
               </button>
             </form>
+            <a href={withBase("/")} class={btnGhost}>
+              back to site
+            </a>
           </div>
         </TerminalWindow>
       ) : (
-        <TerminalWindow title="~/login.sh" meta="players" class="mt-6">
+        <TerminalWindow title="~/login.sh" class="mt-6">
           {error && (
             <Notice tone="error" class="mb-5">
               {error}
@@ -156,18 +205,9 @@ const signedOut = Astro.url.searchParams.has("signedOut");
               sign in
             </button>
           </form>
-          <div class="mt-5 space-y-1 text-xs text-ink-faint">
-            <p>Forgotten your password? Ask an admin to reset it.</p>
-            <p>
-              Admin?{" "}
-              <a
-                href={withBase("/admin/login")}
-                class="text-cyan hover:underline"
-              >
-                Use the admin portal
-              </a>
-            </p>
-          </div>
+          <p class="mt-5 text-xs text-ink-faint">
+            Forgotten your password? Ask an admin to reset it.
+          </p>
         </TerminalWindow>
       )
     }

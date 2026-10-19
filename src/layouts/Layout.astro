@@ -16,6 +16,8 @@ interface Props {
   description?: string;
   /** Social share image, relative to the site root. */
   image?: string;
+  /** Keep the page out of search engines (e.g. the admin panel). */
+  noindex?: boolean;
 }
 
 const SITE_NAME = "EAYL Taskmaster";
@@ -24,6 +26,7 @@ const {
   title,
   description = "16 weeks. 25 players. One winner. The EAYL Academy Taskmaster challenge.",
   image = "/og.png",
+  noindex = false,
 } = Astro.props;
 
 // Page-specific titles read "<page> · EAYL Taskmaster"; the home page (no
@@ -34,7 +37,7 @@ const fullTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const socialImage = new URL(withBase(image), Astro.site);
 
-const paletteItems = getCommandPaletteItems();
+const paletteItems = getCommandPaletteItems({ admin: viewer?.isAdmin });
 const whatsNew = getWhatsNew();
 // Only players get notifications: their read marker lives on the account.
 const notifications = viewer?.playerId
@@ -69,6 +72,7 @@ const notifications = viewer?.playerId
     <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <meta name="theme-color" content="#080b10" />
     <link rel="canonical" href={canonicalURL} />
 

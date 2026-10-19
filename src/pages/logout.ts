@@ -3,11 +3,8 @@ import { createAuth } from "../lib/auth";
 import { withBase } from "../lib/url";
 
 // POST-only so a link or image can't sign someone out; Astro's origin check
-// rejects cross-site posts. Admins return to the admin portal, everyone else
-// to the player portal.
+// rejects cross-site posts.
 export const POST: APIRoute = async (context) => {
-  const form = await context.request.formData().catch(() => undefined);
-  const portal = form?.get("portal") === "admin" ? "/admin/login" : "/login";
   await createAuth(context).signOut();
-  return context.redirect(withBase(`${portal}?signedOut=1`));
+  return context.redirect(withBase("/login?signedOut=1"));
 };

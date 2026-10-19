@@ -552,9 +552,24 @@ export interface PlayerComparison {
  * Which bucket a command-palette entry belongs to (section + icon). `"action"`
  * entries are synthesized on the client for dynamic commands (e.g. "jump to
  * week N", "compare X vs Y") and are never emitted by the data layer.
+ * `"admin"` entries are only included for signed-in admins.
  */
 export type CommandPaletteGroup =
-  "page" | "task" | "team" | "player" | "action";
+  "page" | "task" | "team" | "player" | "admin" | "action";
+
+/** One area of the admin panel (sub-nav tab, dashboard shortcut, palette entry). */
+export interface AdminSection {
+  /** Root-relative path, e.g. `/admin/scores`. */
+  href: string;
+  /** Short tab label in the admin sub-nav. */
+  label: string;
+  /** Action-style title for the dashboard and command palette. */
+  title: string;
+  /** One-line description of what the section is for. */
+  hint: string;
+  /** Extra command-palette search terms. */
+  keywords?: string;
+}
 
 /** A single searchable destination in the global command palette. */
 export interface CommandPaletteItem {

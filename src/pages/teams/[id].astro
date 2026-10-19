@@ -4,6 +4,7 @@ import TerminalWindow from "../../components/TerminalWindow.astro";
 import StatCard from "../../components/StatCard.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
 import { withBase } from "../../lib/url";
@@ -47,6 +48,7 @@ const positionClasses = (position: number) => {
   if (position <= 3) return "border-cyan/40 bg-cyan/5 text-cyan";
   return "border-grid bg-term-bg text-ink-dim";
 };
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 ---
 
 <Layout title={team.name} description={pageDescription}>
@@ -54,12 +56,22 @@ const positionClasses = (position: number) => {
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/teams" label="ALL TEAMS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${team.name} · EAYL Taskmaster`}
-        shareText={pageDescription}
-        label="SHARE SQUAD"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          isAdmin && (
+            <AdminEditLink
+              href={`/admin/teams/${team.id}`}
+              subject={`the ${team.name} team`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${team.name} · EAYL Taskmaster`}
+          shareText={pageDescription}
+          label="SHARE SQUAD"
+        />
+      </div>
     </div>
 
     <!-- Header -->

@@ -12,7 +12,7 @@ import { withBase } from "../../../lib/url";
 import { ukDateFormat } from "../../../lib/time";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const { tasks } = await Astro.locals.getQueries();
 const done = Astro.url.searchParams.get("done");

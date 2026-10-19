@@ -5,10 +5,11 @@ import StatCard from "../../components/StatCard.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
 import { getAdminCounts } from "../../data/admin";
+import { ADMIN_SECTIONS } from "../../lib/admin-nav";
 import { withBase } from "../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const [counts, { getCurrentTask }] = await Promise.all([
   getAdminCounts(),
@@ -16,50 +17,6 @@ const [counts, { getCurrentTask }] = await Promise.all([
 ]);
 const current = getCurrentTask();
 const admin = Astro.locals.admin;
-
-const sections = [
-  {
-    href: "/admin/scores",
-    label: "record scores",
-    hint: "per-week grid + bonus points",
-  },
-  {
-    href: "/admin/submissions",
-    label: "review entries",
-    hint: "players' photo and text entries, scored in a gallery",
-  },
-  {
-    href: "/admin/tasks",
-    label: "manage tasks",
-    hint: "briefs, dates and formats",
-  },
-  {
-    href: "/admin/players",
-    label: "manage players",
-    hint: "roster, bios and avatars",
-  },
-  { href: "/admin/teams", label: "manage teams", hint: "squads and members" },
-  {
-    href: "/admin/polls",
-    label: "run polls",
-    hint: "homepage polls, schedules and results",
-  },
-  {
-    href: "/admin/live",
-    label: "results night",
-    hint: "hold a week's results and reveal them live",
-  },
-  {
-    href: "/admin/recaps",
-    label: "write recaps",
-    hint: "episode headlines, summaries and moments",
-  },
-  {
-    href: "/admin/changelog",
-    label: "edit changelog",
-    hint: "the homepage what's new list",
-  },
-];
 ---
 
 <AdminLayout title="Dashboard">
@@ -68,7 +25,9 @@ const sections = [
   </h1>
   <p class="mt-2 text-sm text-ink-dim">
     Signed in as <span class="text-ink">{admin?.email}</span>. Changes go live
-    on the public site as soon as you save.
+    on the public site as soon as you save. Press
+    <kbd class="rounded border border-grid px-1 text-ink">⌘K</kbd> anywhere to jump
+    to an admin section.
   </p>
 
   <section aria-labelledby="counts-heading" class="mt-8">
@@ -127,14 +86,14 @@ const sections = [
       <h2 class="sr-only">Sections</h2>
       <ul class="space-y-2">
         {
-          sections.map((s) => (
+          ADMIN_SECTIONS.map((s) => (
             <li>
               <a
                 href={withBase(s.href)}
                 class="group flex items-baseline justify-between gap-4 rounded-md border border-grid px-3 py-2 transition-colors hover:border-acid-dim"
               >
                 <span class="text-sm text-ink group-hover:text-acid">
-                  <span class="text-acid">&gt;</span> {s.label}
+                  <span class="text-acid">&gt;</span> {s.title.toLowerCase()}
                 </span>
                 <span class="text-xs text-ink-faint">{s.hint}</span>
               </a>

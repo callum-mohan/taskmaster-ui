@@ -19,7 +19,7 @@ import { loadTaskResultRows } from "../../../data/live";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const { getTaskById, getLiveRunOrder, getLiveTask } =
   await Astro.locals.getQueries();

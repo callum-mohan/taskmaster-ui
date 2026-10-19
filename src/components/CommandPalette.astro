@@ -109,7 +109,7 @@ const { items, class: className = "" } = Astro.props;
   interface PaletteItem {
     id: string;
     label: string;
-    group: "page" | "task" | "team" | "player" | "action";
+    group: "page" | "task" | "team" | "player" | "admin" | "action";
     href: string;
     hint?: string;
     keywords?: string;
@@ -135,6 +135,7 @@ const { items, class: className = "" } = Astro.props;
       task: "#",
       team: "&",
       player: "@",
+      admin: "$",
     };
     const groupLabel: Record<PaletteItem["group"], string> = {
       action: "actions",
@@ -142,9 +143,11 @@ const { items, class: className = "" } = Astro.props;
       task: "tasks",
       team: "teams",
       player: "players",
+      admin: "admin",
     };
     const groupOrder: PaletteItem["group"][] = [
       "page",
+      "admin",
       "task",
       "team",
       "player",

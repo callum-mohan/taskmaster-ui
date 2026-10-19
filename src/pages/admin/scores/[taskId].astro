@@ -31,7 +31,7 @@ import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 const admin = Astro.locals.admin;
-if (!admin) return Astro.redirect(withBase("/admin/login"));
+if (!admin) return Astro.redirect(withBase("/login"));
 
 const { taskId } = Astro.params;
 const { players, teams, getTaskById, getPlayerById, getPollBonusesForTask } =

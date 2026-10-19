@@ -12,7 +12,7 @@ import {
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 // Today's UK date, as YYYY-MM-DD.
 const today = new Intl.DateTimeFormat("en-CA", {

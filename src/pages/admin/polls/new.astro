@@ -20,7 +20,7 @@ import { wallClockToIso } from "../../../lib/time";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/admin/login"));
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const { players, teams, tasks } = await Astro.locals.getQueries();
 

@@ -24,5 +24,12 @@
       "namespace_id": "1001",
       "simple": { "limit": 10, "period": 60 },
     },
+    // Throttles sign-in attempts: 20 per minute per IP (headroom for players
+    // signing in together from one office network).
+    {
+      "name": "LOGIN_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 20, "period": 60 },
+    },
   ],
 }

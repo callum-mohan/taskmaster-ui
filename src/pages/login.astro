@@ -6,6 +6,7 @@ import Notice from "../components/admin/Notice.astro";
 import { btnPrimary, btnGhost } from "../components/admin/styles";
 import { getSessionPlayer } from "../data/accounts";
 import { createAuth, hasAdminRole, isAuthNetworkError } from "../lib/auth";
+import { allowLoginAttempt, requestClientIp } from "../lib/login-limit";
 import { withBase } from "../lib/url";
 
 // The one sign-in page for players and admins. Guards send people here with
@@ -56,6 +57,13 @@ if (Astro.request.method === "POST") {
   const password = String(form.get("password") ?? "");
   if (!email || !password) {
     error = "Enter your email and password.";
+  } else if (
+    !(await allowLoginAttempt(
+      requestClientIp(Astro.request, () => Astro.clientAddress),
+    ))
+  ) {
+    error = "Too many sign-in attempts. Wait a minute and try again.";
+    Astro.response.status = 429;
   } else {
     const result = await createAuth(Astro).signIn.email({ email, password });
     const signedIn = result.data?.user;

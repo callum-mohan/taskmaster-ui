@@ -75,11 +75,14 @@ export function mapTasks(
     if (isTaskLocked(base, reveal)) {
       return { ...base, title: "???", description: "", locked: true };
     }
+    // An upcoming task's brief stays classified until release, so admins can
+    // load it early without any page or feed showing it.
+    const briefReleased = reveal.mode === "admin" || base.status !== "upcoming";
     return {
       ...base,
       title: row.title,
       description: row.description,
-      ...(row.brief !== null && { brief: row.brief }),
+      ...(briefReleased && row.brief !== null && { brief: row.brief }),
       locked: false,
     };
   });

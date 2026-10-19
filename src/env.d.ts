@@ -9,6 +9,8 @@ declare module "cloudflare:workers" {
   export const env: {
     /** Throttles task reveal-password guesses (optional locally). */
     TASK_REVEAL_LIMITER?: RateLimiter;
+    /** Throttles sign-in attempts per IP (optional locally). */
+    LOGIN_LIMITER?: RateLimiter;
   };
 }
 

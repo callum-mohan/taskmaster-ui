@@ -162,6 +162,36 @@ describe("mapTasks", () => {
     expect(mapped).not.toHaveProperty("brief");
   });
 
+  describe("upcoming tasks", () => {
+    const beforeRelease = at("2026-01-01T00:00:00Z");
+    const row = taskRow({ brief: ["Fold it", "Throw it"] });
+
+    it("withholds the brief from the public until release", () => {
+      const [mapped] = mapTasks([row], publicView(), beforeRelease);
+      expect(mapped).toMatchObject({
+        status: "upcoming",
+        title: "Make the best paper plane",
+        description: "Furthest flight wins.",
+        locked: false,
+      });
+      expect(mapped).not.toHaveProperty("brief");
+    });
+
+    it("withholds it even from a visitor holding a reveal cookie", () => {
+      const [mapped] = mapTasks(
+        [{ ...row, revealPassword: "swordfish" }],
+        publicView("week-01"),
+        beforeRelease,
+      );
+      expect(mapped).not.toHaveProperty("brief");
+    });
+
+    it("shows the brief to admins before release", () => {
+      const [mapped] = mapTasks([row], { mode: "admin" }, beforeRelease);
+      expect(mapped.brief).toEqual(["Fold it", "Throw it"]);
+    });
+  });
+
   it("reports no submission kinds while submissions are closed", () => {
     const [mapped] = mapTasks(
       [taskRow({ maxSubmissions: 0, submissionKinds: ["photo"] })],

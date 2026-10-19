@@ -79,6 +79,7 @@ src/
 │   └── accounts.ts    # player sign-in accounts + self-service profile edits
 ├── lib/
 │   ├── auth.ts        # Neon Auth adapter for Astro (sign in/out, session)
+│   ├── login-limit.ts # per-IP throttle on sign-in attempts
 │   ├── admin-forms.ts # admin form parsing + validation (zod)
 │   ├── account-forms.ts # player profile + password form validation
 │   ├── submission-forms.ts # entry form parsing, limits + photo type sniffing
@@ -193,6 +194,8 @@ removed. Forms are plain HTML posts, so they work without JavaScript.
   on `/admin`. The old `/admin/login` URL redirects there. Only users with the
   `admin` role get into `/admin`; anyone else is told so and, if they're a
   player, pointed to their profile.
+- Sign-in attempts are throttled per IP (20 a minute) by the `LOGIN_LIMITER`
+  rate-limit binding in `wrangler.jsonc`.
 - Public sign-up is **disabled** on the Neon Auth branch. Create admins with:
 
   ```sh
@@ -217,7 +220,8 @@ A task can have an optional **reveal password** (set on the admin task form).
 Once the task goes live, its title, description and brief stay encrypted
 everywhere (home page, task cards, command palette, banner, `.ics`) until a
 visitor enters the password on the task page. Then they get an
-`ACCESS GRANTED` decrypt animation.
+`ACCESS GRANTED` decrypt animation. Every task's brief, protected or not, is
+withheld from public pages and feeds until its release date.
 
 - Matching ignores case and surrounding spaces. A correct guess sets a signed,
   HttpOnly cookie for that task, so the visitor doesn't need it again. Changing

@@ -6,10 +6,12 @@ interface Props {
   taskId: string;
   entryId: number;
   social: GalleryEntrySocial;
+  /** Gallery page the entry is on, so a no-JS post comes back to it. */
+  page?: number;
   class?: string;
 }
 
-const { taskId, entryId, social, class: className } = Astro.props;
+const { taskId, entryId, social, page = 1, class: className } = Astro.props;
 const { canVote, votedFor, votes, winner } = social;
 const action = withBase(`/account/gallery/${taskId}`);
 const btn =
@@ -37,6 +39,7 @@ const btn =
         <form method="post" action={action}>
           <input type="hidden" name="intent" value="unvote" />
           <input type="hidden" name="submissionId" value={entryId} />
+          {page > 1 && <input type="hidden" name="entries" value={page} />}
           <button
             type="submit"
             class:list={[
@@ -60,6 +63,7 @@ const btn =
       <form method="post" action={action}>
         <input type="hidden" name="intent" value="vote" />
         <input type="hidden" name="submissionId" value={entryId} />
+        {page > 1 && <input type="hidden" name="entries" value={page} />}
         <button
           type="submit"
           class:list={[

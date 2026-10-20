@@ -14,6 +14,7 @@ import BonusForm from "../../../../components/admin/BonusForm.astro";
 import ConfirmDelete from "../../../../components/admin/ConfirmDelete.astro";
 import SubmissionReviewCard from "../../../../components/admin/SubmissionReviewCard.astro";
 import AddEntryForms from "../../../../components/admin/AddEntryForms.astro";
+import Pagination from "../../../../components/Pagination.astro";
 import { btnPrimary, btnGhost } from "../../../../components/admin/styles";
 import {
   addBonus,
@@ -52,6 +53,7 @@ import { weekHref } from "../../../../lib/admin-nav";
 import { StorageError } from "../../../../lib/storage";
 import { ukDateFormat } from "../../../../lib/time";
 import { withBase } from "../../../../lib/url";
+import { pageHref, parsePage } from "../../../../lib/pagination";
 
 // Fail closed if the middleware guard is ever bypassed.
 const admin = Astro.locals.admin;
@@ -211,7 +213,7 @@ if (Astro.request.method === "POST" && tooLarge) {
 const [submissions, sheet, history, counts] = await Promise.all([
   loadTaskSubmissions(task.id),
   getTaskScoreSheet(task.id),
-  getScoreAuditLog(task.id),
+  getScoreAuditLog(task.id, parsePage(Astro.url.searchParams.get("history"))),
   getWeekCounts(),
 ]);
 const progress = getWeekProgress(task, counts.get(task.id), {
@@ -300,6 +302,8 @@ const doneMessage: Record<string, string> = {
   "entry-added": "Entry added. It's already in the public gallery.",
 };
 const settings = task.submissions;
+const historyHref = (page: number) =>
+  pageHref(Astro.url, "history", page, { hash: "history", drop: ["done"] });
 ---
 
 <AdminLayout title={`Judge · ${weekLabel}`}>
@@ -610,10 +614,14 @@ const settings = task.submissions;
     </TerminalWindow>
   </section>
 
-  <section id="history" aria-labelledby="history-heading" class="mt-8">
+  <section
+    id="history"
+    aria-labelledby="history-heading"
+    class="mt-8 scroll-mt-24"
+  >
     <TerminalWindow
       title={`~/weeks/${task.id}/scores.log`}
-      meta={`${history.length} ${history.length === 1 ? "change" : "changes"}`}
+      meta={`${history.total} ${history.total === 1 ? "change" : "changes"}`}
     >
       <h2 id="history-heading" class="text-sm font-bold text-ink">
         <span class="text-acid">$</span> tail scores.log
@@ -621,7 +629,14 @@ const settings = task.submissions;
       <p class="mt-1 mb-5 text-sm text-ink-dim">
         Who changed this week's scores and bonuses, newest first.
       </p>
-      <ScoreHistory entries={history} names={subjectNames} />
+      <ScoreHistory entries={history.items} names={subjectNames} />
+      <Pagination
+        info={history}
+        href={historyHref}
+        label="Score history pages"
+        itemLabel="changes"
+        class="mt-4"
+      />
     </TerminalWindow>
   </section>
 </AdminLayout>

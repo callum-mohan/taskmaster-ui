@@ -93,6 +93,13 @@ Rules:
 - Map variants with a typed config object keyed by the union
   (see `TaskStatusBadge.astro`'s `config: Record<TaskStatus, {...}>`), rather
   than chains of `if`/ternaries in markup.
+- **Long lists paginate on the server:** slice with `paginate()` from
+  `src/lib/pagination.ts` (`LIST_PAGE_SIZE` rows, `GALLERY_PAGE_SIZE` media
+  entries), read the page with `parsePage()`, and render `Pagination.astro`
+  with links from `pageHref()`. Give each list on a page its own query param
+  and section `id` (hash) so lists page independently, and drop one-off
+  outcome params from paging links. Only presign media for the page shown.
+  Never paginate inputs that one form saves together (e.g. the judge sheet).
 - Comment only where it adds context (e.g. explaining the server-rendered
   countdown fallback); don't narrate obvious markup.
 

@@ -6,10 +6,12 @@ interface Props {
   taskId: string;
   entryId: number;
   social: GalleryEntrySocial;
+  /** Gallery page the entry is on, so a no-JS post comes back to it. */
+  page?: number;
   class?: string;
 }
 
-const { taskId, entryId, social, class: className } = Astro.props;
+const { taskId, entryId, social, page = 1, class: className } = Astro.props;
 const { reactions, canReact } = social;
 const action = withBase(`/account/gallery/${taskId}`);
 const shown = canReact ? reactions : reactions.filter((r) => r.count > 0);
@@ -30,6 +32,7 @@ const tooltip = (names: string[]) =>
       >
         <input type="hidden" name="intent" value="react" />
         <input type="hidden" name="submissionId" value={entryId} />
+        {page > 1 && <input type="hidden" name="entries" value={page} />}
         {shown.map((r) => (
           <button
             type="submit"

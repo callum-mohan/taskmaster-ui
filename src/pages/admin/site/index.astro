@@ -3,6 +3,7 @@ import AdminLayout from "../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../components/TerminalWindow.astro";
 import PollStatusBadge from "../../../components/PollStatusBadge.astro";
 import Notice from "../../../components/admin/Notice.astro";
+import Pagination from "../../../components/Pagination.astro";
 import {
   btnGhost,
   btnPrimary,
@@ -12,6 +13,12 @@ import {
 import { listChangelog } from "../../../data/admin";
 import { withBase } from "../../../lib/url";
 import { ukDateFormat } from "../../../lib/time";
+import {
+  LIST_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../../lib/pagination";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
@@ -21,6 +28,16 @@ const [{ getPollSummaries, players }, changelog] = await Promise.all([
   listChangelog(),
 ]);
 const summaries = getPollSummaries();
+const changelogPage = paginate(
+  changelog,
+  parsePage(Astro.url.searchParams.get("changelog")),
+  LIST_PAGE_SIZE,
+);
+const changelogHref = (page: number) =>
+  pageHref(Astro.url, "changelog", page, {
+    hash: "changelog",
+    drop: ["done", "name"],
+  });
 const categoryClass: Record<string, string> = {
   new: "text-acid",
   improved: "text-cyan",
@@ -192,7 +209,7 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
           </thead>
           <tbody>
             {
-              changelog.map((row) => (
+              changelogPage.items.map((row) => (
                 <tr class="transition-colors hover:bg-term-panel-2">
                   <td
                     class:list={[
@@ -238,5 +255,12 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
         }
       </div>
     </TerminalWindow>
+    <Pagination
+      info={changelogPage}
+      href={changelogHref}
+      label="Changelog pages"
+      itemLabel="entries"
+      class="mt-3"
+    />
   </section>
 </AdminLayout>

@@ -1,0 +1,108 @@
+---
+import type { PageInfo } from "../types";
+import { pageSlots } from "../lib/pagination";
+
+interface Props {
+  info: PageInfo;
+  /** Builds the link for a page number (the page owns the URL and its params). */
+  href: (page: number) => string;
+  /** Accessible name for the nav, e.g. "Gallery pages". */
+  label: string;
+  /** Plural noun for the "showing x–y of n" summary, e.g. "entries". */
+  itemLabel?: string;
+  class?: string;
+}
+
+const {
+  info,
+  href,
+  label,
+  itemLabel = "items",
+  class: className,
+} = Astro.props;
+const { page, pageCount, total, from, to } = info;
+const slots = pageSlots(page, pageCount);
+
+const cell =
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-[11px] font-bold tracking-widest tabular-nums transition-colors";
+const link = `${cell} border-grid text-ink-dim hover:border-ink-faint hover:text-ink`;
+const disabled = `${cell} border-grid-soft text-ink-faint/60`;
+---
+
+{
+  pageCount > 1 && (
+    <nav
+      aria-label={label}
+      class:list={[
+        "flex flex-wrap items-center justify-between gap-x-4 gap-y-2",
+        className,
+      ]}
+    >
+      <p class="text-[11px] text-ink-faint">
+        <span class="text-acid" aria-hidden="true">
+          ${" "}
+        </span>
+        showing{" "}
+        <span class="text-ink-dim tabular-nums">
+          {from}–{to}
+        </span>{" "}
+        of <span class="tabular-nums">{total}</span> {itemLabel}
+      </p>
+      <ul class="flex flex-wrap items-center gap-1">
+        <li>
+          {page > 1 ? (
+            <a href={href(page - 1)} rel="prev" class={link}>
+              <span aria-hidden="true">&larr;&nbsp;</span>prev
+            </a>
+          ) : (
+            <span class={disabled} aria-hidden="true">
+              &larr;&nbsp;prev
+            </span>
+          )}
+        </li>
+        {slots.map((slot) =>
+          slot === "gap" ? (
+            <li
+              class="hidden px-1 text-[11px] text-ink-faint sm:block"
+              aria-hidden="true"
+            >
+              …
+            </li>
+          ) : slot === page ? (
+            <li class="hidden sm:block">
+              <a
+                href={href(slot)}
+                aria-current="page"
+                aria-label={`Page ${slot}, current page`}
+                class={`${cell} border-acid bg-acid/10 text-acid`}
+              >
+                {slot}
+              </a>
+            </li>
+          ) : (
+            <li class="hidden sm:block">
+              <a href={href(slot)} aria-label={`Page ${slot}`} class={link}>
+                {slot}
+              </a>
+            </li>
+          ),
+        )}
+        <li class="px-2 text-[11px] text-ink-dim tabular-nums sm:hidden">
+          <span class="sr-only">page </span>
+          {page}/{pageCount}
+        </li>
+        <li>
+          {page < pageCount ? (
+            <a href={href(page + 1)} rel="next" class={link}>
+              next<span aria-hidden="true">&nbsp;&rarr;</span>
+            </a>
+          ) : (
+            <span class={disabled} aria-hidden="true">
+              next&nbsp;&rarr;
+            </span>
+          )}
+        </li>
+      </ul>
+    </nav>
+  )
+}

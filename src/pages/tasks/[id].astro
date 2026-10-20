@@ -18,6 +18,14 @@ import SubmissionPanel from "../../components/SubmissionPanel.astro";
 import SubmissionGallery from "../../components/SubmissionGallery.astro";
 import PeoplesChoiceBar from "../../components/PeoplesChoiceBar.astro";
 import PredictionPanel from "../../components/PredictionPanel.astro";
+import Pagination from "../../components/Pagination.astro";
+import {
+  GALLERY_PAGE_SIZE,
+  LIST_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../lib/pagination";
 import { loadTaskSubmissions, presignEntryMedia } from "../../data/submissions";
 import { loadTaskReactions } from "../../data/reactions";
 import { getRevealPassword } from "../../data/task-reveal";
@@ -121,6 +129,15 @@ const pager = getTaskPager(task.id);
 const hasRecap = getRecapTaskIds().includes(task.id);
 const bonuses = getTaskBonuses(task.id);
 
+// Each list pages on its own query param, so paging one leaves the others
+// where they were. Paging links drop one-off form outcomes.
+const outcomeParams = ["gallery", "prediction", "entry", "decrypted"];
+const pageOf = (param: string) => parsePage(Astro.url.searchParams.get(param));
+const pageLinks = (param: string, hash: string) => (page: number) =>
+  pageHref(Astro.url, param, page, { hash, drop: outcomeParams });
+const resultsPage = paginate(results, pageOf("results"), LIST_PAGE_SIZE);
+const bonusPage = paginate(bonuses, pageOf("bonuses"), LIST_PAGE_SIZE);
+
 // Entries: the viewer's own slots while the task is live, then a gallery for
 // signed-in users once the deadline passes. Only loaded when something will show.
 const submissionViewer = {
@@ -142,16 +159,24 @@ const submissionPanel = takesEntries
   : undefined;
 const gallery = getSocialGallery(
   task,
-  await Promise.all(
-    getPublicSubmissionGallery(task, submissions, submissionViewer).map(
-      async (group) => ({
-        ...group,
-        entries: await presignEntryMedia(group.entries),
-      }),
-    ),
-  ),
+  getPublicSubmissionGallery(task, submissions, submissionViewer),
   reactions,
   submissionViewer,
+);
+// One group per entry, so a page break can fall between a player's entries.
+const galleryPage = paginate(
+  gallery.flatMap((group) =>
+    group.entries.map((entry) => ({ owner: group.owner, entries: [entry] })),
+  ),
+  pageOf("entries"),
+  GALLERY_PAGE_SIZE,
+);
+// Only the entries on show need signed media links.
+const galleryPageGroups = await Promise.all(
+  galleryPage.items.map(async (group) => ({
+    ...group,
+    entries: await presignEntryMedia(group.entries),
+  })),
 );
 const peoplesChoice = getPeoplesChoice(task, submissionViewer);
 const peoplesChoiceWinners = gallery.flatMap((group) =>
@@ -646,7 +671,7 @@ const medal = (position: number) =>
                 </tr>
               </thead>
               <tbody>
-                {results.slice(0, 10).map((row) => (
+                {resultsPage.items.map((row) => (
                   <tr class="border-b border-grid-soft last:border-b-0 hover:bg-term-panel/60">
                     <td class="px-4 py-3">
                       <span class="font-bold tabular-nums">
@@ -679,12 +704,13 @@ const medal = (position: number) =>
               </tbody>
             </table>
           </div>
-          {results.length > 10 && (
-            <p class="mt-3 text-center text-[11px] text-ink-faint">
-              <span class="text-acid">$</span> showing top 10 of{" "}
-              {results.length} players
-            </p>
-          )}
+          <Pagination
+            info={resultsPage}
+            href={pageLinks("results", "results")}
+            label="Results pages"
+            itemLabel="players"
+            class="mt-3"
+          />
         </section>
       )
     }
@@ -800,8 +826,16 @@ const medal = (position: number) =>
           />
           <SubmissionGallery
             taskId={task.id}
-            groups={gallery}
+            groups={galleryPageGroups}
+            page={galleryPage.page}
             formatStamp={formatStamp}
+          />
+          <Pagination
+            info={galleryPage}
+            href={pageLinks("entries", "entries")}
+            label="Gallery pages"
+            itemLabel="entries"
+            class="mt-4"
           />
         </section>
       )
@@ -810,7 +844,11 @@ const medal = (position: number) =>
     <!-- Bonus points & deductions given this week -->
     {
       bonuses.length > 0 && (
-        <section class="mt-10" aria-labelledby="bonus-heading">
+        <section
+          id="bonuses"
+          class="mt-10 scroll-mt-24"
+          aria-labelledby="bonus-heading"
+        >
           <h2
             id="bonus-heading"
             class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
@@ -823,11 +861,18 @@ const medal = (position: number) =>
             bodyClass="p-0 sm:p-0"
           >
             <BonusPointsLedger
-              entries={bonuses}
+              entries={bonusPage.items}
               subject="player"
               caption={`Bonus points and deductions for ${weekLabel}: ${task.title}`}
             />
           </TerminalWindow>
+          <Pagination
+            info={bonusPage}
+            href={pageLinks("bonuses", "bonuses")}
+            label="Bonus pages"
+            itemLabel="adjustments"
+            class="mt-3"
+          />
           <p class="mt-3 text-[11px] text-ink-faint">
             <span class="text-acid">//</span> Added to each player's overall
             total. They don't change this week's finishing positions.

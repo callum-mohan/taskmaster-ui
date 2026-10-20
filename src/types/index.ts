@@ -1369,3 +1369,25 @@ export interface HallOfFame {
   seasons: HallOfFameSeason[];
   records: AllTimeRecord[];
 }
+
+/** Where one page sits within a longer, paginated list. */
+export interface PageInfo {
+  /** 1-based current page, clamped to the available pages. */
+  page: number;
+  /** Always at least 1, even for an empty list. */
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  /** 1-based position of the first item shown (0 when the list is empty). */
+  from: number;
+  /** 1-based position of the last item shown (0 when the list is empty). */
+  to: number;
+}
+
+/** One page of a longer list. */
+export interface Page<T> extends PageInfo {
+  items: T[];
+}
+
+/** A slot in a pagination control: a page number, or a gap ("…"). */
+export type PageLinkSlot = number | "gap";

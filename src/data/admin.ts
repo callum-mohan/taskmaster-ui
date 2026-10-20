@@ -36,12 +36,14 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import type {
   AdminUser,
+  Page,
   ScoreAuditEntry,
   SubmissionOwnerRef,
   WeekCounts,
 } from "../types";
 import { EMPTY_WEEK_COUNTS } from "./week-progress";
 import { timestamptzToIso } from "../lib/time";
+import { LIST_PAGE_SIZE, pageInfo } from "../lib/pagination";
 import { deleteObjects, putObject } from "../lib/storage";
 import { submissionObjectKey } from "../lib/submission-forms";
 import type {
@@ -983,29 +985,47 @@ export async function deleteBonus(
   ]);
 }
 
-/** A week's score and bonus history, newest change first. */
+/** One page of a week's score and bonus history, newest change first. */
 export async function getScoreAuditLog(
   taskId: string,
-  limit = 100,
-): Promise<ScoreAuditEntry[]> {
-  const rows = await getDb()
-    .select()
-    .from(scoreAuditLog)
-    .where(eq(scoreAuditLog.taskId, taskId))
-    .orderBy(desc(scoreAuditLog.at), desc(scoreAuditLog.id))
-    .limit(limit);
-  return rows.map((row) => ({
-    id: row.id,
-    at: timestamptzToIso(row.at),
-    actorName: row.actorName,
-    entity: row.entity,
-    action: row.action,
-    subjectId: row.subjectId,
-    ...(row.pointsBefore !== null && { pointsBefore: row.pointsBefore }),
-    ...(row.pointsAfter !== null && { pointsAfter: row.pointsAfter }),
-    ...(row.noteBefore !== null && { noteBefore: row.noteBefore }),
-    ...(row.noteAfter !== null && { noteAfter: row.noteAfter }),
-  }));
+  page = 1,
+  pageSize = LIST_PAGE_SIZE,
+): Promise<Page<ScoreAuditEntry>> {
+  const db = getDb();
+  const ofTask = eq(scoreAuditLog.taskId, taskId);
+  const selectPage = (n: number) =>
+    db
+      .select()
+      .from(scoreAuditLog)
+      .where(ofTask)
+      .orderBy(desc(scoreAuditLog.at), desc(scoreAuditLog.id))
+      .limit(pageSize)
+      .offset((n - 1) * pageSize);
+  const [[counted], requested] = await db.batch([
+    db.select({ n: count() }).from(scoreAuditLog).where(ofTask),
+    selectPage(Math.max(1, page)),
+  ]);
+  const info = pageInfo(counted?.n ?? 0, page, pageSize);
+  // Past the last page: show the last page instead.
+  const rows =
+    info.page === page || info.total === 0
+      ? requested
+      : await selectPage(info.page);
+  return {
+    ...info,
+    items: rows.map((row) => ({
+      id: row.id,
+      at: timestamptzToIso(row.at),
+      actorName: row.actorName,
+      entity: row.entity,
+      action: row.action,
+      subjectId: row.subjectId,
+      ...(row.pointsBefore !== null && { pointsBefore: row.pointsBefore }),
+      ...(row.pointsAfter !== null && { pointsAfter: row.pointsAfter }),
+      ...(row.noteBefore !== null && { noteBefore: row.noteBefore }),
+      ...(row.noteAfter !== null && { noteAfter: row.noteAfter }),
+    })),
+  };
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────

@@ -60,9 +60,9 @@ export async function getSubmission(
  * route. Only for pages already rendered per viewer (never shared-cached)
  * whose entries have passed the access check.
  */
-export function presignEntryMedia(
-  entries: SubmissionEntry[],
-): Promise<SubmissionEntry[]> {
+export function presignEntryMedia<T extends SubmissionEntry>(
+  entries: T[],
+): Promise<T[]> {
   return Promise.all(
     entries.map(async (entry) =>
       entry.mediaUrl && entry.objectKey

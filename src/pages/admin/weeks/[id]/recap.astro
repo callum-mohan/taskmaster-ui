@@ -1,4 +1,5 @@
 ---
+import { queriesForTask } from "../../../../lib/season-scope";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../../components/TerminalWindow.astro";
 import RecapForm from "../../../../components/admin/RecapForm.astro";
@@ -24,8 +25,10 @@ import { withBase } from "../../../../lib/url";
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
-const { players, teams, getTaskById, getRecapTaskIds } =
-  await Astro.locals.getQueries();
+const { players, teams, getTaskById, getRecapTaskIds } = await queriesForTask(
+  Astro.locals,
+  Astro.params.id,
+);
 const task = getTaskById(Astro.params.id!);
 if (!task) return Astro.rewrite("/404");
 

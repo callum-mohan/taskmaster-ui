@@ -18,14 +18,23 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
+import { withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
 const id = Astro.params.id!;
-const [playerRows, teamRows] = await Promise.all([listPlayers(), listTeams()]);
+const season = (await Astro.locals.getSeasons()).seasonOfTeam(id);
+if (!season) return Astro.rewrite("/404");
+// Only the squad's own season's players can join it.
+const [playerRows, teamRows] = await Promise.all([
+  listPlayers(season.id),
+  listTeams(season.id),
+]);
 const team = teamRows.find((t) => t.id === id);
 if (!team) return Astro.rewrite("/404");
+const rosterHref = (query = "") =>
+  withBase(withSeason(`/admin/roster${query}#squads`, season));
 
 let values: FormValues = {
   id: team.id,
@@ -42,7 +51,7 @@ if (Astro.request.method === "POST") {
   if (form.get("intent") === "delete") {
     await deleteTeam(id);
     const query = new URLSearchParams({ done: "deleted", name: team.name });
-    return Astro.redirect(withBase(`/admin/roster?${query}#squads`));
+    return Astro.redirect(rosterHref(`?${query}`));
   }
   form.set("id", id);
   const parsed = parseTeamForm(form);
@@ -58,12 +67,12 @@ if (Astro.request.method === "POST") {
         ...team.memberIds.filter((m) => picked.has(m)),
         ...parsed.data.memberIds.filter((m) => !team.memberIds.includes(m)),
       ];
-      await updateTeam(id, { ...parsed.data, memberIds });
+      await updateTeam(team, { ...parsed.data, memberIds });
       const query = new URLSearchParams({
         done: "saved",
         name: parsed.data.name,
       });
-      return Astro.redirect(withBase(`/admin/roster?${query}#squads`));
+      return Astro.redirect(rosterHref(`?${query}`));
     } catch (error) {
       formError = describeWriteError(error);
       if (!formError) throw error;
@@ -84,8 +93,7 @@ const impact = await getTeamDeleteImpact(id);
 
 <AdminLayout title={`Edit ${team.name}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase("/admin/roster#squads")} class={btnGhost}>&larr; ROSTER</a
-    >
+    <a href={rosterHref()} class={btnGhost}>&larr; ROSTER</a>
     <a
       href={withBase(`/teams/${team.id}`)}
       class="text-xs text-cyan hover:underline"

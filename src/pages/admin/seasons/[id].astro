@@ -1,0 +1,305 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import SeasonStatusBadge from "../../../components/SeasonStatusBadge.astro";
+import SeasonForm from "../../../components/admin/SeasonForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import {
+  btnGhost,
+  btnPrimary,
+  labelClass,
+} from "../../../components/admin/styles";
+import {
+  deleteSeason,
+  describeWriteError,
+  getSeasonContents,
+  setCurrentSeason,
+  setSeasonClosed,
+  updateSeason,
+} from "../../../data/admin";
+import { getSeasonCloseBlockers } from "../../../data/season-close";
+import { isSeasonPublic } from "../../../data/seasons";
+import {
+  parseSeasonForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import {
+  ADMIN_ROSTER,
+  ADMIN_SEASONS,
+  ADMIN_WEEKS,
+} from "../../../lib/admin-nav";
+import { withSeason } from "../../../lib/admin-season";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const id = Astro.params.id!;
+const season = (await Astro.locals.getSeasons()).getSeason(id);
+if (!season) return Astro.rewrite("/404");
+
+const { tasks, resultsPostedAt, getLeaderboard, getTeamLeaderboard } =
+  await Astro.locals.getQueries(season.id);
+const closeBlockers = getSeasonCloseBlockers(tasks, resultsPostedAt);
+const contents = await getSeasonContents(season.id);
+const isEmpty = contents.every((c) => c.count === 0);
+const selfUrl = withBase(`${ADMIN_SEASONS}/${encodeURIComponent(id)}`);
+
+let values: FormValues = { id: season.id, name: season.name };
+let errors: FieldErrors = {};
+let formError: string | undefined;
+let actionError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  if (intent === "make-current") {
+    await setCurrentSeason(id);
+    return Astro.redirect(`${selfUrl}?done=current`);
+  }
+  if (intent === "close") {
+    if (closeBlockers.length > 0) {
+      actionError = "Finish every week before closing the season.";
+    } else {
+      await setSeasonClosed(id, true);
+      return Astro.redirect(`${selfUrl}?done=closed`);
+    }
+  } else if (intent === "reopen") {
+    await setSeasonClosed(id, false);
+    return Astro.redirect(`${selfUrl}?done=reopened`);
+  } else if (intent === "delete") {
+    if (season.isCurrent || !isEmpty) {
+      actionError =
+        "Only an empty season that isn't current can be deleted. Move to another season and remove this one's weeks and roster first.";
+    } else {
+      try {
+        await deleteSeason(id);
+        const query = new URLSearchParams({
+          done: "deleted",
+          name: season.name,
+        });
+        return Astro.redirect(withBase(`${ADMIN_SEASONS}?${query}`));
+      } catch (error) {
+        actionError = describeWriteError(error);
+        if (!actionError) throw error;
+      }
+    }
+  } else {
+    form.set("id", id);
+    const parsed = parseSeasonForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updateSeason(id, parsed.data);
+        return Astro.redirect(`${selfUrl}?done=saved`);
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+
+const notices: Record<string, string> = {
+  created: `Created ${season.name}. Add its players, squads and weeks, then make it current.`,
+  saved: `Saved ${season.name}.`,
+  current: `${season.name} is now the current season on the public site.`,
+  closed: `Closed ${season.name}. Its champion is in the Hall of Fame.`,
+  reopened: `Reopened ${season.name}. Its weeks and roster can be edited again.`,
+};
+const done = Astro.url.searchParams.get("done");
+const notice = done ? notices[done] : undefined;
+
+const podium = getLeaderboard()
+  .filter((row) => row.tasksCompleted > 0)
+  .slice(0, 3);
+const topSquad = getTeamLeaderboard().find((t) => t.tasksCompleted > 0);
+const medals = ["1st", "2nd", "3rd"];
+const sectionHeading = `${labelClass} mb-3`;
+---
+
+<AdminLayout title={season.name}>
+  <a href={withBase(ADMIN_SEASONS)} class={btnGhost}>&larr; ALL SEASONS</a>
+  <div class="mt-6 flex flex-wrap items-center gap-3">
+    <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+      <span class="text-acid">$</span> cd ~/seasons/{season.id}
+    </h1>
+    {
+      season.isCurrent && (
+        <span class="text-[10px] font-bold tracking-[0.2em] text-cyan">
+          CURRENT
+        </span>
+      )
+    }
+    <SeasonStatusBadge status={season.status} />
+  </div>
+  <p class="mt-2 flex flex-wrap gap-4 text-xs">
+    <a
+      href={withBase(withSeason(ADMIN_WEEKS, season))}
+      class="text-cyan hover:underline">weeks ({season.weekCount})</a
+    >
+    <a
+      href={withBase(withSeason(ADMIN_ROSTER, season))}
+      class="text-cyan hover:underline">roster</a
+    >
+    {
+      isSeasonPublic(season) && (
+        <a
+          href={withBase(`/seasons/${season.id}`)}
+          class="text-cyan hover:underline"
+          target="_blank"
+          rel="noopener"
+        >
+          public page ↗
+        </a>
+      )
+    }
+  </p>
+
+  {
+    notice && (
+      <Notice tone="success" class="mt-6">
+        {notice}
+      </Notice>
+    )
+  }
+  {
+    actionError && (
+      <Notice tone="error" class="mt-6">
+        {actionError}
+      </Notice>
+    )
+  }
+
+  <div class="mt-8 grid gap-8 lg:grid-cols-2">
+    <section aria-labelledby="current-heading">
+      <h2 id="current-heading" class={sectionHeading}>public site</h2>
+      <TerminalWindow title="~/seasons/current">
+        {
+          season.isCurrent ? (
+            <p class="text-sm text-ink-dim">
+              This is the season the public site shows. To move on, create the
+              next season and make it current from its page.
+            </p>
+          ) : (
+            <form method="post" class="space-y-4">
+              <input type="hidden" name="intent" value="make-current" />
+              <p class="text-sm text-ink-dim">
+                Make {season.name} the season the public site shows: its
+                leaderboard, weeks, players and squads replace the current
+                season's everywhere. Past seasons stay in the Hall of Fame once
+                they're closed.
+              </p>
+              <button type="submit" class={btnPrimary}>
+                make current
+              </button>
+            </form>
+          )
+        }
+      </TerminalWindow>
+    </section>
+
+    <section aria-labelledby="close-heading">
+      <h2 id="close-heading" class={sectionHeading}>crown the champion</h2>
+      <TerminalWindow title="~/seasons/close">
+        {
+          season.status === "closed" ? (
+            <form method="post" class="space-y-4">
+              <input type="hidden" name="intent" value="reopen" />
+              <p class="text-sm text-ink-dim">
+                {season.name} is closed: its champion is in the Hall of Fame and
+                its weeks, roster and scores are read-only. Reopen it to fix
+                something; close it again afterwards.
+              </p>
+              <button type="submit" class={btnGhost}>
+                reopen season
+              </button>
+            </form>
+          ) : closeBlockers.length > 0 ? (
+            <div class="space-y-3 text-sm">
+              <p class="text-ink-dim">
+                A season closes once every week is over with its results in and
+                published. Still to do:
+              </p>
+              <ul class="space-y-1 text-amber">
+                {closeBlockers.map((reason) => (
+                  <li>
+                    <span aria-hidden="true">● </span>
+                    {reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <form method="post" class="space-y-4">
+              <input type="hidden" name="intent" value="close" />
+              <p class="text-sm text-ink-dim">
+                Every week is in. Closing crowns the final standings in the Hall
+                of Fame and makes the season read-only:
+              </p>
+              <ol class="space-y-1 text-sm">
+                {podium.map((row, index) => (
+                  <li class="flex items-baseline gap-3">
+                    <span class="w-8 text-xs font-bold text-magenta">
+                      {medals[index]}
+                    </span>
+                    <span class="text-ink">{row.player.name}</span>
+                    <span class="tabular-nums text-ink-faint">
+                      {row.points} pts
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {topSquad && (
+                <p class="text-xs text-ink-faint">
+                  Winning squad:{" "}
+                  <span class="text-ink">{topSquad.team.name}</span>
+                </p>
+              )}
+              <button type="submit" class={btnPrimary}>
+                close &amp; crown champion
+              </button>
+            </form>
+          )
+        }
+      </TerminalWindow>
+    </section>
+  </div>
+
+  <section aria-labelledby="details-heading" class="mt-8">
+    <h2 id="details-heading" class={sectionHeading}>details</h2>
+    <TerminalWindow title={`~/seasons/${season.id}.md`}>
+      <SeasonForm
+        mode="edit"
+        values={values}
+        errors={errors}
+        formError={formError}
+      />
+    </TerminalWindow>
+  </section>
+
+  <section aria-labelledby="danger-heading" class="mt-8">
+    <h2 id="danger-heading" class={sectionHeading}>danger zone</h2>
+    {
+      season.isCurrent || !isEmpty ? (
+        <p class="text-sm text-ink-dim">
+          {season.isCurrent
+            ? "The current season can't be deleted."
+            : `Only an empty season can be deleted. This one still has ${contents
+                .filter((c) => c.count > 0)
+                .map((c) => `${c.count} ${c.label}${c.count === 1 ? "" : "s"}`)
+                .join(", ")}.`}
+        </p>
+      ) : (
+        <ConfirmDelete
+          subject={`season "${season.name}"`}
+          label="delete season"
+        />
+      )
+    }
+  </section>
+</AdminLayout>

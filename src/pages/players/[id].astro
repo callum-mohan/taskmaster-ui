@@ -11,6 +11,15 @@ import AchievementBadge from "../../components/AchievementBadge.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import { withBase } from "../../lib/url";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
+
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const scope = await recordScope(Astro.locals, "player", Astro.params.id, {
+  isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
 
 const {
   getTeamForPlayer,
@@ -20,7 +29,7 @@ const {
   getPlayerAchievements,
   getPlayerProgressionChart,
   getPlayerBonusSummary,
-} = await Astro.locals.getQueries();
+} = scope.queries;
 
 const { id } = Astro.params;
 const standing = getPlayerStanding(id!);
@@ -68,12 +77,11 @@ const positionClasses = (position: number) => {
   if (position <= 3) return "border-cyan/40 bg-cyan/5 text-cyan";
   return "border-grid bg-term-bg text-ink-dim";
 };
-const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 ---
 
 <Layout title={player.name} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-    <!-- Back link -->
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/players" label="ALL PLAYERS" />

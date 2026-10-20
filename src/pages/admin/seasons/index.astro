@@ -1,0 +1,147 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import SeasonStatusBadge from "../../../components/SeasonStatusBadge.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnPrimary } from "../../../components/admin/styles";
+import {
+  ADMIN_GUIDE,
+  ADMIN_ROSTER,
+  ADMIN_SEASONS,
+  ADMIN_WEEKS,
+} from "../../../lib/admin-nav";
+import { withSeason } from "../../../lib/admin-season";
+import { isSeasonPublic } from "../../../data/seasons";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const { seasons } = await Astro.locals.getSeasons();
+// Newest first: that's the one usually being worked on.
+const rows = await Promise.all(
+  [...seasons].reverse().map(async (season) => {
+    const { players, teams } = await Astro.locals.getQueries(season.id);
+    return { season, players: players.length, teams: teams.length };
+  }),
+);
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+---
+
+<AdminLayout title="Seasons">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+        <span class="text-acid">$</span> ls ~/seasons
+      </h1>
+      <p class="mt-1 max-w-prose text-sm text-ink-dim">
+        Each season is one cohort's competition, with its own players, squads
+        and weeks. The <span class="text-ink">current</span> season is the one the
+        public site shows. Close a season when its last week is in to crown its champion
+        in the Hall of Fame.{" "}
+        <a
+          href={withBase(`${ADMIN_GUIDE}#seasons`)}
+          class="text-cyan hover:underline">How seasons work</a
+        >
+      </p>
+    </div>
+    <a href={withBase(`${ADMIN_SEASONS}/new`)} class={btnPrimary}
+      >+ new season</a
+    >
+  </div>
+
+  {
+    done === "deleted" && subject && (
+      <Notice tone="success" class="mt-6">
+        Deleted {subject}.
+      </Notice>
+    )
+  }
+
+  <TerminalWindow
+    title="~/seasons"
+    meta={plural(seasons.length, "season")}
+    class="mt-6"
+    bodyClass="p-0 sm:p-0"
+  >
+    <ul class="divide-y divide-grid/60">
+      {
+        rows.map(({ season, players, teams }) => (
+          <li
+            class:list={[
+              "flex flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between",
+              season.isCurrent && "bg-acid/5",
+            ]}
+          >
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-3">
+                <a
+                  href={withBase(`${ADMIN_SEASONS}/${season.id}`)}
+                  class="font-bold text-ink hover:text-acid"
+                >
+                  {season.name}
+                </a>
+                {season.isCurrent && (
+                  <span class="text-[10px] font-bold tracking-[0.2em] text-cyan">
+                    CURRENT
+                  </span>
+                )}
+                <SeasonStatusBadge status={season.status} />
+              </div>
+              <p class="mt-1 text-xs text-ink-faint">
+                {plural(season.weekCount, "week")} · {plural(players, "player")}{" "}
+                · {plural(teams, "squad")}
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-4 text-xs">
+              <a
+                href={withBase(withSeason(ADMIN_WEEKS, season))}
+                class="text-cyan hover:underline"
+              >
+                weeks
+              </a>
+              <a
+                href={withBase(withSeason(ADMIN_ROSTER, season))}
+                class="text-cyan hover:underline"
+              >
+                roster
+              </a>
+              {isSeasonPublic(season) && (
+                <a
+                  href={withBase(`/seasons/${season.id}`)}
+                  class="text-cyan hover:underline"
+                  target="_blank"
+                  rel="noopener"
+                >
+                  public page ↗
+                </a>
+              )}
+              <a
+                href={withBase(`${ADMIN_SEASONS}/${season.id}`)}
+                class="font-bold tracking-widest text-amber hover:underline"
+              >
+                manage &rarr;
+              </a>
+            </div>
+          </li>
+        ))
+      }
+    </ul>
+    {
+      seasons.length === 0 && (
+        <p class="p-6 text-sm text-ink-dim">
+          No seasons yet.{" "}
+          <a
+            href={withBase(`${ADMIN_SEASONS}/new`)}
+            class="text-cyan hover:underline"
+          >
+            Create the first one
+          </a>
+          .
+        </p>
+      )
+    }
+  </TerminalWindow>
+</AdminLayout>

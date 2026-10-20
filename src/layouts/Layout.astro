@@ -6,9 +6,17 @@ import CommandPalette from "../components/CommandPalette.astro";
 import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
 import { withBase } from "../lib/url";
+import { isSeasonPublic } from "../data/seasons";
 
-const [{ getCommandPaletteItems, getWhatsNew, getNotifications }, viewer] =
-  await Promise.all([Astro.locals.getQueries(), Astro.locals.getViewer()]);
+const [
+  { getCommandPaletteItems, getWhatsNew, getNotifications },
+  viewer,
+  { seasons },
+] = await Promise.all([
+  Astro.locals.getQueries(),
+  Astro.locals.getViewer(),
+  Astro.locals.getSeasons(),
+]);
 
 interface Props {
   /** Page-specific title segment; the site name is appended automatically. */
@@ -37,7 +45,10 @@ const fullTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const socialImage = new URL(withBase(image), Astro.site);
 
-const paletteItems = getCommandPaletteItems({ admin: viewer?.isAdmin });
+const paletteItems = getCommandPaletteItems({
+  admin: viewer?.isAdmin,
+  seasons: viewer?.isAdmin ? seasons : seasons.filter(isSeasonPublic),
+});
 const whatsNew = getWhatsNew();
 // Only players get notifications: their read marker lives on the account.
 const notifications = viewer?.playerId

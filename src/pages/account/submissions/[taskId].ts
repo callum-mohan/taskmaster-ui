@@ -15,6 +15,7 @@ import {
   submissionObjectKey,
 } from "../../../lib/submission-forms";
 import { withBase } from "../../../lib/url";
+import { queriesForTask } from "../../../lib/season-scope";
 
 // Players submit and withdraw task entries from the task page. Living under
 // `/account` means the middleware has already required a signed-in player
@@ -41,7 +42,7 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
   }
 
   const { getTaskById, getSubmissionPanel, getSubmissionOwnerRef } =
-    await locals.getQueries();
+    await queriesForTask(locals, params.taskId);
   const task = getTaskById(params.taskId ?? "");
   if (!task) return redirect(withBase("/tasks"));
   const reply = (outcome: SubmissionOutcome) =>

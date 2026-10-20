@@ -1,4 +1,6 @@
 ---
+import { queriesForTask } from "../../../../lib/season-scope";
+import { withSeason } from "../../../../lib/admin-season";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../../components/TerminalWindow.astro";
 import TaskForm from "../../../../components/admin/TaskForm.astro";
@@ -33,7 +35,7 @@ if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 const id = Astro.params.id!;
 const [task, { players, teams, getTaskById }] = await Promise.all([
   getTask(id),
-  Astro.locals.getQueries(),
+  queriesForTask(Astro.locals, Astro.params.id),
 ]);
 const view = getTaskById(id);
 if (!task || !view) return Astro.rewrite("/404");
@@ -63,7 +65,10 @@ if (Astro.request.method === "POST") {
   if (intent === "delete") {
     await deleteTask(id);
     const query = new URLSearchParams({ done: "deleted", name: weekName });
-    return Astro.redirect(withBase(`${ADMIN_WEEKS}?${query}`));
+    const season = (await Astro.locals.getSeasons()).getSeason(task.seasonId);
+    return Astro.redirect(
+      withBase(withSeason(`${ADMIN_WEEKS}?${query}`, season)),
+    );
   }
   if (intent === "reveal" || intent === "relock") {
     await setTaskRevealed(id, intent === "reveal");

@@ -7,19 +7,42 @@ import WeekSteps from "../../components/admin/WeekSteps.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
 import { getAdminCounts, getWeekCounts } from "../../data/admin";
 import { getWeekProgress } from "../../data/week-progress";
-import { ADMIN_SECTIONS, ADMIN_WEEKS, weekHref } from "../../lib/admin-nav";
+import {
+  ADMIN_SEASONS,
+  ADMIN_SECTIONS,
+  ADMIN_WEEKS,
+  weekHref,
+} from "../../lib/admin-nav";
+import { getSeasonCloseBlockers } from "../../data/season-close";
 import { ukDateFormat } from "../../lib/time";
 import { withBase } from "../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
-const [counts, weekCounts, { tasks, players, teams }] = await Promise.all([
+const [
+  counts,
+  weekCounts,
+  { season, tasks, players, teams, resultsPostedAt },
+  { seasons },
+] = await Promise.all([
   getAdminCounts(),
   getWeekCounts(),
   Astro.locals.getQueries(),
+  Astro.locals.getSeasons(),
 ]);
 const admin = Astro.locals.admin;
+const hasSeason = season.id !== "";
+const readyToClose =
+  hasSeason &&
+  season.status !== "closed" &&
+  getSeasonCloseBlockers(tasks, resultsPostedAt).length === 0;
+// A season prepared after the current one, ready to be launched.
+const nextSeason = seasons.find(
+  (s) =>
+    !s.isCurrent && s.status !== "closed" && s.createdAt > season.createdAt,
+);
+const seasonHref = withBase(`${ADMIN_SEASONS}/${season.id}`);
 const roster = { players: players.length, teams: teams.length };
 
 // Weeks that need something doing (live week first, then newest first),
@@ -69,6 +92,67 @@ const when = (iso: string) => stamp.format(new Date(iso));
     to a section.
   </p>
 
+  {
+    (!hasSeason || readyToClose || season.status === "closed") && (
+      <section
+        aria-labelledby="season-heading"
+        class="mt-8 rounded-md border border-amber/50 bg-amber/10 px-4 py-3 text-sm"
+      >
+        <h2 id="season-heading" class="font-bold text-amber">
+          <span aria-hidden="true">● </span>
+          {!hasSeason
+            ? "No season yet"
+            : readyToClose
+              ? `${season.name} is finished`
+              : `${season.name} is closed`}
+        </h2>
+        <p class="mt-1 text-ink-dim">
+          {!hasSeason ? (
+            <>
+              Create the first season, then add its players and weeks.{" "}
+              <a
+                href={withBase(`${ADMIN_SEASONS}/new`)}
+                class="text-cyan hover:underline"
+              >
+                New season &rarr;
+              </a>
+            </>
+          ) : readyToClose ? (
+            <>
+              Every week's results are in. Close the season to crown its
+              champion in the Hall of Fame.{" "}
+              <a href={seasonHref} class="text-cyan hover:underline">
+                Close {season.name} &rarr;
+              </a>
+            </>
+          ) : nextSeason ? (
+            <>
+              {nextSeason.name} is waiting in the wings. Make it current when
+              it's ready to launch.{" "}
+              <a
+                href={withBase(`${ADMIN_SEASONS}/${nextSeason.id}`)}
+                class="text-cyan hover:underline"
+              >
+                Open {nextSeason.name} &rarr;
+              </a>
+            </>
+          ) : (
+            <>
+              The public site is showing its champion. Set up the next season
+              when you're ready.{" "}
+              <a
+                href={withBase(`${ADMIN_SEASONS}/new`)}
+                class="text-cyan hover:underline"
+              >
+                New season &rarr;
+              </a>
+            </>
+          )}
+        </p>
+      </section>
+    )
+  }
+
   <section aria-labelledby="todo-heading" class="mt-8">
     <TerminalWindow
       title="~/todo"
@@ -78,13 +162,14 @@ const when = (iso: string) => stamp.format(new Date(iso));
     >
       <h2 id="todo-heading" class="text-sm font-bold text-ink">
         <span class="text-acid">$</span> what needs doing
+        {hasSeason && <span class="text-ink-faint"> · {season.name}</span>}
       </h2>
       {
         needsAction.length === 0 && (
           <p class="mt-3 text-sm text-ink-dim">
             <span class="text-acid">✓</span> Every released week is judged and
             published.
-            {!nextUpcoming && (
+            {!nextUpcoming && season.status !== "closed" && (
               <>
                 {" "}
                 <a
@@ -201,7 +286,7 @@ const when = (iso: string) => stamp.format(new Date(iso));
       id="counts-heading"
       class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
     >
-      totals
+      totals · all seasons
     </h2>
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       <StatCard label="players" value={counts.players} />

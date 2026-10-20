@@ -1,0 +1,53 @@
+---
+import type { SeasonStatus } from "../types";
+
+interface Props {
+  status: SeasonStatus;
+  class?: string;
+}
+
+const { status, class: className = "" } = Astro.props;
+
+const config: Record<
+  SeasonStatus,
+  { label: string; classes: string; live?: boolean }
+> = {
+  running: {
+    label: "IN PROGRESS",
+    classes: "border-amber/50 bg-amber/10 text-amber",
+    live: true,
+  },
+  closed: {
+    label: "FINISHED",
+    classes: "border-acid-dim bg-acid/10 text-acid",
+  },
+  upcoming: {
+    label: "NOT STARTED",
+    classes: "border-grid bg-term-panel-2 text-ink-faint",
+  },
+};
+
+const { label, classes, live } = config[status];
+---
+
+<span
+  class:list={[
+    "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold tracking-[0.2em]",
+    classes,
+    className,
+  ]}
+>
+  {
+    live ? (
+      <span
+        class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+        aria-hidden="true"
+      />
+    ) : (
+      <span class="text-ink-faint" aria-hidden="true">
+        ●
+      </span>
+    )
+  }
+  {label}
+</span>

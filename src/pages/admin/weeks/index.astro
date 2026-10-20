@@ -10,14 +10,17 @@ import { getWeekProgress } from "../../../data/week-progress";
 import { ADMIN_GUIDE, weekHref } from "../../../lib/admin-nav";
 import { withBase } from "../../../lib/url";
 import { ukDateFormat } from "../../../lib/time";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
 const [{ tasks, players, teams, getCurrentTask }, counts] = await Promise.all([
-  Astro.locals.getQueries(),
+  Astro.locals.getQueries(season?.id),
   getWeekCounts(),
 ]);
+const newWeekHref = withBase(withSeason("/admin/weeks/new", season));
 const roster = { players: players.length, teams: teams.length };
 const currentId = getCurrentTask()?.id;
 // Newest week first: that's the one usually being worked on.
@@ -58,7 +61,7 @@ const stamp = ukDateFormat({
         >
       </p>
     </div>
-    <a href={withBase("/admin/weeks/new")} class={btnPrimary}>+ new week</a>
+    <a href={newWeekHref} class={btnPrimary}>+ new week</a>
   </div>
 
   {
@@ -139,10 +142,7 @@ const stamp = ukDateFormat({
       tasks.length === 0 && (
         <p class="p-6 text-sm text-ink-dim">
           No weeks yet.{" "}
-          <a
-            href={withBase("/admin/weeks/new")}
-            class="text-cyan hover:underline"
-          >
+          <a href={newWeekHref} class="text-cyan hover:underline">
             Add the first one
           </a>
           .

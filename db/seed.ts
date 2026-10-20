@@ -33,6 +33,7 @@ try {
           ).length;
 
     return {
+      seasons: await insert(schema.seasons, data.seasons),
       players: await insert(schema.players, data.players),
       teams: await insert(schema.teams, data.teams),
       team_members: await insert(schema.teamMembers, data.teamMembers),

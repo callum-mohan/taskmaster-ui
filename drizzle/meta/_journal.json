@@ -92,6 +92,34 @@
       "when": 1792350355665,
       "tag": "0012_move_editorial_copy",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792487453282,
+      "tag": "0013_seasons",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792487460103,
+      "tag": "0014_backfill_cohort_2026",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792487491853,
+      "tag": "0015_season_constraints",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792487494487,
+      "tag": "0016_squad_season_keys",
+      "breakpoints": true
     }
   ]
 }

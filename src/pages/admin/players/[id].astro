@@ -32,6 +32,7 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
+import { withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
@@ -39,6 +40,9 @@ if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 const id = Astro.params.id!;
 const player = await getPlayer(id);
 if (!player) return Astro.rewrite("/404");
+const season = (await Astro.locals.getSeasons()).getSeason(player.seasonId);
+const rosterHref = (query = "") =>
+  withBase(withSeason(`/admin/roster${query}`, season));
 
 let account = await getPlayerAccount(id);
 
@@ -62,7 +66,7 @@ if (Astro.request.method === "POST") {
   if (intent === "delete") {
     await deletePlayer(id);
     const query = new URLSearchParams({ done: "deleted", name: player.name });
-    return Astro.redirect(withBase(`/admin/roster?${query}`));
+    return Astro.redirect(rosterHref(`?${query}`));
   }
   if (intent === "reset-password") {
     if (!account?.userId) {
@@ -117,7 +121,7 @@ if (Astro.request.method === "POST") {
           done: "saved",
           name: parsed.data.name,
         });
-        return Astro.redirect(withBase(`/admin/roster?${query}`));
+        return Astro.redirect(rosterHref(`?${query}`));
       } catch (error) {
         formError = describeWriteError(error);
         if (!formError) throw error;
@@ -143,7 +147,7 @@ const statusHelp: Record<typeof status, string> = {
 
 <AdminLayout title={`Edit ${player.name}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase("/admin/roster")} class={btnGhost}>&larr; ROSTER</a>
+    <a href={rosterHref()} class={btnGhost}>&larr; ROSTER</a>
     <a
       href={withBase(`/players/${player.id}`)}
       class="text-xs text-cyan hover:underline"

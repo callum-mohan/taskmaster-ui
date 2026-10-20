@@ -3,6 +3,7 @@
 // per player (or squad) when the task takes entries, a plain score grid when
 // it doesn't, then bonuses and the change log. Both layouts post the same
 // score sheet.
+import { queriesForTask } from "../../../../lib/season-scope";
 import AdminLayout from "../../../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../../../components/TerminalWindow.astro";
 import Notice from "../../../../components/admin/Notice.astro";
@@ -66,7 +67,7 @@ const {
   getSubmissionOwnerRef,
   canAddEntriesForPlayers,
   getSubmitterOptions,
-} = await Astro.locals.getQueries();
+} = await queriesForTask(Astro.locals, Astro.params.id);
 const task = getTaskById(Astro.params.id!);
 if (!task) return Astro.rewrite("/404");
 

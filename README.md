@@ -2,7 +2,8 @@
 
 The frontend for a **Taskmaster-style competition** run by the Engineering
 Academy. Every Friday a new task is released; players have one week to complete
-it, earn points, and climb the leaderboard. ~25 players, 16 weeks, one winner.
+it, earn points, and climb the leaderboard. ~25 players, 16 weeks, one winner
+per season, with every champion kept in the [Hall of Fame](#-seasons--hall-of-fame).
 
 The UI has a deliberate **terminal / CRT aesthetic** — monospace, green-on-black,
 window chrome — and is built with **Astro + TypeScript + Tailwind v4**, rendered
@@ -54,7 +55,14 @@ src/
 │   ├── client.ts      # createDb(url) — node-postgres client for scripts
 │   └── index.ts       # getDb() — Neon HTTP client used by the site
 ├── data/              # The data-access layer (the only code that imports db/)
+<<<<<<< Updated upstream
 │   ├── competition.ts # loads every table per request in one batch
+=======
+│   ├── competition.ts # loads every table in one batch (edge-cached rows), builds a season's snapshot
+│   ├── seasons.ts     # rows → Season (status derived), season lookups, rowsForSeason
+│   ├── season-close.ts # what still stops a season being closed
+│   ├── hall-of-fame-queries.ts # closed seasons' podiums, squads, awards + all-time records
+>>>>>>> Stashed changes
 │   ├── players.ts     # rows → Player ─┐
 │   ├── teams.ts       # rows → Team    ├─ pure mappers
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
@@ -81,12 +89,14 @@ src/
 │   ├── auth.ts        # Neon Auth adapter for Astro (sign in/out, session)
 │   ├── login-limit.ts # per-IP throttle on sign-in attempts
 │   ├── admin-forms.ts # admin form parsing + validation (zod)
+│   ├── admin-season.ts # which season an admin screen works on (?season=)
+│   ├── season-scope.ts # a record's season + its selectors, for detail pages
 │   ├── account-forms.ts # player profile + password form validation
 │   ├── submission-forms.ts # entry form parsing, limits + photo type sniffing
 │   ├── reactions.ts   # the reaction emoji set
 │   └── storage.ts     # Object Storage client (put, presigned get, delete)
 ├── pages/
-│   ├── admin/                 # /admin — dashboard, weeks/<id>/{judge,live,recap}, roster, site, guide (login.ts redirects to /login)
+│   ├── admin/                 # /admin — dashboard, seasons, weeks/<id>/{judge,live,recap}, roster, site, guide (login.ts redirects to /login)
 │   ├── login.astro            # /login — sign-in for players and admins
 │   ├── logout.ts              # POST /logout — signs out
 │   ├── account/               # /account — edit own profile, change password, vote in polls, notifications, submit entries, react / vote People's Choice, predict winners
@@ -99,7 +109,9 @@ src/
 │   ├── live.astro             # /live — results night, revealed bottom first
 │   ├── rules.astro            # /rules — how to play, scoring, bonuses, the prize
 │   ├── compare/               # /compare head-to-head (+ /compare/[a]/[b])
-│   ├── stats.astro            # stats & Hall of Fame awards
+│   ├── stats.astro            # the current season's stats & awards
+│   ├── hall-of-fame.astro     # every closed season's champions + all-time records
+│   ├── seasons/               # /seasons/[id] — a season's final standings (/seasons → hall of fame)
 │   └── 404.astro
 ├── styles/
 │   └── global.css     # design tokens (@theme) + terminal helper classes
@@ -119,7 +131,11 @@ db/schema.ts  →  data/*.ts          →   data/queries.ts   →   pages      �
 - **Pages** get selectors with `await Astro.locals.getQueries()` (set up by
   [`src/middleware.ts`](src/middleware.ts) from
   [`src/data/queries.ts`](src/data/queries.ts)) and pass ready-to-render data
-  down. The snapshot is loaded lazily, at most once per request.
+  down. Every snapshot covers one season: the current one by default, or
+  `getQueries(seasonId)` for another. Pages about one player, squad or week
+  use `recordScope` (`src/lib/season-scope.ts`) to load that record's season.
+  The rows are loaded lazily, at most once per request, and each season's
+  snapshot is built from them at most once.
 - All cross-record computation (leaderboard ranking, rank movement, awards,
   head-to-head) lives in `queries.ts` as pure functions.
 
@@ -169,18 +185,57 @@ HTTP driver (port 443) and records them in the same journal.
 **Recording results:** use the [admin area](#-admin). Changes are live
 immediately; there's nothing to rebuild.
 
+## 🏆 Seasons & Hall of Fame
+
+The competition runs in **seasons** (one per academy cohort, starting with
+**Cohort 2026**). Each player, squad and week belongs to exactly one season
+(`season_id` on `players`, `teams` and `tasks`), so week numbers restart at 1
+each season. Squads can only contain players from their own season (a
+composite key on `team_members`). Ids stay unique across seasons because
+they're public URLs: blank week ids in later seasons default to
+`<season-id>-week-NN`.
+
+- **Current season:** exactly one season is current (`seasons.is_current`,
+  enforced by a partial unique index). The public site's lists, home page,
+  leaderboard, rules and notifications all show it.
+- **Status** is derived: _upcoming_ until its first week is released,
+  _running_ after that, _closed_ once an admin closes it.
+- **Closing** (`seasons.closed_at`) crowns the champion. It's only allowed
+  once every week is over with its results in and published. The podium,
+  winning squad and awards are always derived from the final standings,
+  never stored. A closed season is read-only: the middleware refuses
+  writes to its weeks, roster and scores until it's reopened.
+- **Public archive:** `/hall-of-fame` lists every closed season's champion,
+  podium, winning squad and awards, plus all-time records (highest season
+  total, biggest winning margin, most weekly wins, best single week).
+  `/seasons/<id>` shows a season's standings, squads, awards and weeks.
+  Player, squad, task and recap URLs from past seasons keep working, with an
+  "archived season" banner. Seasons being prepared (not current, not closed)
+  are hidden from the public.
+- Polls and the changelog are site-wide. A poll's voting bonus only counts
+  for players in the season of the week it lands in.
+- Player sign-in emails are unique across all seasons, so a returning player
+  needs a different email (or their old account removed) for a new season's
+  player record.
+
 ## 🔐 Admin
 
 `/admin` is grouped into five areas, and `/admin/guide` explains each one
 along with the weekly runbook:
 
-| Area      | Path            | What it's for                                                                                                                                                                                                                                                                                                                                                                   |
-| --------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| dashboard | `/admin`        | What needs doing now: the live week, finished weeks still to judge or publish, and the next week to be released, each with a button for its next step.                                                                                                                                                                                                                          |
-| weeks     | `/admin/weeks`  | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
-| roster    | `/admin/roster` | Players (with sign-in accounts) and squads; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                                           |
-| site      | `/admin/site`   | [Polls](#️-polls) and the homepage changelog; editors at `/admin/polls/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                                                                                                                        |
-| guide     | `/admin/guide`  | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
+| Area      | Path             | What it's for                                                                                                                                                                                                                                                                                                                                                                   |
+| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dashboard | `/admin`         | What needs doing now: the live week, finished weeks still to judge or publish, and the next week to be released, each with a button for its next step. Prompts to close a finished season or launch the next one.                                                                                                                                                               |
+| seasons   | `/admin/seasons` | Part of the weeks area. Create seasons, make one current, close one to crown its champion (or reopen it), rename, and delete empty ones. Editor at `/admin/seasons/<id>`.                                                                                                                                                                                                       |
+| weeks     | `/admin/weeks`   | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
+| roster    | `/admin/roster`  | Players (with sign-in accounts) and squads, per season; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                               |
+| site      | `/admin/site`    | [Polls](#️-polls) and the homepage changelog; editors at `/admin/polls/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                                                                                                                        |
+| guide     | `/admin/guide`   | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
+
+The weeks and roster lists, and the new week / player / squad forms, work on
+one season: the current one, or another picked with the season switcher
+(`?season=<id>`, see `src/lib/admin-season.ts`). Screens about a single week,
+player or squad use that record's season.
 
 Each week's progress (brief → judge → results night → recap) is worked out
 in `src/data/week-progress.ts` from the task and its counts, so it can't

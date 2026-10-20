@@ -10,6 +10,7 @@ import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
 import WhatsNewModal from "../components/WhatsNewModal.astro";
 import PollCard from "../components/PollCard.astro";
+import ChampionCard from "../components/ChampionCard.astro";
 import {
   describeVoteOutcome,
   VOTE_OUTCOMES,
@@ -19,6 +20,9 @@ import type { PollViewer } from "../types";
 import { ukDateFormat } from "../lib/time";
 
 const {
+  season,
+  tasks,
+  players,
   getCurrentTask,
   getTopPlayers,
   getRecentResults,
@@ -29,6 +33,18 @@ const {
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
+// Between the last week and the next season: the closed season's honours.
+const champion =
+  season.status === "closed"
+    ? (await Astro.locals.getHallOfFame()).seasons.find(
+        (h) => h.season.id === season.id,
+      )
+    : undefined;
+const seasonState: Record<typeof season.status, string> = {
+  upcoming: "STARTING SOON",
+  running: "IN PROGRESS",
+  closed: "COMPLETE",
+};
 const liveTask = getLiveTask();
 const currentEncrypted = currentTask?.status === "live" && currentTask.locked;
 const topPlayers = getTopPlayers(5);
@@ -117,17 +133,24 @@ const btnGhost =
             <span class="text-cyan">&gt;</span> initialising competition...
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> players loaded:
-            <span class="text-ink">25</span>
+            <span class="text-cyan">&gt;</span> season:{" "}
+            <span class="text-ink">{season.name}</span>
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> weeks scheduled:
-            <span class="text-ink">16</span>
+            <span class="text-cyan">&gt;</span> players loaded:{" "}
+            <span class="text-ink">{players.length}</span>
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> status:
-            <span class="text-amber">IN&nbsp;PROGRESS</span><span class="caret"
-            ></span>
+            <span class="text-cyan">&gt;</span> weeks scheduled:{" "}
+            <span class="text-ink">{tasks.length}</span>
+          </p>
+          <p class="text-ink-faint">
+            <span class="text-cyan">&gt;</span> status:{" "}
+            <span
+              class:list={[
+                season.status === "closed" ? "text-acid" : "text-amber",
+              ]}>{seasonState[season.status]}</span
+            ><span class="caret"></span>
           </p>
         </div>
       </div>
@@ -142,8 +165,14 @@ const btnGhost =
       <div
         class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xl font-bold sm:text-2xl"
       >
-        <span><span class="text-magenta">16</span> weeks.</span>
-        <span><span class="text-magenta">25</span> players.</span>
+        <span
+          ><span class="text-magenta">{tasks.length}</span>{" "}
+          {tasks.length === 1 ? "week" : "weeks"}.</span
+        >
+        <span
+          ><span class="text-magenta">{players.length}</span>{" "}
+          {players.length === 1 ? "player" : "players"}.</span
+        >
         <span><span class="text-magenta">One</span> winner.</span>
       </div>
 
@@ -155,7 +184,21 @@ const btnGhost =
       </p>
 
       <div class="mt-7 flex flex-wrap gap-3">
-        <a href="#current-task" class={btnPrimary}>&gt; VIEW CURRENT TASK</a>
+        {
+          currentTask ? (
+            <a href="#current-task" class={btnPrimary}>
+              &gt; VIEW CURRENT TASK
+            </a>
+          ) : champion ? (
+            <a href="#champion" class={btnPrimary}>
+              &gt; MEET THE CHAMPION
+            </a>
+          ) : (
+            <a href={withBase("/hall-of-fame")} class={btnPrimary}>
+              &gt; HALL OF FAME
+            </a>
+          )
+        }
         <a href={withBase("/leaderboard")} class={btnGhost}>LEADERBOARD</a>
         <button
           type="button"
@@ -271,6 +314,55 @@ const btnGhost =
               </div>
             </div>
           </TerminalWindow>
+        </section>
+      )
+    }
+
+    <!-- ===================== BETWEEN WEEKS / SEASONS ===================== -->
+    {
+      !currentTask && (
+        <section id="champion" class="mt-14 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            {champion ? "season --champion" : "season --status"}
+          </h2>
+          {champion ? (
+            <>
+              <ChampionCard honours={champion} />
+              <p class="mt-4 text-sm text-ink-dim">
+                <span class="text-acid">//</span> That's a wrap on {season.name}
+                . The next season is on its way: until then, relive every
+                champion in the{" "}
+                <a
+                  href={withBase("/hall-of-fame")}
+                  class="text-cyan hover:underline"
+                >
+                  Hall of Fame
+                </a>
+                .
+              </p>
+            </>
+          ) : (
+            <TerminalWindow title={`~/seasons/${season.id || "next"}.md`}>
+              <p class="text-sm text-ink-dim">
+                <span class="text-amber" aria-hidden="true">
+                  ●{" "}
+                </span>
+                {tasks.length === 0
+                  ? `${season.name} hasn't started yet: the first task is coming soon.`
+                  : `Every week of ${season.name} is done. The Taskmaster is tallying the final scores before crowning the champion.`}{" "}
+                <a
+                  href={withBase(
+                    tasks.length === 0 ? "/hall-of-fame" : "/leaderboard",
+                  )}
+                  class="text-cyan hover:underline"
+                >
+                  {tasks.length === 0
+                    ? "Past champions →"
+                    : "Final standings →"}
+                </a>
+              </p>
+            </TerminalWindow>
+          )}
         </section>
       )
     }

@@ -2,15 +2,17 @@
 import type { Player } from "../types";
 import { withBase } from "../lib/url";
 
-const { getPlayerIcon } = await Astro.locals.getQueries();
-
 interface Props {
-  player: Player;
+  player: Pick<Player, "id" | "name" | "avatarUrl"> &
+    Partial<Pick<Player, "seasonId">>;
   /** Sizing / rounding utilities, merged last so callers control dimensions. */
   class?: string;
 }
 
 const { player, class: className = "h-9 w-9 rounded" } = Astro.props;
+
+// Icons are dealt out per season's roster, so use the player's own season.
+const { getPlayerIcon } = await Astro.locals.getQueries(player.seasonId);
 
 // Decorative: the player's name is always rendered alongside the avatar.
 const src = withBase(getPlayerIcon(player));

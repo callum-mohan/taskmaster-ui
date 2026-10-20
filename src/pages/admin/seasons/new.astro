@@ -1,0 +1,60 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import SeasonForm from "../../../components/admin/SeasonForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createSeason, describeWriteError } from "../../../data/admin";
+import {
+  parseSeasonForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { ADMIN_SEASONS } from "../../../lib/admin-nav";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+let values: FormValues = {};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const parsed = parseSeasonForm(await Astro.request.formData());
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await createSeason(parsed.data);
+      return Astro.redirect(
+        withBase(
+          `${ADMIN_SEASONS}/${encodeURIComponent(parsed.data.id)}?done=created`,
+        ),
+      );
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+---
+
+<AdminLayout title="New season">
+  <a href={withBase(ADMIN_SEASONS)} class={btnGhost}>&larr; ALL SEASONS</a>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> git checkout -b new-season
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    A new season starts empty and private: add its players, squads and weeks,
+    then make it current when you're ready to launch it.
+  </p>
+  <TerminalWindow title="~/seasons/new.md" class="mt-6">
+    <SeasonForm
+      mode="create"
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+</AdminLayout>

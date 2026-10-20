@@ -2,9 +2,14 @@
 import Layout from "../../../layouts/Layout.astro";
 import ComparisonView from "../../../components/ComparisonView.astro";
 
-const { players, getPlayerComparison } = await Astro.locals.getQueries();
+import { recordScope } from "../../../lib/season-scope";
 
 const { a, b } = Astro.params;
+// Head-to-heads are within one season: `b` must be in `a`'s season.
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const scope = await recordScope(Astro.locals, "player", a, { isAdmin });
+if (!scope) return Astro.rewrite("/404");
+const { players, getPlayerComparison } = scope.queries;
 const comparison = getPlayerComparison(a!, b!);
 
 // Unknown or identical ids → 404 rather than a broken page.

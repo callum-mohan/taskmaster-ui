@@ -24,6 +24,7 @@ import {
   predictions,
   recaps,
   scoreAuditLog,
+  seasons,
   submissionReactions,
   taskScores,
   taskSubmissions,
@@ -50,6 +51,7 @@ import type {
   PlayerInput,
   PollInput,
   RecapInput,
+  SeasonInput,
   TaskInput,
   TaskScoreInput,
   TeamInput,
@@ -128,8 +130,12 @@ export async function getAdminCounts() {
 
 // ── Players ───────────────────────────────────────────────────────────
 
-export async function listPlayers(): Promise<PlayerRecord[]> {
-  return getDb().select().from(players).orderBy(asc(players.sortOrder));
+export async function listPlayers(seasonId?: string): Promise<PlayerRecord[]> {
+  return getDb()
+    .select()
+    .from(players)
+    .where(seasonId === undefined ? undefined : eq(players.seasonId, seasonId))
+    .orderBy(asc(players.sortOrder));
 }
 
 export async function getPlayer(id: string): Promise<PlayerRecord | undefined> {
@@ -143,11 +149,13 @@ export async function getPlayer(id: string): Promise<PlayerRecord | undefined> {
  * Neon Auth afterwards and linked with `linkPlayerAccount`.
  */
 export async function createPlayer(
+  seasonId: string,
   input: PlayerInput & { email?: string | null },
 ): Promise<void> {
   const db = getDb();
   const insertPlayer = db.insert(players).values({
     id: input.id,
+    seasonId,
     name: input.name,
     bio: input.bio,
     avatarUrl: input.avatarUrl,
@@ -236,12 +244,80 @@ export async function deletePlayer(id: string): Promise<void> {
   );
 }
 
+// ── Seasons ───────────────────────────────────────────────────────────
+
+export async function createSeason(input: SeasonInput): Promise<void> {
+  await getDb().insert(seasons).values({ id: input.id, name: input.name });
+}
+
+export async function updateSeason(
+  id: string,
+  input: Pick<SeasonInput, "name">,
+): Promise<void> {
+  await getDb()
+    .update(seasons)
+    .set({ name: input.name })
+    .where(eq(seasons.id, id));
+}
+
+/** Makes `id` the season the public site shows (exactly one is current). */
+export async function setCurrentSeason(id: string): Promise<void> {
+  const db = getDb();
+  await db.batch([
+    db
+      .update(seasons)
+      .set({ isCurrent: false })
+      .where(and(eq(seasons.isCurrent, true), sql`${seasons.id} <> ${id}`)),
+    db.update(seasons).set({ isCurrent: true }).where(eq(seasons.id, id)),
+  ]);
+}
+
+/**
+ * Closes a season, crowning its champion, or reopens it. A closed season's
+ * weeks, roster and scores are read-only (see the middleware).
+ */
+export async function setSeasonClosed(
+  id: string,
+  closed: boolean,
+): Promise<void> {
+  await getDb()
+    .update(seasons)
+    .set({ closedAt: closed ? sql`now()` : null })
+    .where(eq(seasons.id, id));
+}
+
+/** What still belongs to a season; only an empty season can be deleted. */
+export async function getSeasonContents(id: string): Promise<DeleteImpact[]> {
+  const db = getDb();
+  const [[p], [t], [k]] = await db.batch([
+    db.select({ n: count() }).from(players).where(eq(players.seasonId, id)),
+    db.select({ n: count() }).from(teams).where(eq(teams.seasonId, id)),
+    db.select({ n: count() }).from(tasks).where(eq(tasks.seasonId, id)),
+  ]);
+  return [
+    { label: "player", count: p.n },
+    { label: "squad", count: t.n },
+    { label: "week", count: k.n },
+  ];
+}
+
+/** Deletes an empty season that isn't current. */
+export async function deleteSeason(id: string): Promise<void> {
+  await getDb()
+    .delete(seasons)
+    .where(and(eq(seasons.id, id), eq(seasons.isCurrent, false)));
+}
+
 // ── Teams ─────────────────────────────────────────────────────────────
 
-export async function listTeams(): Promise<TeamRecord[]> {
+export async function listTeams(seasonId?: string): Promise<TeamRecord[]> {
   const db = getDb();
   const [teamRows, memberRows] = await db.batch([
-    db.select().from(teams).orderBy(asc(teams.sortOrder)),
+    db
+      .select()
+      .from(teams)
+      .where(seasonId === undefined ? undefined : eq(teams.seasonId, seasonId))
+      .orderBy(asc(teams.sortOrder)),
     db.select().from(teamMembers).orderBy(asc(teamMembers.sortOrder)),
   ]);
   return teamRows.map((team) => ({
@@ -260,7 +336,7 @@ export async function getTeam(id: string): Promise<TeamRecord | undefined> {
  * Replaces a squad's members. Players already in another squad are moved
  * (a player belongs to at most one squad), all in the same transaction.
  */
-function replaceMembers(teamId: string, memberIds: string[]) {
+function replaceMembers(teamId: string, seasonId: string, memberIds: string[]) {
   const db = getDb();
   const removeExisting = db
     .delete(teamMembers)
@@ -279,6 +355,7 @@ function replaceMembers(teamId: string, memberIds: string[]) {
           memberIds.map((playerId, index) => ({
             teamId,
             playerId,
+            seasonId,
             sortOrder: index + 1,
           })),
         ),
@@ -286,20 +363,28 @@ function replaceMembers(teamId: string, memberIds: string[]) {
     : ([removeExisting] as const);
 }
 
-export async function createTeam(input: TeamInput): Promise<void> {
+export async function createTeam(
+  seasonId: string,
+  input: TeamInput,
+): Promise<void> {
   const db = getDb();
   await db.batch([
     db.insert(teams).values({
       id: input.id,
+      seasonId,
       name: input.name,
       tagline: input.tagline,
       sortOrder: input.sortOrder ?? nextSortOrder(teams),
     }),
-    ...replaceMembers(input.id, input.memberIds),
+    ...replaceMembers(input.id, seasonId, input.memberIds),
   ]);
 }
 
-export async function updateTeam(id: string, input: TeamInput): Promise<void> {
+export async function updateTeam(
+  team: Pick<TeamRecord, "id" | "seasonId">,
+  input: TeamInput,
+): Promise<void> {
+  const { id } = team;
   const db = getDb();
   await db.batch([
     db
@@ -310,7 +395,7 @@ export async function updateTeam(id: string, input: TeamInput): Promise<void> {
         ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
       })
       .where(eq(teams.id, id)),
-    ...replaceMembers(id, input.memberIds),
+    ...replaceMembers(id, team.seasonId, input.memberIds),
   ]);
 }
 
@@ -367,10 +452,13 @@ const taskValues = (input: TaskInput) => ({
   submissionKinds: input.submissionKinds,
 });
 
-export async function createTask(input: TaskInput): Promise<void> {
+export async function createTask(
+  seasonId: string,
+  input: TaskInput,
+): Promise<void> {
   await getDb()
     .insert(tasks)
-    .values({ id: input.id, ...taskValues(input) });
+    .values({ id: input.id, seasonId, ...taskValues(input) });
 }
 
 export async function updateTask(id: string, input: TaskInput): Promise<void> {
@@ -1209,7 +1297,18 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   players_pkey: "A player with that id already exists.",
   teams_pkey: "A team with that id already exists.",
   tasks_pkey: "A task with that id already exists.",
-  tasks_week_number_unique: "Another task already uses that week number.",
+  tasks_season_id_week_number_unique:
+    "Another week this season already uses that week number.",
+  team_members_player_season_fk:
+    "Squad members must be players from the squad's season.",
+  seasons_pkey: "A season with that id already exists.",
+  seasons_one_current_idx: "Only one season can be current.",
+  players_season_id_seasons_id_fk:
+    "That season still has players, squads or weeks.",
+  teams_season_id_seasons_id_fk:
+    "That season still has players, squads or weeks.",
+  tasks_season_id_seasons_id_fk:
+    "That season still has players, squads or weeks.",
   tasks_deadline_after_release: "The deadline must be after the release date.",
   team_members_player_id_unique: "A player can only be in one team.",
   player_accounts_email_unique: "Another player already uses that email.",

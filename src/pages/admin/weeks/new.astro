@@ -11,11 +11,18 @@ import {
 } from "../../../lib/admin-forms";
 import { ADMIN_WEEKS, weekHref } from "../../../lib/admin-nav";
 import { withBase } from "../../../lib/url";
+import {
+  defaultWeekId,
+  selectedSeason,
+  withSeason,
+} from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
-const { tasks } = await Astro.locals.getQueries();
+const seasons = await Astro.locals.getSeasons();
+const season = selectedSeason(Astro.url, seasons);
+const { tasks } = await Astro.locals.getQueries(season?.id);
 const nextWeek = Math.max(0, ...tasks.map((t) => t.weekNumber)) + 1;
 
 let values: FormValues = {
@@ -30,22 +37,26 @@ let formError: string | undefined;
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
-  // Default the id to the site's `week-NN` convention.
+  // Default the id to the site's `week-NN` convention, prefixed with the
+  // season after the first one (ids are site-wide URLs).
   const week = Number(form.get("weekNumber"));
   if (
+    season &&
     !String(form.get("id") ?? "").trim() &&
     Number.isInteger(week) &&
     week > 0
   ) {
-    form.set("id", `week-${String(week).padStart(2, "0")}`);
+    form.set("id", defaultWeekId(season, week, seasons.seasons));
   }
   const parsed = parseTaskForm(form);
   values = parsed.values;
-  if (!parsed.ok) {
+  if (!season) {
+    formError = "Create a season first.";
+  } else if (!parsed.ok) {
     errors = parsed.errors;
   } else {
     try {
-      await createTask(parsed.data);
+      await createTask(season.id, parsed.data);
       return Astro.redirect(
         withBase(`${weekHref(parsed.data.id)}?done=created`),
       );
@@ -58,7 +69,9 @@ if (Astro.request.method === "POST") {
 ---
 
 <AdminLayout title="New week">
-  <a href={withBase(ADMIN_WEEKS)} class={btnGhost}>&larr; ALL WEEKS</a>
+  <a href={withBase(withSeason(ADMIN_WEEKS, season))} class={btnGhost}
+    >&larr; ALL WEEKS</a
+  >
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> touch ~/weeks/new.brief
   </h1>
@@ -69,6 +82,9 @@ if (Astro.request.method === "POST") {
   <TerminalWindow title="~/weeks/new.brief" class="mt-6">
     <TaskForm
       mode="create"
+      defaultIdPattern={season
+        ? defaultWeekId(season, 1, seasons.seasons).replace("01", "NN")
+        : undefined}
       values={values}
       errors={errors}
       formError={formError}

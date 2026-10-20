@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { recordScope } from "../../lib/season-scope";
 import { withBase } from "../../lib/url";
 
 // Escape per RFC 5545 text rules (backslash, comma, semicolon, newlines).
@@ -34,8 +35,9 @@ const foldLine = (line: string) => {
 };
 
 export const GET: APIRoute = async ({ params, site, locals }) => {
-  const { getTaskById } = await locals.getQueries();
-  const task = getTaskById(params.id!);
+  const isAdmin = (await locals.getViewer())?.isAdmin ?? false;
+  const scope = await recordScope(locals, "task", params.id, { isAdmin });
+  const task = scope?.queries.getTaskById(params.id!);
   if (!task) {
     return new Response("Not found", { status: 404 });
   }

@@ -22,9 +22,12 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
 
 let values: FormValues = {};
 let errors: FieldErrors = {};
@@ -37,13 +40,15 @@ if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   const parsed = parseNewPlayerForm(form);
   values = parsed.values;
-  if (!parsed.ok) {
+  if (!season) {
+    formError = "Create a season first.";
+  } else if (!parsed.ok) {
     errors = parsed.errors;
   } else {
     const { id, name, email } = parsed.data;
     let saved = false;
     try {
-      await createPlayer(parsed.data);
+      await createPlayer(season.id, parsed.data);
       saved = true;
     } catch (error) {
       formError = describeWriteError(error);
@@ -55,7 +60,9 @@ if (Astro.request.method === "POST") {
     }
     if (saved && !email) {
       const query = new URLSearchParams({ done: "saved", name });
-      return Astro.redirect(withBase(`/admin/roster?${query}`));
+      return Astro.redirect(
+        withBase(withSeason(`/admin/roster?${query}`, season)),
+      );
     }
     if (saved && email) {
       const password = temporaryPassword();
@@ -81,7 +88,9 @@ if (Astro.request.method === "POST") {
 ---
 
 <AdminLayout title="New player">
-  <a href={withBase("/admin/roster")} class={btnGhost}>&larr; ROSTER</a>
+  <a href={withBase(withSeason("/admin/roster", season))} class={btnGhost}
+    >&larr; ROSTER</a
+  >
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> touch ~/players/new
   </h1>
@@ -106,13 +115,19 @@ if (Astro.request.method === "POST") {
             </span>
           </Notice>
           <div class="flex flex-wrap gap-3">
-            <a href={withBase("/admin/players/new")} class={btnPrimary}>
+            <a
+              href={withBase(withSeason("/admin/players/new", season))}
+              class={btnPrimary}
+            >
               add another player
             </a>
             <a href={withBase(`/admin/players/${created.id}`)} class={btnGhost}>
               edit {created.name}
             </a>
-            <a href={withBase("/admin/roster")} class={btnGhost}>
+            <a
+              href={withBase(withSeason("/admin/roster", season))}
+              class={btnGhost}
+            >
               all players
             </a>
           </div>

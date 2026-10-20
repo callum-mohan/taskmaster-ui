@@ -33,6 +33,15 @@ import type {
   SubmissionOutcome,
 } from "../../types";
 import { ukDateFormat } from "../../lib/time";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
+
+const viewer = await Astro.locals.getViewer();
+const scope = await recordScope(Astro.locals, "task", Astro.params.id, {
+  isAdmin: viewer?.isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
 
 const {
   getTaskSummary,
@@ -47,7 +56,7 @@ const {
   getPeoplesChoice,
   getPredictionPanel,
   teams,
-} = await Astro.locals.getQueries();
+} = scope.queries;
 
 const { id } = Astro.params;
 const summary = getTaskSummary(id!);
@@ -114,7 +123,6 @@ const bonuses = getTaskBonuses(task.id);
 
 // Entries: the viewer's own slots while the task is live, then a gallery for
 // signed-in users once the deadline passes. Only loaded when something will show.
-const viewer = await Astro.locals.getViewer();
 const submissionViewer = {
   signedIn: viewer !== undefined,
   isAdmin: viewer?.isAdmin ?? false,
@@ -258,7 +266,7 @@ const medal = (position: number) =>
         <DecryptReveal taskId={task.id} play={revealPlay} label={briefFile} />
       )
     }
-    <!-- Back link -->
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/tasks" label="ALL TASKS" />

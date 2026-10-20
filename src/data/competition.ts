@@ -1,5 +1,15 @@
 import { asc, desc, eq } from "drizzle-orm";
+<<<<<<< Updated upstream
 import type { CompetitionData, TaskRevealContext } from "../types";
+=======
+import { env } from "cloudflare:workers";
+import type {
+  CompetitionData,
+  Season,
+  SeasonDirectory,
+  TaskRevealContext,
+} from "../types";
+>>>>>>> Stashed changes
 import { getDb } from "../db";
 import {
   bonusPoints as bonusPointsTable,
@@ -11,6 +21,7 @@ import {
   pollVotes as pollVotesTable,
   predictions as predictionsTable,
   recaps as recapsTable,
+  seasons as seasonsTable,
   taskScores as taskScoresTable,
   taskSubmissions as taskSubmissionsTable,
   tasks as tasksTable,
@@ -29,6 +40,7 @@ import {
 } from "./peoples-choice";
 import { derivePredictionBonusRows, mapPredictions } from "./predictions";
 import { mapChangelog, mapRecaps } from "./editorial";
+import { createSeasonDirectory, mapSeasons, rowsForSeason } from "./seasons";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
 
@@ -50,6 +62,7 @@ export async function loadCompetition(
 ): Promise<CompetitionData> {
   const db = getDb();
   const [
+    seasonRows,
     playerRows,
     teamRows,
     memberRows,
@@ -65,6 +78,7 @@ export async function loadCompetition(
     recapRows,
     changelogRows,
   ] = await db.batch([
+    db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
     db.select().from(teamsTable).orderBy(asc(teamsTable.sortOrder)),
     db
@@ -104,7 +118,96 @@ export async function loadCompetition(
       .from(changelogTable)
       .orderBy(desc(changelogTable.date), desc(changelogTable.createdAt)),
   ]);
+<<<<<<< Updated upstream
 
+=======
+  return {
+    seasonRows,
+    playerRows,
+    teamRows,
+    memberRows,
+    taskRows,
+    taskScoreRows,
+    teamScoreRows,
+    bonusRows,
+    pollRows,
+    pollOptionRows,
+    pollVoteRows,
+    peoplesChoiceRows,
+    predictionRows,
+    recapRows,
+    changelogRows,
+  };
+}
+
+export type CompetitionRows = Awaited<ReturnType<typeof fetchCompetitionRows>>;
+
+/**
+ * Every competition table's rows for the current request. Admins always read
+ * the database directly; public requests (given the site `origin` for the
+ * cache key) share the cached rows. Build a season's snapshot from them with
+ * `buildCompetition`.
+ */
+export async function loadCompetitionRows(
+  viewer: CompetitionViewer = { mode: "public", revealTokens: new Map() },
+  cacheOrigin?: string,
+): Promise<CompetitionRows> {
+  return viewer.mode === "admin" || !cacheOrigin
+    ? fetchCompetitionRows()
+    : cachedJson<CompetitionRows>(
+        rowsCacheKey(cacheOrigin),
+        ROWS_CACHE_TTL_SECONDS,
+        fetchCompetitionRows,
+      );
+}
+
+/** The seasons, and which season each player, squad and week is in. */
+export function buildSeasonDirectory(rows: CompetitionRows): SeasonDirectory {
+  return createSeasonDirectory(mapSeasons(rows.seasonRows, rows.taskRows), {
+    players: rows.playerRows,
+    teams: rows.teamRows,
+    tasks: rows.taskRows,
+  });
+}
+
+/**
+ * Maps one season's rows onto the `src/types` shapes for `viewer`. Derived
+ * state (task status, deadlines) is worked out on every request, so it's
+ * never stale.
+ */
+export async function buildCompetition(
+  allRows: CompetitionRows,
+  viewer: CompetitionViewer,
+  season: Season,
+): Promise<CompetitionData> {
+  return buildSeasonCompetition(
+    rowsForSeason(allRows, season.id),
+    viewer,
+    season,
+  );
+}
+
+async function buildSeasonCompetition(
+  {
+    playerRows,
+    teamRows,
+    memberRows,
+    taskRows,
+    taskScoreRows,
+    teamScoreRows,
+    bonusRows,
+    pollRows,
+    pollOptionRows,
+    pollVoteRows,
+    peoplesChoiceRows,
+    predictionRows,
+    recapRows,
+    changelogRows,
+  }: CompetitionRows,
+  viewer: CompetitionViewer,
+  season: Season,
+): Promise<CompetitionData> {
+>>>>>>> Stashed changes
   const players = mapPlayers(playerRows);
   const teams = mapTeams(teamRows, memberRows);
   const reveal: TaskRevealContext =
@@ -158,7 +261,10 @@ export async function loadCompetition(
         ? { ...row, createdAt: at }
         : row;
     }),
-    ...derivePollBonusRows(polls),
+    // Polls are site-wide: only this season's players earn their bonus.
+    ...derivePollBonusRows(polls).filter((row) =>
+      players.some((p) => p.id === row.playerId),
+    ),
     ...derivePeoplesChoiceBonusRows(peoplesChoiceVotes, tasks, teams),
   ];
   // Correct predictions depend on the week's finishing positions, so rank
@@ -180,6 +286,7 @@ export async function loadCompetition(
         );
 
   return {
+    season,
     players,
     teams,
     tasks,

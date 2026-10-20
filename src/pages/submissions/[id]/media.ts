@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import { getSubmission } from "../../../data/submissions";
 import { presignGet } from "../../../lib/storage";
+import { queriesForTask } from "../../../lib/season-scope";
 
 // A stable, access-checked link to a photo entry. The bucket is private, so
 // this checks who's asking (see `canViewSubmission`) and redirects to a
@@ -22,7 +23,7 @@ export const GET: APIRoute = async ({ params, locals }) => {
   if (!submission?.objectKey) return notFound();
 
   const [{ getTaskById, canViewSubmission }, viewer] = await Promise.all([
-    locals.getQueries(),
+    queriesForTask(locals, submission.taskId),
     locals.getViewer(),
   ]);
   const task = getTaskById(submission.taskId);

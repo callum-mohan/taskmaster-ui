@@ -2,6 +2,7 @@ import type { AdminSection, WeekStepId } from "../types";
 
 export const ADMIN_HOME = "/admin";
 export const ADMIN_WEEKS = "/admin/weeks";
+export const ADMIN_SEASONS = "/admin/seasons";
 export const ADMIN_ROSTER = "/admin/roster";
 export const ADMIN_SITE = "/admin/site";
 export const ADMIN_GUIDE = "/admin/guide";
@@ -16,9 +17,10 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     href: ADMIN_WEEKS,
     label: "weeks",
     title: "Run the weeks",
-    hint: "briefs, entries, scores, results night and recaps",
+    hint: "seasons, briefs, entries, scores, results night and recaps",
     keywords:
-      "tasks briefs scores points bonus entries submissions judge live reveal results recaps",
+      "tasks briefs scores points bonus entries submissions judge live reveal results recaps seasons cohorts champion close",
+    match: [ADMIN_SEASONS],
   },
   {
     href: ADMIN_ROSTER,

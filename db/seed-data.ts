@@ -7,152 +7,183 @@ import type * as schema from "../src/db/schema";
 
 type Insert<T extends { $inferInsert: unknown }> = T["$inferInsert"][];
 
+const seasonId = "cohort-2026";
+
+export const seasons: Insert<typeof schema.seasons> = [
+  { id: seasonId, name: "Cohort 2026", isCurrent: true },
+];
+
 export const players: Insert<typeof schema.players> = [
   {
+    seasonId,
     id: "eva",
     name: "Eva",
     bio: "Conveniently inconvenient",
     sortOrder: 0,
   },
   {
+    seasonId,
     id: "rebekah",
     name: "Rebekah",
     bio: "Good point for Rebekah?",
     sortOrder: 1,
   },
   {
+    seasonId,
     id: "karen",
     name: "Karen",
     bio: "On your left! :D",
     sortOrder: 2,
   },
   {
+    seasonId,
     id: "finnbar",
     name: "Finnbar",
     bio: "Reluctantly optimistic",
     sortOrder: 3,
   },
   {
+    seasonId,
     id: "eve",
     name: "Eve",
     bio: "That's the way it is",
     sortOrder: 4,
   },
   {
+    seasonId,
     id: "luke",
     name: "Luke",
     bio: "'I wish I was as cool as Luke' - everyone",
     sortOrder: 5,
   },
   {
+    seasonId,
     id: "rose",
     name: "Rose",
     bio: "The Game is Afoot",
     sortOrder: 6,
   },
   {
+    seasonId,
     id: "emma",
     name: "Emma",
     bio: "Always one step ahead...",
     sortOrder: 7,
   },
   {
+    seasonId,
     id: "jack",
     name: "Jack",
     bio: "mediocre at all times",
     sortOrder: 8,
   },
   {
+    seasonId,
     id: "caolan_d",
     name: "Caolãn D",
     bio: "My dog is called Loki",
     sortOrder: 9,
   },
   {
+    seasonId,
     id: "erin",
     name: "Erin",
     bio: "gg freaking ez",
     sortOrder: 10,
   },
   {
+    seasonId,
     id: "john",
     name: "John",
     bio: "48 cukes in my belly",
     sortOrder: 11,
   },
   {
+    seasonId,
     id: "connor",
     name: "Connor",
     bio: "Lo siento Wilson",
     sortOrder: 12,
   },
   {
+    seasonId,
     id: "sophia",
     name: "Sophia",
     bio: "sry this bio is stressed me out",
     sortOrder: 13,
   },
   {
+    seasonId,
     id: "orlagh",
     name: "Orlagh",
     bio: "I will never git it.",
     sortOrder: 14,
   },
   {
+    seasonId,
     id: "amelia",
     name: "Amelia",
     bio: "git master 🐦",
     sortOrder: 15,
   },
   {
+    seasonId,
     id: "daire",
     name: "Daire",
     bio: "i have a wayyy smaller ego that y=ou. i have the smallest ego ever",
     sortOrder: 16,
   },
   {
+    seasonId,
     id: "jake",
     name: "Jake",
     bio: "Tasks scatter like leaves\nJake gathers them one by one\nAutumn crowns a king",
     sortOrder: 17,
   },
   {
+    seasonId,
     id: "ryan",
     name: "Ryan",
     bio: "MR GUY",
     sortOrder: 18,
   },
   {
+    seasonId,
     id: "caolan_t",
     name: "Caolan T",
     bio: "Desperately trying",
     sortOrder: 19,
   },
   {
+    seasonId,
     id: "criostoir",
     name: "Criostoir",
     bio: "one must imagine the best bio ever...",
     sortOrder: 20,
   },
   {
+    seasonId,
     id: "eimhear",
     name: "Eimhear",
     bio: "The master of all the tasks",
     sortOrder: 21,
   },
   {
+    seasonId,
     id: "grace",
     name: "Grace",
     bio: "AI's #1 fan",
     sortOrder: 22,
   },
   {
+    seasonId,
     id: "adam",
     name: "Adam",
     bio: "the old guy - Amelia 2026",
     sortOrder: 23,
   },
   {
+    seasonId,
     id: "andrew",
     name: "Andrew",
     bio: "Future taskmaster winner!!!",
@@ -162,36 +193,42 @@ export const players: Insert<typeof schema.players> = [
 
 export const teams: Insert<typeof schema.teams> = [
   {
+    seasonId,
     id: "ctrl-alt-elite",
     name: "Ctrl Alt Elite",
     tagline: "we have used all our tokens; this is our slogan",
     sortOrder: 0,
   },
   {
+    seasonId,
     id: "team-b-for-brilliant",
     name: "Team B (for Brilliant)",
     tagline: "bad point for luke",
     sortOrder: 1,
   },
   {
+    seasonId,
     id: "team-c-pending",
     name: "Team C (pending)",
     tagline: "we will decide eventually",
     sortOrder: 2,
   },
   {
+    seasonId,
     id: "team-friendship",
     name: "Team Friendship",
     tagline: "friendship is magic",
     sortOrder: 3,
   },
   {
+    seasonId,
     id: "team-star-elephant-diagram",
     name: "Team Star Elephant Diagram",
     tagline: "addressing the elephant on the whiteboard - karen",
     sortOrder: 4,
   },
   {
+    seasonId,
     id: "the-achievers",
     name: "The Achievers",
     tagline: "consistently mediocre from day one",
@@ -201,126 +238,151 @@ export const teams: Insert<typeof schema.teams> = [
 
 export const teamMembers: Insert<typeof schema.teamMembers> = [
   {
+    seasonId,
     teamId: "ctrl-alt-elite",
     playerId: "caolan_d",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "ctrl-alt-elite",
     playerId: "grace",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "ctrl-alt-elite",
     playerId: "eimhear",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "ctrl-alt-elite",
     playerId: "criostoir",
     sortOrder: 3,
   },
   {
+    seasonId,
     teamId: "team-b-for-brilliant",
     playerId: "luke",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "team-b-for-brilliant",
     playerId: "erin",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "team-b-for-brilliant",
     playerId: "john",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "team-b-for-brilliant",
     playerId: "rebekah",
     sortOrder: 3,
   },
   {
+    seasonId,
     teamId: "team-c-pending",
     playerId: "finnbar",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "team-c-pending",
     playerId: "eve",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "team-c-pending",
     playerId: "jake",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "team-c-pending",
     playerId: "orlagh",
     sortOrder: 3,
   },
   {
+    seasonId,
     teamId: "team-friendship",
     playerId: "connor",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "team-friendship",
     playerId: "caolan_t",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "team-friendship",
     playerId: "eva",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "team-friendship",
     playerId: "emma",
     sortOrder: 3,
   },
   {
+    seasonId,
     teamId: "team-friendship",
     playerId: "andrew",
     sortOrder: 4,
   },
   {
+    seasonId,
     teamId: "team-star-elephant-diagram",
     playerId: "daire",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "team-star-elephant-diagram",
     playerId: "rose",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "team-star-elephant-diagram",
     playerId: "karen",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "team-star-elephant-diagram",
     playerId: "adam",
     sortOrder: 3,
   },
   {
+    seasonId,
     teamId: "the-achievers",
     playerId: "amelia",
     sortOrder: 0,
   },
   {
+    seasonId,
     teamId: "the-achievers",
     playerId: "sophia",
     sortOrder: 1,
   },
   {
+    seasonId,
     teamId: "the-achievers",
     playerId: "ryan",
     sortOrder: 2,
   },
   {
+    seasonId,
     teamId: "the-achievers",
     playerId: "jack",
     sortOrder: 3,
@@ -329,6 +391,7 @@ export const teamMembers: Insert<typeof schema.teamMembers> = [
 
 export const tasks: Insert<typeof schema.tasks> = [
   {
+    seasonId,
     id: "week-01",
     weekNumber: 1,
     title: "Eggy?",
@@ -340,6 +403,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-02",
     weekNumber: 2,
     title: "Put Yourself On The Map",
@@ -351,6 +415,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-03",
     weekNumber: 3,
     title: "Assassin",
@@ -367,6 +432,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-04",
     weekNumber: 4,
     title: "Task Tank",
@@ -383,6 +449,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "team",
   },
   {
+    seasonId,
     id: "week-05",
     weekNumber: 5,
     title: "???",
@@ -393,6 +460,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-06",
     weekNumber: 6,
     title: "New Roots",
@@ -403,6 +471,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-07",
     weekNumber: 7,
     title: "???",
@@ -413,6 +482,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-08",
     weekNumber: 8,
     title: "Humpty Dumpty",
@@ -423,6 +493,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "team",
   },
   {
+    seasonId,
     id: "week-09",
     weekNumber: 9,
     title: "???",
@@ -433,6 +504,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-10",
     weekNumber: 10,
     title: "Whac-A-Mole",
@@ -443,6 +515,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-11",
     weekNumber: 11,
     title: "???",
@@ -453,6 +526,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-12",
     weekNumber: 12,
     title: "???",
@@ -463,6 +537,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "team",
   },
   {
+    seasonId,
     id: "week-13",
     weekNumber: 13,
     title: "???",
@@ -473,6 +548,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-14",
     weekNumber: 14,
     title: "???",
@@ -483,6 +559,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-15",
     weekNumber: 15,
     title: "???",
@@ -493,6 +570,7 @@ export const tasks: Insert<typeof schema.tasks> = [
     format: "individual",
   },
   {
+    seasonId,
     id: "week-16",
     weekNumber: 16,
     title: "???",

@@ -8,7 +8,14 @@ import type {
   taskScores,
   teamScores,
 } from "../db/schema";
-import type { CompetitionData, Player, Poll, Task, Team } from "../types";
+import type {
+  CompetitionData,
+  Player,
+  Poll,
+  Season,
+  Task,
+  Team,
+} from "../types";
 
 type TaskRow = typeof tasks.$inferSelect;
 type PollRow = typeof polls.$inferSelect;
@@ -20,9 +27,24 @@ type TeamScoreRow = typeof teamScores.$inferSelect;
 /** A `Date.now()`-style timestamp for an ISO 8601 instant. */
 export const at = (iso: string): number => new Date(iso).getTime();
 
+export const SEASON_ID = "cohort-2026";
+
+export function season(overrides: Partial<Season> = {}): Season {
+  return {
+    id: SEASON_ID,
+    name: "Cohort 2026",
+    isCurrent: true,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    status: "running",
+    weekCount: 0,
+    ...overrides,
+  };
+}
+
 export function taskRow(overrides: Partial<TaskRow> = {}): TaskRow {
   return {
     id: "week-01",
+    seasonId: SEASON_ID,
     weekNumber: 1,
     title: "Make the best paper plane",
     description: "Furthest flight wins.",
@@ -44,6 +66,7 @@ export function taskRow(overrides: Partial<TaskRow> = {}): TaskRow {
 export function task(overrides: Partial<Task> = {}): Task {
   return {
     id: "week-01",
+    seasonId: SEASON_ID,
     weekNumber: 1,
     title: "Make the best paper plane",
     description: "Furthest flight wins.",
@@ -61,10 +84,19 @@ export function task(overrides: Partial<Task> = {}): Task {
   };
 }
 
-export const player = (id: string, name = id): Player => ({ id, name });
+export const player = (
+  id: string,
+  name = id,
+  seasonId = SEASON_ID,
+): Player => ({ id, seasonId, name });
 
-export const team = (id: string, memberIds: string[]): Team => ({
+export const team = (
+  id: string,
+  memberIds: string[],
+  seasonId = SEASON_ID,
+): Team => ({
   id,
+  seasonId,
   name: id,
   memberIds,
 });
@@ -168,6 +200,7 @@ export function competitionData(
   overrides: Partial<CompetitionData> = {},
 ): CompetitionData {
   return {
+    season: season(),
     players: [],
     teams: [],
     tasks: [],

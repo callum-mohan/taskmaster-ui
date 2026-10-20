@@ -6,6 +6,35 @@
 export type TaskStatus = "upcoming" | "live" | "completed";
 
 /**
+ * Derived from the season's weeks and whether an admin has closed it:
+ *   no week released yet   → "upcoming"
+ *   a week released        → "running"
+ *   closed by an admin     → "closed" (champion crowned)
+ */
+export type SeasonStatus = "upcoming" | "running" | "closed";
+
+/**
+ * One run of the competition (an academy cohort). Players, squads and weeks
+ * each belong to exactly one season; the public site shows the current one.
+ */
+export interface Season {
+  id: string;
+  /** Display name, e.g. "Cohort 2026". */
+  name: string;
+  /** Whether this is the season the public site shows. */
+  isCurrent: boolean;
+  /** When an admin closed the season and crowned its champion (ISO 8601). */
+  closedAt?: string;
+  createdAt: string;
+  status: SeasonStatus;
+  /** First week's release, once the season has weeks (ISO 8601). */
+  startsAt?: string;
+  /** Last week's deadline, once the season has weeks (ISO 8601). */
+  endsAt?: string;
+  weekCount: number;
+}
+
+/**
  * How a task is contested and scored:
  *   "individual" → every player competes and is scored on their own.
  *   "team"       → players compete in fixed teams; the squad's points are
@@ -17,6 +46,7 @@ export type TaskFormat = "individual" | "team";
 
 export interface Player {
   id: string;
+  seasonId: string;
   name: string;
   /** Optional team grouping, reserved for a future feature. */
   team?: string;
@@ -33,6 +63,7 @@ export interface Player {
  */
 export interface Team {
   id: string;
+  seasonId: string;
   name: string;
   /** Player ids that make up the squad (4–5 members). */
   memberIds: string[];
@@ -42,6 +73,7 @@ export interface Team {
 
 export interface Task {
   id: string;
+  seasonId: string;
   weekNumber: number;
   title: string;
   /** Short summary shown on cards. Hidden for upcoming tasks. */
@@ -222,6 +254,8 @@ export interface Viewer {
  * computation over this snapshot.
  */
 export interface CompetitionData {
+  /** The season this snapshot covers. */
+  season: Season;
   players: Player[];
   teams: Team[];
   /** Ascending by week number, with status derived at load time. */
@@ -1276,4 +1310,53 @@ export interface GameRules {
     maxTextChars: number;
     maxCaptionChars: number;
   };
+}
+
+// ── Seasons & Hall of Fame ───────────────────────────────────────────
+
+/**
+ * Which season each player, squad and week belongs to, plus the season list
+ * (oldest first). Lets detail pages load the right season's snapshot.
+ */
+export interface SeasonDirectory {
+  seasons: Season[];
+  current?: Season;
+  getSeason(id: string): Season | undefined;
+  seasonOfPlayer(playerId: string): Season | undefined;
+  seasonOfTeam(teamId: string): Season | undefined;
+  seasonOfTask(taskId: string): Season | undefined;
+}
+
+/** A closed season's honours, derived from its final standings. */
+export interface HallOfFameSeason {
+  season: Season;
+  /** The top three (fewer when the roster is smaller), champion first. */
+  podium: LeaderboardRow[];
+  /** The top squad, when the season had team tasks scored. */
+  winningSquad?: TeamStanding;
+  awards: Award[];
+  playerCount: number;
+  weekCount: number;
+}
+
+/** An all-time record across every closed season. */
+export interface AllTimeRecord {
+  id: string;
+  /** Record name, e.g. "Highest season total". */
+  title: string;
+  /** Command-style sub-label, e.g. "max season.points". */
+  command: string;
+  player: Player;
+  season: Season;
+  /** Headline value, pre-formatted, e.g. "142 pts". */
+  value: string;
+  /** Supporting context, e.g. the week it was set in. */
+  detail?: string;
+  accent: "acid" | "magenta" | "amber" | "cyan";
+}
+
+export interface HallOfFame {
+  /** Closed seasons, most recent first. */
+  seasons: HallOfFameSeason[];
+  records: AllTimeRecord[];
 }

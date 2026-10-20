@@ -13,14 +13,16 @@ import {
 import { listPlayers, listTeams } from "../../../data/admin";
 import { getAccountStatuses } from "../../../data/accounts";
 import { ADMIN_GUIDE } from "../../../lib/admin-nav";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
 import { withBase } from "../../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
 const [players, teams, accounts] = await Promise.all([
-  listPlayers(),
-  listTeams(),
+  season ? listPlayers(season.id) : [],
+  season ? listTeams(season.id) : [],
   getAccountStatuses(),
 ]);
 const playerName = new Map(players.map((p) => [p.id, p.name]));
@@ -66,8 +68,9 @@ const subject = Astro.url.searchParams.get("name");
       >
         players ({players.length})
       </h2>
-      <a href={withBase("/admin/players/new")} class={btnPrimary}
-        >+ new player</a
+      <a
+        href={withBase(withSeason("/admin/players/new", season))}
+        class={btnPrimary}>+ new player</a
       >
     </div>
     <TerminalWindow title="~/roster/players" bodyClass="p-0 sm:p-0">
@@ -96,7 +99,11 @@ const subject = Astro.url.searchParams.get("name");
                   <td class={tableCell}>
                     <span class="flex items-center gap-3">
                       <PlayerAvatar
-                        player={{ id: row.id, name: row.name }}
+                        player={{
+                          id: row.id,
+                          name: row.name,
+                          seasonId: row.seasonId,
+                        }}
                         class="h-7 w-7 rounded"
                       />
                       <span>
@@ -163,7 +170,10 @@ const subject = Astro.url.searchParams.get("name");
           }
         </p>
       </div>
-      <a href={withBase("/admin/teams/new")} class={btnGhost}>+ new squad</a>
+      <a
+        href={withBase(withSeason("/admin/teams/new", season))}
+        class={btnGhost}>+ new squad</a
+      >
     </div>
     <TerminalWindow title="~/roster/squads" bodyClass="p-0 sm:p-0">
       <div class="overflow-x-auto">

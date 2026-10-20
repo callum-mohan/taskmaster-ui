@@ -36,6 +36,7 @@ import type {
   FeatureUpdate,
   CompetitionData,
   PlayerRankChange,
+  Season,
 } from "../types";
 import { createPollQueries } from "./poll-queries";
 import { createNotificationQueries } from "./notification-queries";
@@ -658,7 +659,7 @@ export function createQueries(data: CompetitionData) {
   })();
 
   /** Root-relative path to the avatar image assigned to this player. */
-  function getPlayerIcon(player: Player): string {
+  function getPlayerIcon(player: Pick<Player, "id">): string {
     const index =
       playerIconIndex.get(player.id) ??
       hashString(player.id) % PLAYER_ICON_COUNT;
@@ -1135,8 +1136,17 @@ export function createQueries(data: CompetitionData) {
       label: "Stats",
       group: "page",
       href: withBase("/stats"),
-      hint: "hall of fame & awards",
-      keywords: "summary superlatives records",
+      hint: "awards & superlatives",
+      keywords: "summary superlatives",
+    },
+    {
+      id: "page-hall-of-fame",
+      label: "Hall of Fame",
+      group: "page",
+      href: withBase("/hall-of-fame"),
+      hint: "every season's champions & records",
+      keywords:
+        "hall of fame champions winners seasons cohorts past archive records history",
     },
     {
       id: "page-players",
@@ -1164,7 +1174,23 @@ export function createQueries(data: CompetitionData) {
    */
   function getCommandPaletteItems({
     admin = false,
-  }: { admin?: boolean } = {}): CommandPaletteItem[] {
+    seasons = [],
+  }: {
+    admin?: boolean;
+    /** Seasons to list (pass the ones the viewer may see). */
+    seasons?: readonly Season[];
+  } = {}): CommandPaletteItem[] {
+    const seasonItems: CommandPaletteItem[] = seasons
+      .filter((s) => s.id !== data.season.id)
+      .map((s) => ({
+        id: `season-${s.id}`,
+        label: s.name,
+        group: "page" as const,
+        href: withBase(`/seasons/${s.id}`),
+        hint: s.status === "closed" ? "final standings" : "season",
+        keywords: `season cohort archive past ${s.id}`,
+      }));
+
     const taskItems: CommandPaletteItem[] = [...tasks]
       .sort((a, b) => a.weekNumber - b.weekNumber)
       .map((task) => {
@@ -1236,6 +1262,7 @@ export function createQueries(data: CompetitionData) {
 
     return [
       ...PALETTE_PAGES,
+      ...seasonItems,
       ...taskItems,
       ...teamItems,
       ...playerItems,
@@ -1580,9 +1607,12 @@ export function createQueries(data: CompetitionData) {
   }
 
   return {
+    season: data.season,
     players,
     teams,
     tasks,
+    scores,
+    resultsPostedAt,
     getPlayerById,
     getTaskById,
     getCurrentTask,

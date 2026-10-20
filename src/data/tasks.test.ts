@@ -140,6 +140,7 @@ describe("mapTasks", () => {
     );
     expect(mapped).toEqual({
       id: "week-01",
+      seasonId: "cohort-2026",
       weekNumber: 1,
       title: "Make the best paper plane",
       description: "Furthest flight wins.",

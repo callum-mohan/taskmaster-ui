@@ -9,6 +9,7 @@ type PlayerRow = typeof playersTable.$inferSelect;
 export function mapPlayers(rows: PlayerRow[]): Player[] {
   return rows.map((row) => ({
     id: row.id,
+    seasonId: row.seasonId,
     name: row.name,
     ...(row.bio !== null && { bio: row.bio }),
     ...(row.avatarUrl !== null && { avatarUrl: row.avatarUrl }),

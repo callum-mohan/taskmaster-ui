@@ -6,7 +6,8 @@ import type { PlayerTaskResult, TaskStatus, TaskSummary } from "../../types";
 
 type TaskFilter = "all" | TaskStatus;
 
-const { getTaskSummaries, getPlayerResults } = await Astro.locals.getQueries();
+const { season, getTaskSummaries, getPlayerResults } =
+  await Astro.locals.getQueries();
 const viewer = await Astro.locals.getViewer();
 
 const summaries = getTaskSummaries();
@@ -119,8 +120,8 @@ const clearSearchHref = withBase(
         class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim sm:text-base"
       >
         <span class="text-acid">// </span>
-        {summaries.length} weekly challenges. One released every Friday. Upcoming
-        briefs stay encrypted until release.
+        {season.name}: {summaries.length} weekly challenges. One released every Friday.
+        Upcoming briefs stay encrypted until release.
       </p>
 
       <div

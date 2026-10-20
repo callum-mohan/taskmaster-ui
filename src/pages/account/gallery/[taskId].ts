@@ -9,6 +9,7 @@ import {
 import { isReactionKind } from "../../../lib/reactions";
 import { parseRowId } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
+import { queriesForTask } from "../../../lib/season-scope";
 
 // Players react to gallery entries and cast their People's Choice vote from
 // the task page. Living under `/account` means the middleware has already
@@ -45,7 +46,7 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
     canViewSubmission,
     getPeoplesChoice,
     getReactionTallies,
-  } = await locals.getQueries();
+  } = await queriesForTask(locals, params.taskId);
   const task = getTaskById(params.taskId ?? "");
   if (!task) return redirect(withBase("/tasks"));
 

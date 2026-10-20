@@ -1,6 +1,7 @@
 ---
 // The admin's how-to: the area map, the weekly runbook, how to read the
-// progress markers, and reference notes for the roster and site pages.
+// progress markers, the season lifecycle, and reference notes for the
+// roster and site pages.
 import AdminLayout from "../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../components/TerminalWindow.astro";
 import { weekStepState } from "../../components/admin/styles";
@@ -8,6 +9,7 @@ import {
   ADMIN_GUIDE,
   ADMIN_HOME,
   ADMIN_ROSTER,
+  ADMIN_SEASONS,
   ADMIN_SITE,
   ADMIN_WEEKS,
 } from "../../lib/admin-nav";
@@ -21,6 +23,7 @@ const contents = [
   { id: "map", label: "the admin at a glance" },
   { id: "weekly", label: "running a week" },
   { id: "markers", label: "reading the progress markers" },
+  { id: "seasons", label: "seasons and the Hall of Fame" },
   { id: "roster", label: "players, accounts and squads" },
   { id: "site", label: "polls and the changelog" },
   { id: "good-to-know", label: "good to know" },
@@ -30,7 +33,12 @@ const areas = [
   {
     href: ADMIN_HOME,
     label: "dashboard",
-    what: "What needs doing now: the live week, any finished week that still needs judging or publishing, and the next week to be released. Each has a button for its next step.",
+    what: "What needs doing now: the live week, any finished week that still needs judging or publishing, and the next week to be released. Each has a button for its next step. It also tells you when a season is ready to close or the next one is ready to launch.",
+  },
+  {
+    href: ADMIN_SEASONS,
+    label: "seasons",
+    what: "One per cohort. Create the next season, make it current, and close a finished one to crown its champion. Reached from the weeks area or the season bar on any season's screen.",
   },
   {
     href: ADMIN_WEEKS,
@@ -40,7 +48,7 @@ const areas = [
   {
     href: ADMIN_ROSTER,
     label: "roster",
-    what: "Players (with their sign-in accounts) and squads.",
+    what: "Players (with their sign-in accounts) and squads, for one season at a time.",
   },
   {
     href: ADMIN_SITE,
@@ -176,7 +184,8 @@ const goodToKnow = [
   "Everything you save is live on the public site straight away. There's no publish step (except results night).",
   "Deleting anything asks you to confirm and lists what goes with it (scores, entries, votes and so on).",
   "Some bonuses are automatic and can't be edited here: poll voting bonuses, +1 for the People's Choice winner, and +1 for a correct winner prediction. They're worked out from the votes and results, so they can't go stale.",
-  "Ids (players, squads, weeks) are part of public URLs, so they can't be changed after creation.",
+  "Ids (players, squads, weeks, seasons) are part of public URLs, so they can't be changed after creation, and must be unique across every season. Leave a new week's id blank to get a safe default.",
+  "A sign-in email can only belong to one player across all seasons, so a returning player needs a different email for their new season's player.",
   "When you're signed in as an admin, public player, squad, task and recap pages have an edit link that brings you straight to the right admin screen.",
   "Press ⌘K (Ctrl+K) anywhere to jump to an admin area.",
 ];
@@ -328,6 +337,46 @@ const link = "text-cyan hover:underline";
   </section>
 
   <section
+    id="seasons"
+    aria-labelledby="seasons-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="seasons-heading" class={h2}>
+      <span class="text-acid">#</span> seasons and the Hall of Fame
+    </h2>
+    <p class={lead}>
+      Each cohort plays its own season, with its own players, squads and weeks
+      (week numbers restart at 1). The <span class="text-ink">current</span> season
+      is the one the public site shows. Manage them in{" "}
+      <a href={withBase(ADMIN_SEASONS)} class={link}>seasons</a>.
+    </p>
+    <ol class="mt-4 max-w-prose space-y-2 text-sm text-ink-dim">
+      <li>
+        <span class="font-bold text-acid">1.</span> When the last week's results are
+        published, open the season and press <span class="text-ink"
+          >close &amp; crown champion</span
+        >. Its podium, winning squad and awards go up in the public Hall of
+        Fame, and the season becomes read-only (reopen it to fix anything).
+      </li>
+      <li>
+        <span class="font-bold text-acid">2.</span> Press <span class="text-ink"
+          >+ new season</span
+        > when you're ready to plan the next one. It starts empty and private.
+      </li>
+      <li>
+        <span class="font-bold text-acid">3.</span> Pick the new season in the season
+        switcher on the weeks and roster screens, then add its players, squads and
+        weeks as usual. The public site doesn't see any of it yet.
+      </li>
+      <li>
+        <span class="font-bold text-acid">4.</span> Open the new season and press
+        <span class="text-ink">make current</span> to launch it. The old season's
+        player, squad, task and recap pages stay online as an archive.
+      </li>
+    </ol>
+  </section>
+
+  <section
     id="roster"
     aria-labelledby="roster-heading"
     class="mt-12 scroll-mt-24"
@@ -336,7 +385,8 @@ const link = "text-cyan hover:underline";
       <span class="text-acid">#</span> players, accounts and squads
     </h2>
     <p class={lead}>
-      All in <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a>.
+      All in <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a>, one
+      season at a time (use the season switcher to work on another).
     </p>
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
       <TerminalWindow title="~/guide/players">

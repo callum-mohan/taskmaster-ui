@@ -2,6 +2,7 @@ import type { APIRoute } from "astro";
 import type { PredictionOutcome, PredictionPick } from "../../../types";
 import { savePrediction, withdrawPrediction } from "../../../data/predictions";
 import { withBase } from "../../../lib/url";
+import { queriesForTask } from "../../../lib/season-scope";
 
 // Players call a week's winner from the task page. Living under `/account`
 // means the middleware has already required a signed-in player (with a
@@ -25,8 +26,10 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
     return redirect(withBase("/login"));
   }
 
-  const { getTaskById, getPredictionPanel, canPredict } =
-    await locals.getQueries();
+  const { getTaskById, getPredictionPanel, canPredict } = await queriesForTask(
+    locals,
+    params.taskId,
+  );
   const task = getTaskById(params.taskId ?? "");
   if (!task) return redirect(withBase("/tasks"));
   const reply = (outcome: PredictionOutcome) =>

@@ -59,6 +59,7 @@ export function mapTasks(
     };
     const base = {
       id: row.id,
+      seasonId: row.seasonId,
       weekNumber: row.weekNumber,
       ...dates,
       format: row.format,

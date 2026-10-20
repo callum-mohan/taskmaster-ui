@@ -13,6 +13,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // Raw competition records. Only facts are stored here: finishing positions,
@@ -65,22 +66,67 @@ const recordedTimestamps = () => ({
     .$onUpdate(() => sql`now()`),
 });
 
-export const players = pgTable("players", {
-  id: text().primaryKey(),
-  name: text().notNull(),
-  bio: text(),
-  avatarUrl: text(),
-  // Roster order: display order and the tie-breaker for equal points.
-  sortOrder: integer().notNull(),
-});
+/**
+ * A run of the competition (one academy cohort). Players, squads and weeks
+ * all belong to one season. Exactly one season is current: the one the
+ * public site shows. `closedAt` is set when an admin closes the season and
+ * crowns its champion (the standings themselves are always derived).
+ */
+export const seasons = pgTable(
+  "seasons",
+  {
+    id: text().primaryKey(),
+    name: text().notNull(),
+    isCurrent: boolean().notNull().default(false),
+    closedAt: timestamp({ withTimezone: true, mode: "string" }),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    uniqueIndex("seasons_one_current_idx")
+      .on(t.isCurrent)
+      .where(sql`${t.isCurrent}`),
+  ],
+);
 
-export const teams = pgTable("teams", {
-  id: text().primaryKey(),
-  name: text().notNull(),
-  tagline: text(),
-  // Team order: display order and the tie-breaker for equal team points.
-  sortOrder: integer().notNull(),
-});
+// A season with players, squads or weeks can't be deleted.
+const seasonId = () =>
+  text()
+    .notNull()
+    .references(() => seasons.id, { onDelete: "restrict" });
+
+export const players = pgTable(
+  "players",
+  {
+    id: text().primaryKey(),
+    seasonId: seasonId(),
+    name: text().notNull(),
+    bio: text(),
+    avatarUrl: text(),
+    // Roster order: display order and the tie-breaker for equal points.
+    sortOrder: integer().notNull(),
+  },
+  (t) => [
+    index("players_season_id_idx").on(t.seasonId),
+    // Target of `team_members`' composite key, so squads stay in one season.
+    unique("players_id_season_id_unique").on(t.id, t.seasonId),
+  ],
+);
+
+export const teams = pgTable(
+  "teams",
+  {
+    id: text().primaryKey(),
+    seasonId: seasonId(),
+    name: text().notNull(),
+    tagline: text(),
+    // Team order: display order and the tie-breaker for equal team points.
+    sortOrder: integer().notNull(),
+  },
+  (t) => [
+    index("teams_season_id_idx").on(t.seasonId),
+    unique("teams_id_season_id_unique").on(t.id, t.seasonId),
+  ],
+);
 
 export const teamMembers = pgTable(
   "team_members",
@@ -93,16 +139,32 @@ export const teamMembers = pgTable(
       .notNull()
       .unique("team_members_player_id_unique")
       .references(() => players.id, { onDelete: "cascade" }),
+    // Denormalised so the composite keys below keep a squad's members in
+    // the squad's season.
+    seasonId: seasonId(),
     sortOrder: integer().notNull(),
   },
-  (t) => [primaryKey({ columns: [t.teamId, t.playerId] })],
+  (t) => [
+    primaryKey({ columns: [t.teamId, t.playerId] }),
+    foreignKey({
+      name: "team_members_team_season_fk",
+      columns: [t.teamId, t.seasonId],
+      foreignColumns: [teams.id, teams.seasonId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "team_members_player_season_fk",
+      columns: [t.playerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+  ],
 );
 
 export const tasks = pgTable(
   "tasks",
   {
     id: text().primaryKey(),
-    weekNumber: integer().notNull().unique("tasks_week_number_unique"),
+    seasonId: seasonId(),
+    weekNumber: integer().notNull(),
     title: text().notNull(),
     description: text().notNull().default(""),
     // Prose (string) or a bullet list (string[]); see `Task.brief`.
@@ -133,6 +195,7 @@ export const tasks = pgTable(
     resultsPublishedAt: timestamp({ withTimezone: true, mode: "string" }),
   },
   (t) => [
+    unique("tasks_season_id_week_number_unique").on(t.seasonId, t.weekNumber),
     check(
       "tasks_results_reveal_count_positive",
       sql`${t.resultsRevealCount} >= 0`,

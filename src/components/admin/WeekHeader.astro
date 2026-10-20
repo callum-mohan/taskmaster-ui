@@ -6,6 +6,7 @@ import TaskStatusBadge from "../TaskStatusBadge.astro";
 import { btnGhost, weekStepState } from "./styles";
 import { ADMIN_WEEKS } from "../../lib/admin-nav";
 import { withBase } from "../../lib/url";
+import { withSeason } from "../../lib/admin-season";
 import type { Task, WeekProgress, WeekStepId } from "../../types";
 
 interface Props {
@@ -18,11 +19,14 @@ interface Props {
 
 const { task, progress, active, class: className } = Astro.props;
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
+const season = (await Astro.locals.getSeasons()).getSeason(task.seasonId);
 ---
 
 <div class={className}>
   <div class="flex flex-wrap items-center justify-between gap-3">
-    <a href={withBase(ADMIN_WEEKS)} class={btnGhost}>&larr; ALL WEEKS</a>
+    <a href={withBase(withSeason(ADMIN_WEEKS, season))} class={btnGhost}
+      >&larr; ALL WEEKS</a
+    >
     <span class="flex flex-wrap gap-4 text-xs">
       <slot name="links" />
       <a

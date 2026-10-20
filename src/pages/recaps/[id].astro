@@ -11,8 +11,17 @@ import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
 import AdminEditLink from "../../components/AdminEditLink.astro";
 import { weekHref } from "../../lib/admin-nav";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
 
-const { getWeekRecap, getRecapTaskIds } = await Astro.locals.getQueries();
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const scope = await recordScope(Astro.locals, "task", Astro.params.id, {
+  isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
+
+const { getWeekRecap, getRecapTaskIds } = scope.queries;
 
 const { id } = Astro.params;
 // Only completed, scored weeks have a recap; anything else (including a live
@@ -75,11 +84,11 @@ if (titleRace) {
 
 const medal = (position: number) =>
   position === 1 ? "🥇" : position === 2 ? "🥈" : position === 3 ? "🥉" : null;
-const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/recaps" label="ALL RECAPS" />

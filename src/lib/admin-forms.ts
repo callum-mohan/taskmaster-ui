@@ -123,6 +123,22 @@ export const avatarUrlField = optionalText(500).refine(
   "Use an https:// URL or a site path starting with /.",
 );
 
+const seasonSchema = z.object({
+  id: slug,
+  name: requiredText(60),
+});
+
+export type SeasonInput = z.output<typeof seasonSchema>;
+
+export function parseSeasonForm(form: FormData): ParseResult<SeasonInput> {
+  const values = formValues(form);
+  return parseWith(
+    seasonSchema,
+    { id: values.id ?? "", name: values.name ?? "" },
+    values,
+  );
+}
+
 const playerSchema = z.object({
   id: slug,
   name: requiredText(80),

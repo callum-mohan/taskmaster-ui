@@ -16,6 +16,7 @@ export function mapTeams(
 ): Team[] {
   return teamRows.map((row) => ({
     id: row.id,
+    seasonId: row.seasonId,
     name: row.name,
     ...(row.tagline !== null && { tagline: row.tagline }),
     memberIds: memberRows

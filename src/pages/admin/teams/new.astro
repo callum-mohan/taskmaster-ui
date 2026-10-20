@@ -1,0 +1,80 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import TeamForm from "../../../components/admin/TeamForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import {
+  createTeam,
+  describeWriteError,
+  listPlayers,
+  listTeams,
+} from "../../../data/admin";
+import {
+  parseTeamForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+
+let values: FormValues = {};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const parsed = parseTeamForm(await Astro.request.formData());
+  values = parsed.values;
+  if (!season) {
+    formError = "Create a season first.";
+  } else if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await createTeam(season.id, parsed.data);
+      const query = new URLSearchParams({
+        done: "saved",
+        name: parsed.data.name,
+      });
+      return Astro.redirect(
+        withBase(withSeason(`/admin/roster?${query}#squads`, season)),
+      );
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+
+const [playerRows, teamRows] = season
+  ? await Promise.all([listPlayers(season.id), listTeams(season.id)])
+  : [[], []];
+const options = playerRows.map((p) => ({
+  id: p.id,
+  name: p.name,
+  otherTeam: teamRows.find((t) => t.memberIds.includes(p.id))?.name,
+}));
+---
+
+<AdminLayout title="New team">
+  <a
+    href={withBase(withSeason("/admin/roster#squads", season))}
+    class={btnGhost}>&larr; ROSTER</a
+  >
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch ~/teams/new
+  </h1>
+  <TerminalWindow title="~/teams/new.md" class="mt-6">
+    <TeamForm
+      mode="create"
+      values={values}
+      options={options}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+</AdminLayout>

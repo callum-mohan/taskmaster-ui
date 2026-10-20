@@ -3,40 +3,53 @@ name: taskmaster-component-standards
 description: >-
   Coding standards and architecture conventions for EAYL Taskmaster Astro UI.
   Use when creating or editing Astro components, pages, TypeScript types, or
-  the mock data layer so new code matches the established patterns: typed
-  `Props`, the data-layer separation (types → data → derived queries → UI),
-  mock-data-only rules, prop-driven reusable components, client scripts, and
-  accessibility. Triggers: "add a component", "create a page", "add mock
-  data", "wire up data", "new type", "follow the project conventions".
+  the data layer so new code matches the established patterns: typed
+  `Props`, the data-layer separation (schema → data → derived queries → UI),
+  per-request Neon Postgres data rules, the admin area (auth + writes),
+  prop-driven reusable components, client scripts, and accessibility. Triggers: "add a component", "create a page",
+  "add data", "wire up data", "new type", "follow the project conventions".
 ---
 
 # Taskmaster Component & Code Standards
 
-The UI is **Astro + TypeScript + Tailwind v4**, static-first, **no React**,
-**no backend/Supabase yet**. The goal is a clean, prop-driven component set
-backed by a swappable mock data layer.
+The UI is **Astro + TypeScript + Tailwind v4**, **no React**, rendered on
+request on **Cloudflare Workers** (`output: "server"`). Competition data lives
+in **Neon Postgres** (Drizzle ORM over Neon's HTTP driver). Public requests
+read the raw rows through a 5-minute per-data-centre edge cache that every
+signed-in write purges (see README → Caching), so edits made in `/admin`
+show up immediately. The goal is a clean,
+prop-driven component set backed by a database-agnostic data layer.
 
 ## Architecture: strict data-layer separation
 Data flows one direction. Keep every layer in its place:
 
 ```
+src/db/schema.ts        ← Drizzle tables (raw facts only)
 src/types/index.ts      ← shape definitions (interfaces, unions)
-src/data/*.ts           ← raw mock records (players, tasks, scores)
-src/data/queries.ts     ← derived selectors / view models
-pages (.astro)          ← call selectors, pass plain props to components
+src/data/competition.ts ← load every table (one db.batch; rows edge-cached)
+src/data/*.ts           ← pure mappers: rows → raw records (types)
+src/data/queries.ts     ← createQueries(data): derived selectors / view models
+src/middleware.ts       ← Astro.locals.getQueries() (lazy, once per request)
+pages (.astro)          ← await getQueries(), pass plain props to components
 components (.astro)      ← render props only; NO data imports of raw records
 ```
 
 Rules:
 - **Never hard-code player/task/score data inside a component.** Components
   receive everything through typed `Props`.
-- Pages import from `src/data/*` (ideally the `queries.ts` selectors), then
-  hand ready-to-render data to components.
+- Pages get selectors with
+  `const { getLeaderboard } = await Astro.locals.getQueries();`, then hand
+  ready-to-render data to components. Never cache competition data in
+  module-level state: a Worker isolate serves many requests concurrently.
+  The only cache is the raw-rows edge cache in `competition.ts`; new
+  competition writes must happen in a `POST` under `/admin` or `/account`
+  so the middleware purges it.
 - All cross-record computation (leaderboard ranking, stats, recent results,
   initials) lives in `queries.ts` as pure functions — not in components or
   page markup.
-- This separation exists so the mock arrays can later be replaced by Supabase
-  queries **without changing any component**. Preserve it.
+- This separation keeps the database out of the UI: only `src/data/*.ts`
+  imports `src/db`, and **no component, page or client script may import
+  `src/db`**. Admin writes live in `src/data/admin.ts`. Preserve it.
 
 ## Types (`src/types/index.ts`)
 - Define a shared `interface` / union for every domain concept and reuse it;
@@ -47,14 +60,26 @@ Rules:
 - Status is a string-literal union (`"upcoming" | "live" | "completed"`),
   exported as `TaskStatus`.
 
-## Mock data (`src/data/*.ts`)
-- One file per entity: `players.ts`, `tasks.ts`, `scores.ts`.
-- Export a typed array plus small `getXById` / `getCurrent*` lookup helpers.
-- Derive scores deterministically where practical (see `scores.ts`) so the
-  dataset stays internally consistent and easy to extend.
-- Add a comment noting the array will become a Supabase query later.
-- Keep data realistic and sufficient to demonstrate every UI state (upcoming,
-  live, completed).
+## Data (`src/db/*`, `src/data/*.ts`)
+- The schema lives in `src/db/schema.ts`. Change it, then
+  `npm run db:generate`; never hand-edit or ad-hoc migrate the database.
+  Test migrations on a Neon branch (`neon checkout dev --create`) first.
+- Store **facts only** (points, dates, membership). Derive positions, status
+  and totals in `src/data/*` / `queries.ts` so they can't drift.
+- One mapper file per entity: `players.ts`, `teams.ts`, `tasks.ts`,
+  `scores.ts`. Each maps rows to the `src/types` shape (omit `null` columns
+  rather than passing `null`). `competition.ts` does the loading; add new
+  tables to its `db.batch` so a page view stays one round trip.
+- Lookups (`getXById`, `getCurrent*`) live inside `createQueries`, keeping
+  selectors synchronous over the snapshot.
+- Dynamic routes have no `getStaticPaths`: look the param up and
+  `return Astro.rewrite("/404")` when it's missing.
+- New initial/demo rows go in `db/seed-data.ts` (seeded with `npm run db:seed`,
+  insert-only). Editorial copy (recaps, changelog) is data too: it lives in
+  the `recaps` / `changelog_entries` tables, edited in `/admin`.
+- Bonuses earned automatically (poll votes, People's Choice, predictions) are
+  derived in `competition.ts` from their votes/results, never stored, so they
+  can't go stale.
 
 ## Astro component conventions
 - **Typed props:** every component declares `interface Props { ... }` and
@@ -68,11 +93,42 @@ Rules:
 - Map variants with a typed config object keyed by the union
   (see `TaskStatusBadge.astro`'s `config: Record<TaskStatus, {...}>`), rather
   than chains of `if`/ternaries in markup.
-- Comment only where it adds context (e.g. explaining the build-time
+- Comment only where it adds context (e.g. explaining the server-rendered
   countdown fallback); don't narrate obvious markup.
 
+## Admin area (`/admin`)
+- Auth is Neon Auth (Managed Better Auth) through the small adapter in
+  `src/lib/auth.ts`. Everyone signs in at `/login` (`/admin/login` is a
+  legacy redirect). `src/middleware.ts` guards every `/admin` path and sets
+  `Astro.locals.admin`; only the `admin` role gets in.
+- Admin pages render with `AdminLayout.astro` (the site `Layout` plus an
+  admin sub-nav) and the `src/components/admin/*` controls (`AdminField`,
+  `ScoreGrid`, `ConfirmDelete`, `Notice`, shared class strings in
+  `styles.ts`). Admin areas are defined once in `src/lib/admin-nav.ts`
+  (sub-nav, dashboard, command palette): dashboard · weeks · roster · site ·
+  guide. Prefer extending an existing area over adding a new one, and give
+  each job one screen: don't add a second place to do the same thing.
+- Anything about a single week is a tab of its workspace,
+  `/admin/weeks/[id]/…` (brief · judge · results night · recap), rendered
+  with `WeekHeader` and linked with `weekHref(id, step)`. A week's step
+  states come from `getWeekProgress` (`src/data/week-progress.ts`); update it
+  (and its tests) when a step's meaning changes.
+- When an admin URL moves, add the old path to `legacyAdminPath` in
+  `admin-nav.ts` so bookmarks redirect, and update `/admin/guide` and the
+  README when an admin workflow changes.
+- Public detail pages show an `AdminEditLink` to their editor when
+  `viewer.isAdmin`.
+- Forms are plain `method="post"` forms handled in the page frontmatter: parse
+  with `src/lib/admin-forms.ts` (zod), write with `src/data/admin.ts`, then
+  `Astro.redirect` (post/redirect/get). On failure, re-render with the
+  submitted `values` and per-field `errors`; map constraint errors with
+  `describeWriteError`. Use a hidden `intent` field for multiple actions.
+- Multi-statement writes go in one `db.batch([...])` (a transaction).
+- Deletes always go through `ConfirmDelete` and show what cascades.
+- Ids are immutable after create (they're public URLs).
+
 ## Client-side JavaScript
-- Default to static output. Add a `<script>` only when behaviour needs the
+- Default to server-rendered HTML that works without JS. Add a `<script>` only when behaviour needs the
   browser (e.g. `Countdown.astro`, mobile nav toggle).
 - Scripts are TypeScript, type the DOM queries (`querySelector<HTMLElement>`),
   and must **degrade gracefully**: render a correct server-side value first,
@@ -100,11 +156,15 @@ Always run and keep clean:
 npx astro check   # 0 errors / 0 warnings
 npx astro build
 ```
-Also confirm nav links and dynamic routes resolve, and that no section looks
-unfinished or contains placeholder content.
+Also confirm nav links and dynamic routes resolve (unknown ids → 404), and
+that no section looks unfinished or contains placeholder content. Test admin
+changes against the Neon `dev` branch, never production.
 
 ## Don't
 - ❌ Add React or UI libraries without a strong technical reason.
-- ❌ Implement Supabase, auth, or any backend yet.
+- ❌ Query the database from the browser or a client script, or expose admin
+  writes outside the guarded `/admin` routes.
+- ❌ Hold competition data in module-level variables (requests share an
+  isolate); load it through `Astro.locals.getQueries()`.
 - ❌ Import raw data arrays into components or compute standings in markup.
 - ❌ Leave untyped props or inline one-off object shapes.

@@ -1,0 +1,26 @@
+---
+import { withBase } from "../lib/url";
+
+interface Props {
+  /** Root-relative admin path, e.g. `/admin/players/rose`. */
+  href: string;
+  /** What's being edited, for the accessible name (e.g. "Rose's profile"). */
+  subject: string;
+  class?: string;
+}
+
+const { href, subject, class: className = "" } = Astro.props;
+---
+
+<!-- Admin-only shortcut from a public page to its admin editor. -->
+<a
+  href={withBase(href)}
+  aria-label={`Edit ${subject} in admin`}
+  title="admin only"
+  class:list={[
+    "inline-flex items-center justify-center gap-2 rounded-md border border-magenta/50 px-4 py-2 text-xs font-bold tracking-widest text-magenta transition-colors hover:border-magenta hover:bg-magenta/10",
+    className,
+  ]}
+>
+  <span aria-hidden="true">$</span>EDIT
+</a>

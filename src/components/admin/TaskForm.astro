@@ -1,0 +1,244 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import { btnPrimary, btnGhost, labelClass } from "./styles";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import { withBase } from "../../lib/url";
+import {
+  MAX_PHOTO_BYTES,
+  MAX_SUBMISSIONS_PER_TASK,
+  MAX_TEXT_LENGTH,
+} from "../../lib/submission-forms";
+
+interface Props {
+  mode: "create" | "edit";
+  values: FormValues;
+  errors?: FieldErrors;
+  formError?: string;
+  /** The id a blank id field becomes, with NN for the week number. */
+  defaultIdPattern?: string;
+}
+
+const {
+  mode,
+  values,
+  errors = {},
+  formError,
+  defaultIdPattern = "week-NN",
+} = Astro.props;
+const isCreate = mode === "create";
+
+const choice =
+  "flex cursor-pointer items-center gap-2 rounded-md border border-grid px-3 py-2 text-sm text-ink transition-colors hover:border-ink-faint has-[:checked]:border-acid-dim has-[:checked]:bg-acid/5";
+const radio = "h-4 w-4 accent-[var(--color-acid)]";
+
+const formats = [
+  {
+    value: "individual",
+    label: "individual",
+    hint: "every player scored on their own",
+  },
+  {
+    value: "team",
+    label: "team",
+    hint: "squads scored; members inherit points",
+  },
+];
+const briefModes = [
+  { value: "prose", label: "prose" },
+  { value: "bullets", label: "bullet list (one per line)" },
+];
+const submissionKinds = [
+  {
+    value: "photo",
+    label: "photo",
+    hint: `JPEG, PNG, WebP, GIF or AVIF, up to ${MAX_PHOTO_BYTES / (1024 * 1024)} MB`,
+  },
+  {
+    value: "text",
+    label: "text",
+    hint: `a written entry, up to ${MAX_TEXT_LENGTH} characters`,
+  },
+];
+const checkbox = "h-4 w-4 accent-[var(--color-acid)]";
+const kinds = new Set(
+  (values.submissionKinds ?? "").split(",").filter(Boolean),
+);
+const format = values.format ?? "individual";
+const briefMode = values.briefMode ?? "prose";
+---
+
+<form method="post" class="space-y-5">
+  <input type="hidden" name="intent" value="save" />
+  {formError && <Notice tone="error">{formError}</Notice>}
+  <div class="grid gap-5 sm:grid-cols-3">
+    <AdminField
+      label="week"
+      name="weekNumber"
+      type="number"
+      min={1}
+      max={99}
+      value={values.weekNumber}
+      error={errors.weekNumber}
+      required
+    />
+    <AdminField
+      label="id"
+      name="id"
+      value={values.id}
+      error={errors.id}
+      readonly={!isCreate}
+      required={!isCreate}
+      placeholder={defaultIdPattern.replace("NN", "05")}
+      hint={isCreate
+        ? `Blank uses ${defaultIdPattern}. Used in URLs; can't be changed later.`
+        : "Used in URLs, so it can't be changed."}
+      class="sm:col-span-2"
+    />
+  </div>
+  <AdminField
+    label="title"
+    name="title"
+    value={values.title}
+    error={errors.title}
+    required
+    hint={'Use "???" to keep the title secret until release.'}
+  />
+  <AdminField
+    label="description"
+    name="description"
+    value={values.description}
+    error={errors.description}
+    rows={2}
+    hint="Short summary for cards. Hidden until the task is released."
+  />
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>brief</legend>
+    <div class="flex flex-wrap gap-2">
+      {
+        briefModes.map((m) => (
+          <label class={choice}>
+            <input
+              type="radio"
+              name="briefMode"
+              value={m.value}
+              checked={briefMode === m.value}
+              class={radio}
+            />
+            {m.label}
+          </label>
+        ))
+      }
+    </div>
+    <AdminField
+      label="brief text"
+      name="brief"
+      value={values.brief}
+      error={errors.brief}
+      rows={7}
+      hint="Optional. The full brief on the task page."
+    />
+  </fieldset>
+  <div class="grid gap-5 sm:grid-cols-2">
+    <AdminField
+      label="release"
+      name="releaseDate"
+      type="datetime-local"
+      value={values.releaseDate}
+      error={errors.releaseDate}
+      required
+      hint="UK time (GMT/BST), shown on the site as entered."
+    />
+    <AdminField
+      label="deadline"
+      name="deadline"
+      type="datetime-local"
+      value={values.deadline}
+      error={errors.deadline}
+      required
+      hint="UK time (GMT/BST), shown on the site as entered."
+    />
+  </div>
+  <fieldset>
+    <legend class={labelClass}>format</legend>
+    {errors.format && <p class="mt-1.5 text-xs text-danger">{errors.format}</p>}
+    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+      {
+        formats.map((f) => (
+          <label class={choice}>
+            <input
+              type="radio"
+              name="format"
+              value={f.value}
+              checked={format === f.value}
+              class={radio}
+            />
+            <span>
+              {f.label}
+              <span class="block text-xs text-ink-faint">{f.hint}</span>
+            </span>
+          </label>
+        ))
+      }
+    </div>
+  </fieldset>
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>submissions</legend>
+    <AdminField
+      label="entries allowed"
+      name="maxSubmissions"
+      type="number"
+      min={0}
+      max={MAX_SUBMISSIONS_PER_TASK}
+      value={values.maxSubmissions}
+      error={errors.maxSubmissions}
+      required
+      hint="Per player, or per squad on team tasks. 0 keeps on-site submissions closed."
+      class="sm:max-w-xs"
+    />
+    <div>
+      <p class="text-xs text-ink-dim">accepted kinds</p>
+      {
+        errors.submissionKinds && (
+          <p class="mt-1.5 text-xs text-danger" role="alert">
+            {errors.submissionKinds}
+          </p>
+        )
+      }
+      <div class="mt-2 grid gap-2 sm:grid-cols-2">
+        {
+          submissionKinds.map((k) => (
+            <label class={choice}>
+              <input
+                type="checkbox"
+                name="submissionKinds"
+                value={k.value}
+                checked={kinds.has(k.value)}
+                class={checkbox}
+              />
+              <span>
+                {k.label}
+                <span class="block text-xs text-ink-faint">{k.hint}</span>
+              </span>
+            </label>
+          ))
+        }
+      </div>
+    </div>
+  </fieldset>
+  <AdminField
+    label="reveal password"
+    name="revealPassword"
+    value={values.revealPassword}
+    error={errors.revealPassword}
+    autocomplete="off"
+    placeholder="(none)"
+    hint="Optional. Keeps the title and brief encrypted until a visitor enters it on the task page. Case and spaces are ignored. Changing it re-locks everyone."
+  />
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" class={btnPrimary}>
+      {isCreate ? "create week" : "save changes"}
+    </button>
+    <a href={withBase("/admin/weeks")} class={btnGhost}>cancel</a>
+  </div>
+</form>

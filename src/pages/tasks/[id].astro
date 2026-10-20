@@ -1,5 +1,4 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import { withBase } from "../../lib/url";
 import TerminalWindow from "../../components/TerminalWindow.astro";
@@ -9,53 +8,232 @@ import ScoreBadge from "../../components/ScoreBadge.astro";
 import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
+import { weekHref } from "../../lib/admin-nav";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
-import { tasks } from "../../data/tasks";
+import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
+import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
+import DecryptReveal from "../../components/DecryptReveal.astro";
+import SubmissionPanel from "../../components/SubmissionPanel.astro";
+import SubmissionGallery from "../../components/SubmissionGallery.astro";
+import PeoplesChoiceBar from "../../components/PeoplesChoiceBar.astro";
+import PredictionPanel from "../../components/PredictionPanel.astro";
+import { loadTaskSubmissions, presignEntryMedia } from "../../data/submissions";
+import { loadTaskReactions } from "../../data/reactions";
+import { getRevealPassword } from "../../data/task-reveal";
 import {
+  allowRevealAttempt,
+  passwordMatches,
+  setRevealCookie,
+} from "../../lib/task-reveal";
+import type {
+  GalleryOutcome,
+  PredictionOutcome,
+  RevealError,
+  SubmissionOutcome,
+} from "../../types";
+import { ukDateFormat } from "../../lib/time";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
+
+const viewer = await Astro.locals.getViewer();
+const scope = await recordScope(Astro.locals, "task", Astro.params.id, {
+  isAdmin: viewer?.isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
+
+const {
   getTaskSummary,
   getTaskResults,
   getTaskPager,
   getRecapTaskIds,
   getTeamResults,
-} from "../../data/queries";
-import { teams } from "../../data/teams";
-
-export const getStaticPaths = (() => {
-  return tasks.map((task) => ({ params: { id: task.id } }));
-}) satisfies GetStaticPaths;
+  getTaskBonuses,
+  getSubmissionPanel,
+  getPublicSubmissionGallery,
+  getSocialGallery,
+  getPeoplesChoice,
+  getPredictionPanel,
+  teams,
+} = scope.queries;
 
 const { id } = Astro.params;
 const summary = getTaskSummary(id!);
 
 // Unknown id → 404 rather than a broken page.
 if (!summary) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const { task, winner, winningScore, winningTeam } = summary;
+
+// A live, password-protected task this visitor hasn't unlocked yet: the data
+// layer has already redacted its title and brief.
+const needsPassword = task.locked && task.status === "live";
+
+// Reveal-password guesses post back here (post/redirect/get on success).
+let revealError: RevealError | undefined;
+if (Astro.request.method === "POST") {
+  if (!needsPassword) {
+    return Astro.redirect(withBase(`/tasks/${task.id}`), 303);
+  }
+  const form = await Astro.request.formData();
+  const guess = String(form.get("password") ?? "").slice(0, 200);
+  let clientIp = Astro.request.headers.get("cf-connecting-ip") ?? "";
+  try {
+    clientIp ||= Astro.clientAddress;
+  } catch {
+    clientIp ||= "unknown";
+  }
+  if (!(await allowRevealAttempt(clientIp, task.id))) {
+    revealError = "throttled";
+    Astro.response.status = 429;
+  } else {
+    const password = await getRevealPassword(task.id);
+    if (password && guess.trim() && passwordMatches(guess, password)) {
+      await setRevealCookie(
+        Astro.cookies,
+        task.id,
+        password,
+        Astro.url.protocol === "https:",
+      );
+      return Astro.redirect(withBase(`/tasks/${task.id}?decrypted=1`), 303);
+    }
+    revealError = "denied";
+    Astro.response.status = 403;
+  }
+}
+
+// Decrypt animation: straight after a correct password, otherwise once per
+// browser the first time a password-protected task is seen unlocked.
+const revealPlay: "always" | "if-unseen" | undefined =
+  task.passwordProtected && !task.locked && task.status === "live"
+    ? Astro.url.searchParams.has("decrypted")
+      ? "always"
+      : "if-unseen"
+    : undefined;
 const isTeam = task.format === "team";
 const results = task.status === "completed" ? getTaskResults(task.id) : [];
 const teamResults =
   isTeam && task.status === "completed" ? getTeamResults(task.id) : [];
 const pager = getTaskPager(task.id);
 const hasRecap = getRecapTaskIds().includes(task.id);
+const bonuses = getTaskBonuses(task.id);
+
+// Entries: the viewer's own slots while the task is live, then a gallery for
+// signed-in users once the deadline passes. Only loaded when something will show.
+const submissionViewer = {
+  signedIn: viewer !== undefined,
+  isAdmin: viewer?.isAdmin ?? false,
+  ...(viewer?.playerId && { playerId: viewer.playerId }),
+};
+const takesEntries =
+  task.status === "live" && !task.locked && task.submissions.max > 0;
+const showGallery = task.status === "completed" && viewer !== undefined;
+const [submissions, reactions] = await Promise.all([
+  showGallery || (takesEntries && viewer?.playerId)
+    ? loadTaskSubmissions(task.id)
+    : [],
+  showGallery ? loadTaskReactions(task.id) : [],
+]);
+const submissionPanel = takesEntries
+  ? getSubmissionPanel(task, submissions, submissionViewer)
+  : undefined;
+const gallery = getSocialGallery(
+  task,
+  await Promise.all(
+    getPublicSubmissionGallery(task, submissions, submissionViewer).map(
+      async (group) => ({
+        ...group,
+        entries: await presignEntryMedia(group.entries),
+      }),
+    ),
+  ),
+  reactions,
+  submissionViewer,
+);
+const peoplesChoice = getPeoplesChoice(task, submissionViewer);
+const peoplesChoiceWinners = gallery.flatMap((group) =>
+  group.entries.some((entry) => entry.social.winner) ? [group.owner.name] : [],
+);
+const galleryOutcomes: GalleryOutcome[] = [
+  "reacted",
+  "unreacted",
+  "voted",
+  "vote-changed",
+  "vote-withdrawn",
+  "vote-closed",
+  "own-entry",
+  "invalid",
+];
+const galleryParam = Astro.url.searchParams.get("gallery");
+const galleryOutcome = galleryOutcomes.find((o) => o === galleryParam);
+
+// "Call the winner": open while the task is live, revealed at the deadline.
+const predictionPanel =
+  task.status === "upcoming"
+    ? undefined
+    : getPredictionPanel(task, {
+        signedIn: viewer !== undefined,
+        ...(viewer?.playerId && { playerId: viewer.playerId }),
+      });
+const predictionOutcomes: PredictionOutcome[] = [
+  "saved",
+  "changed",
+  "withdrawn",
+  "closed",
+  "invalid",
+];
+const predictionParam = Astro.url.searchParams.get("prediction");
+const predictionOutcome = predictionOutcomes.find((o) => o === predictionParam);
+const resultsHeld = task.status === "completed" && task.resultsHeld;
+const entryCount = gallery.reduce((n, g) => n + g.entries.length, 0);
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const squadCount = gallery.filter((g) => g.owner.type === "team").length;
+const entrantsLabel = [
+  squadCount > 0 && plural(squadCount, "squad"),
+  gallery.length > squadCount && plural(gallery.length - squadCount, "player"),
+]
+  .filter(Boolean)
+  .join(" and ");
+// The submission endpoint redirects back with `?entry=<outcome>`.
+const submissionOutcomes: SubmissionOutcome[] = [
+  "submitted",
+  "deleted",
+  "closed",
+  "full",
+  "kind",
+  "invalid",
+  "too-large",
+  "bad-type",
+  "heic",
+  "upload-failed",
+];
+const entryParam = Astro.url.searchParams.get("entry");
+const submissionOutcome = submissionOutcomes.find((o) => o === entryParam);
 
 const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
 const isLocked = task.status === "upcoming";
+const briefFile = `${task.id}.brief`;
 
-const pageTitle = `${weekLabel} — ${task.title}`;
+const pageTitle = needsPassword
+  ? `${weekLabel} — Encrypted`
+  : `${weekLabel} — ${task.title}`;
 const pageDescription = isLocked
   ? `${weekLabel} of the EAYL Taskmaster is still classified. The brief unlocks soon.`
-  : winner
-    ? `${task.description} Won by ${winner.name}${winningScore ? ` with ${winningScore} pts` : ""}.`
-    : task.description;
+  : needsPassword
+    ? `${weekLabel} of the EAYL Taskmaster is live, but the brief is encrypted. Enter the Taskmaster's password to decrypt it.`
+    : winner
+      ? `${task.description} Won by ${winner.name}${winningScore ? ` with ${winningScore} pts` : ""}.`
+      : task.description;
 
-const dayFmt = new Intl.DateTimeFormat("en-GB", {
+const dayFmt = ukDateFormat({
   weekday: "long",
   day: "2-digit",
   month: "long",
 });
-const timeFmt = new Intl.DateTimeFormat("en-GB", {
+const timeFmt = ukDateFormat({
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -67,8 +245,11 @@ const formatStamp = (iso: string) => {
 
 // Standard competition rules shown on every brief (presentational content,
 // identical for all tasks — not per-task entity data).
+const { max: maxEntries, kinds: entryKinds } = task.submissions;
 const rules = [
-  "One submission per player, before the deadline.",
+  maxEntries > 0
+    ? `${maxEntries === 1 ? "One entry" : `Up to ${maxEntries} entries`} per ${isTeam ? "squad" : "player"} (${entryKinds.join(" or ")}), submitted here before the deadline.`
+    : "One submission per player, before the deadline.",
   "No external help unless the brief explicitly allows it.",
   "Points are awarded by the Taskmaster. The Taskmaster's decision is final.",
   "Creativity is rewarded. Literalism is... noted.",
@@ -80,16 +261,31 @@ const medal = (position: number) =>
 
 <Layout title={pageTitle} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
-    <!-- Back link -->
+    {
+      revealPlay && (
+        <DecryptReveal taskId={task.id} play={revealPlay} label={briefFile} />
+      )
+    }
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/tasks" label="ALL TASKS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${weekLabel} — ${task.title} · EAYL Taskmaster`}
-        shareText={pageDescription}
-        label="SHARE TASK"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          viewer?.isAdmin && (
+            <AdminEditLink
+              href={weekHref(task.id)}
+              subject={`the week ${task.weekNumber} task`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${pageTitle} · EAYL Taskmaster`}
+          shareText={pageDescription}
+          label="SHARE TASK"
+        />
+      </div>
     </div>
 
     <!-- Header -->
@@ -98,7 +294,7 @@ const medal = (position: number) =>
         <span class="text-sm font-bold tracking-[0.3em] text-magenta">
           {weekLabel}
         </span>
-        <TaskStatusBadge status={task.status} />
+        <TaskStatusBadge status={task.status} locked={task.locked} />
         {
           isTeam && (
             <span class="inline-flex items-center rounded border border-magenta/40 bg-magenta/10 px-2 py-0.5 text-[10px] font-bold tracking-[0.2em] text-magenta">
@@ -107,16 +303,29 @@ const medal = (position: number) =>
           )
         }
       </div>
-      <h1
-        class="mt-3 text-4xl font-extrabold leading-tight text-ink text-glow sm:text-6xl"
-      >
-        {task.title}
-      </h1>
+      {
+        needsPassword ? (
+          <h1 class="mt-3 text-4xl font-extrabold leading-tight text-ink-faint sm:text-6xl">
+            <span aria-hidden="true">▓▓▓▓▒▒░ ▓▓▒░</span>
+            <span class="sr-only">Encrypted task</span>
+          </h1>
+        ) : (
+          <h1
+            class="mt-3 text-4xl font-extrabold leading-tight text-ink text-glow sm:text-6xl"
+            data-decrypt
+          >
+            {task.title}
+          </h1>
+        )
+      }
     </header>
 
     <!-- The brief -->
     <section class="mt-8">
-      <TerminalWindow title={`~/tasks/${task.id}.brief`} meta={weekLabel}>
+      <TerminalWindow
+        title={`~/tasks/${briefFile}${needsPassword ? ".enc" : ""}`}
+        meta={weekLabel}
+      >
         {
           isLocked ? (
             <div class="py-6 text-center">
@@ -133,11 +342,16 @@ const medal = (position: number) =>
                 Unlocks {formatStamp(task.releaseDate)}
               </p>
             </div>
+          ) : needsPassword ? (
+            <TaskRevealPrompt label={briefFile} error={revealError} />
           ) : (
             <div>
               {task.brief &&
                 (Array.isArray(task.brief) ? (
-                  <ul class="space-y-3 border-l-2 border-acid pl-4">
+                  <ul
+                    class="space-y-3 border-l-2 border-acid pl-4"
+                    data-decrypt
+                  >
                     {task.brief.map((point) => (
                       <li class="flex gap-3 text-lg leading-relaxed text-ink sm:text-xl">
                         <span class="shrink-0 text-acid" aria-hidden="true">
@@ -148,11 +362,14 @@ const medal = (position: number) =>
                     ))}
                   </ul>
                 ) : (
-                  <blockquote class="border-l-2 border-acid pl-4 text-lg leading-relaxed text-ink sm:text-xl">
+                  <blockquote
+                    class="border-l-2 border-acid pl-4 text-lg leading-relaxed text-ink sm:text-xl"
+                    data-decrypt
+                  >
                     {task.brief}
                   </blockquote>
                 ))}
-              <p class="mt-6 text-sm leading-relaxed text-ink-dim">
+              <p class="mt-6 text-sm leading-relaxed text-ink-dim" data-decrypt>
                 {task.description}
               </p>
               {task.status === "live" && (
@@ -303,10 +520,87 @@ const medal = (position: number) =>
       )
     }
 
+    <!-- Entries — submit while the task is live -->
+    {
+      submissionPanel && (
+        <section id="entries" class="mt-8 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            entries --submit
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}/entries`}
+            meta={`closes ${formatStamp(task.deadline)}`}
+          >
+            <SubmissionPanel
+              taskId={task.id}
+              panel={submissionPanel}
+              outcome={submissionOutcome}
+              formatStamp={formatStamp}
+            />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
+    <!-- Results held back for a live reveal -->
+    {
+      resultsHeld && (
+        <a
+          href={withBase("/live")}
+          class="group mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber/40 bg-amber/5 px-5 py-4 transition-colors hover:border-amber"
+        >
+          <span class="flex items-center gap-2 text-[11px] font-bold tracking-widest text-amber uppercase">
+            <span
+              class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+              aria-hidden="true"
+            />{" "}
+            results night
+          </span>
+          <span class="text-sm text-ink-dim">
+            The Taskmaster is holding this week's results for a live reveal.
+          </span>
+          <span
+            class="ml-auto text-xs font-bold tracking-widest text-amber uppercase group-hover:text-ink"
+            aria-hidden="true"
+          >
+            watch live &rarr;
+          </span>
+        </a>
+      )
+    }
+
+    <!-- Call the winner (live: make a call; afterwards: who backed whom) -->
+    {
+      predictionPanel && (
+        <section id="predict" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            predict --winner
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}/predictions`}
+            meta={
+              predictionPanel.status === "open"
+                ? `locks ${formatStamp(task.deadline)}`
+                : predictionPanel.status === "settled"
+                  ? "settled"
+                  : "locked"
+            }
+          >
+            <PredictionPanel
+              taskId={task.id}
+              panel={predictionPanel}
+              isTeam={isTeam}
+              outcome={predictionOutcome}
+            />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
     <!-- Results — individual tasks (completed only) -->
     {
       task.status === "completed" && !isTeam && winner && (
-        <section class="mt-10">
+        <section id="results" class="mt-10 scroll-mt-24">
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
             results --final
           </h2>
@@ -398,7 +692,7 @@ const medal = (position: number) =>
     <!-- Results — team tasks (completed only) -->
     {
       task.status === "completed" && isTeam && winningTeam && (
-        <section class="mt-10">
+        <section id="results" class="mt-10 scroll-mt-24">
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
             results --team --final
           </h2>
@@ -481,6 +775,63 @@ const medal = (position: number) =>
               </tbody>
             </table>
           </div>
+        </section>
+      )
+    }
+
+    <!-- Entries — public once the deadline has passed -->
+    {
+      gallery.length > 0 && (
+        <section id="entries" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            entries --gallery
+          </h2>
+          <p class="mb-4 text-[11px] text-ink-faint">
+            <span class="text-acid">$</span> {entryCount}{" "}
+            {entryCount === 1 ? "entry" : "entries"} from {entrantsLabel}
+          </p>
+          <PeoplesChoiceBar
+            summary={peoplesChoice}
+            winnerNames={peoplesChoiceWinners}
+            isPlayer={submissionViewer.playerId !== undefined}
+            outcome={galleryOutcome}
+            formatStamp={formatStamp}
+            class="mb-4"
+          />
+          <SubmissionGallery
+            taskId={task.id}
+            groups={gallery}
+            formatStamp={formatStamp}
+          />
+        </section>
+      )
+    }
+
+    <!-- Bonus points & deductions given this week -->
+    {
+      bonuses.length > 0 && (
+        <section class="mt-10" aria-labelledby="bonus-heading">
+          <h2
+            id="bonus-heading"
+            class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            bonus --week {String(task.weekNumber).padStart(2, "0")}
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}.bonus`}
+            meta={`${bonuses.length} ${bonuses.length === 1 ? "adjustment" : "adjustments"}`}
+            bodyClass="p-0 sm:p-0"
+          >
+            <BonusPointsLedger
+              entries={bonuses}
+              subject="player"
+              caption={`Bonus points and deductions for ${weekLabel}: ${task.title}`}
+            />
+          </TerminalWindow>
+          <p class="mt-3 text-[11px] text-ink-faint">
+            <span class="text-acid">//</span> Added to each player's overall
+            total. They don't change this week's finishing positions.
+          </p>
         </section>
       )
     }

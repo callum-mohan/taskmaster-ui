@@ -1,0 +1,145 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PlayerForm from "../../../components/admin/PlayerForm.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost, btnPrimary } from "../../../components/admin/styles";
+import {
+  createPlayer,
+  deletePlayer,
+  describeWriteError,
+  violatedConstraint,
+} from "../../../data/admin";
+import { linkPlayerAccount } from "../../../data/accounts";
+import {
+  createUserAccount,
+  removeUserAccount,
+  temporaryPassword,
+} from "../../../lib/auth";
+import {
+  parseNewPlayerForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+
+let values: FormValues = {};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+// Shown once, in this response only: never put the password in a redirect URL.
+let created:
+  { id: string; name: string; email: string; password: string } | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const parsed = parseNewPlayerForm(form);
+  values = parsed.values;
+  if (!season) {
+    formError = "Create a season first.";
+  } else if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    const { id, name, email } = parsed.data;
+    let saved = false;
+    try {
+      await createPlayer(season.id, parsed.data);
+      saved = true;
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+      if (violatedConstraint(error) === "player_accounts_email_unique") {
+        errors = { email: formError };
+        formError = undefined;
+      }
+    }
+    if (saved && !email) {
+      const query = new URLSearchParams({ done: "saved", name });
+      return Astro.redirect(
+        withBase(withSeason(`/admin/roster?${query}`, season)),
+      );
+    }
+    if (saved && email) {
+      const password = temporaryPassword();
+      const result = await createUserAccount(Astro, { email, name, password });
+      if (result.ok) {
+        try {
+          await linkPlayerAccount(id, result.userId);
+        } catch (error) {
+          await removeUserAccount(Astro, result.userId);
+          await deletePlayer(id);
+          throw error;
+        }
+        created = { id, name, email, password };
+      } else {
+        // Roll back so the admin can fix the email and submit again.
+        await deletePlayer(id);
+        if (result.field) errors = { email: result.message };
+        else formError = result.message;
+      }
+    }
+  }
+}
+---
+
+<AdminLayout title="New player">
+  <a href={withBase(withSeason("/admin/roster", season))} class={btnGhost}
+    >&larr; ROSTER</a
+  >
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch ~/players/new
+  </h1>
+  <TerminalWindow title="~/players/new.md" class="mt-6">
+    {
+      created ? (
+        <div class="space-y-5">
+          <Notice tone="success">
+            Created {created.name} and their sign-in account.
+            <span class="mt-3 block text-ink">
+              <span class="text-ink-faint">email:</span> {created.email}
+            </span>
+            <span class="mt-2 block text-ink">
+              temporary password:{" "}
+              <code class="select-all rounded border border-grid bg-term-bg px-2 py-1 text-acid">
+                {created.password}
+              </code>
+            </span>
+            <span class="mt-3 block text-ink-dim">
+              Send it to the player privately; it won't be shown again. They
+              sign in at /login and must choose a new password.
+            </span>
+          </Notice>
+          <div class="flex flex-wrap gap-3">
+            <a
+              href={withBase(withSeason("/admin/players/new", season))}
+              class={btnPrimary}
+            >
+              add another player
+            </a>
+            <a href={withBase(`/admin/players/${created.id}`)} class={btnGhost}>
+              edit {created.name}
+            </a>
+            <a
+              href={withBase(withSeason("/admin/roster", season))}
+              class={btnGhost}
+            >
+              all players
+            </a>
+          </div>
+        </div>
+      ) : (
+        <PlayerForm
+          mode="create"
+          values={values}
+          errors={errors}
+          formError={formError}
+        />
+      )
+    }
+  </TerminalWindow>
+</AdminLayout>

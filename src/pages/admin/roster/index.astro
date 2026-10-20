@@ -1,0 +1,235 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import PlayerAvatar from "../../../components/PlayerAvatar.astro";
+import AccountStatusBadge from "../../../components/admin/AccountStatusBadge.astro";
+import {
+  btnGhost,
+  btnPrimary,
+  tableCell,
+  tableHead,
+} from "../../../components/admin/styles";
+import { listPlayers, listTeams } from "../../../data/admin";
+import { getAccountStatuses } from "../../../data/accounts";
+import { ADMIN_GUIDE } from "../../../lib/admin-nav";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+const [players, teams, accounts] = await Promise.all([
+  season ? listPlayers(season.id) : [],
+  season ? listTeams(season.id) : [],
+  getAccountStatuses(),
+]);
+const playerName = new Map(players.map((p) => [p.id, p.name]));
+const teamOf = new Map(
+  teams.flatMap((t) => t.memberIds.map((id) => [id, t.name] as const)),
+);
+const unassigned = players.filter((p) => !teamOf.has(p.id)).length;
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+---
+
+<AdminLayout title="Roster">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> ls ~/roster
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Who's playing. Add players first, then put them into squads for team tasks.
+    A player's sign-in account (for voting, entries and their profile) is set up
+    on their edit page.{" "}
+    <a
+      href={withBase(`${ADMIN_GUIDE}#roster`)}
+      class="text-cyan hover:underline">How accounts work</a
+    >
+  </p>
+
+  {
+    done && subject && (
+      <Notice tone="success" class="mt-6">
+        {done === "deleted" ? `Deleted ${subject}.` : `Saved ${subject}.`}
+      </Notice>
+    )
+  }
+
+  <section
+    id="players"
+    aria-labelledby="players-heading"
+    class="mt-8 scroll-mt-24"
+  >
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <h2
+        id="players-heading"
+        class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+      >
+        players ({players.length})
+      </h2>
+      <a
+        href={withBase(withSeason("/admin/players/new", season))}
+        class={btnPrimary}>+ new player</a
+      >
+    </div>
+    <TerminalWindow title="~/roster/players" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class={tableHead}>#</th>
+              <th scope="col" class={tableHead}>player</th>
+              <th scope="col" class:list={[tableHead, "hidden md:table-cell"]}>
+                squad
+              </th>
+              <th scope="col" class={tableHead}>account</th>
+              <th scope="col" class={tableHead}
+                ><span class="sr-only">actions</span></th
+              >
+            </tr>
+          </thead>
+          <tbody>
+            {
+              players.map((row) => (
+                <tr class="transition-colors hover:bg-term-panel-2">
+                  <td class:list={[tableCell, "tabular-nums text-ink-faint"]}>
+                    {row.sortOrder}
+                  </td>
+                  <td class={tableCell}>
+                    <span class="flex items-center gap-3">
+                      <PlayerAvatar
+                        player={{
+                          id: row.id,
+                          name: row.name,
+                          seasonId: row.seasonId,
+                        }}
+                        class="h-7 w-7 rounded"
+                      />
+                      <span>
+                        <span class="text-ink">{row.name}</span>
+                        <span class="block text-[11px] text-ink-faint">
+                          {row.id}
+                        </span>
+                      </span>
+                    </span>
+                  </td>
+                  <td
+                    class:list={[
+                      tableCell,
+                      "hidden text-xs md:table-cell",
+                      teamOf.has(row.id) ? "text-ink-dim" : "text-ink-faint",
+                    ]}
+                  >
+                    {teamOf.get(row.id) ?? "—"}
+                  </td>
+                  <td class={tableCell}>
+                    <AccountStatusBadge status={accounts[row.id] ?? "none"} />
+                  </td>
+                  <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
+                    <a
+                      href={withBase(`/admin/players/${row.id}`)}
+                      class="text-cyan hover:underline"
+                      aria-label={`Edit ${row.name}`}
+                    >
+                      edit
+                    </a>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {
+          players.length === 0 && (
+            <p class="p-6 text-sm text-ink-dim">No players yet.</p>
+          )
+        }
+      </div>
+    </TerminalWindow>
+  </section>
+
+  <section
+    id="squads"
+    aria-labelledby="squads-heading"
+    class="mt-10 scroll-mt-24"
+  >
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2
+          id="squads-heading"
+          class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          squads ({teams.length})
+        </h2>
+        <p class="mt-1 text-xs text-ink-faint">
+          {
+            unassigned === 0
+              ? "Every player is in a squad."
+              : `${unassigned} player${unassigned === 1 ? " isn't" : "s aren't"} in a squad yet.`
+          }
+        </p>
+      </div>
+      <a
+        href={withBase(withSeason("/admin/teams/new", season))}
+        class={btnGhost}>+ new squad</a
+      >
+    </div>
+    <TerminalWindow title="~/roster/squads" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class={tableHead}>#</th>
+              <th scope="col" class={tableHead}>squad</th>
+              <th scope="col" class={tableHead}>members</th>
+              <th scope="col" class={tableHead}
+                ><span class="sr-only">actions</span></th
+              >
+            </tr>
+          </thead>
+          <tbody>
+            {
+              teams.map((row) => (
+                <tr class="transition-colors hover:bg-term-panel-2">
+                  <td class:list={[tableCell, "tabular-nums text-ink-faint"]}>
+                    {row.sortOrder}
+                  </td>
+                  <td class={tableCell}>
+                    <span class="text-ink">{row.name}</span>
+                    {row.tagline && (
+                      <span class="block text-xs text-ink-faint">
+                        {row.tagline}
+                      </span>
+                    )}
+                  </td>
+                  <td class:list={[tableCell, "text-xs text-ink-dim"]}>
+                    {row.memberIds.length === 0
+                      ? "—"
+                      : row.memberIds
+                          .map((id) => playerName.get(id) ?? id)
+                          .join(", ")}
+                  </td>
+                  <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
+                    <a
+                      href={withBase(`/admin/teams/${row.id}`)}
+                      class="text-cyan hover:underline"
+                      aria-label={`Edit ${row.name}`}
+                    >
+                      edit
+                    </a>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {
+          teams.length === 0 && (
+            <p class="p-6 text-sm text-ink-dim">No squads yet.</p>
+          )
+        }
+      </div>
+    </TerminalWindow>
+  </section>
+</AdminLayout>

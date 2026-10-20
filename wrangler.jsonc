@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "taskmaster-ui",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  // The deployed version's id keys the competition rows cache, so a deploy
+  // never reads rows cached by the previous version.
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA",
+  },
+  // Both hosts are served by this Worker; the middleware 301s `www` to the
+  // apex so there's a single canonical origin (and one Neon Auth domain).
+  "routes": [
+    { "pattern": "eayltaskmaster.co.uk", "custom_domain": true },
+    { "pattern": "www.eayltaskmaster.co.uk", "custom_domain": true },
+  ],
+  // Secrets (set with `npx wrangler secret put <NAME>`): DATABASE_URL,
+  // NEON_AUTH_BASE_URL, NEON_AUTH_COOKIE_SECRET, and for submission photos
+  // AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY. Locally
+  // they come from `.env.local`.
+  // Throttles guesses at a task's reveal password: 10 per minute per IP+task.
+  "ratelimits": [
+    {
+      "name": "TASK_REVEAL_LIMITER",
+      "namespace_id": "1001",
+      "simple": { "limit": 10, "period": 60 },
+    },
+    // Throttles sign-in attempts: 20 per minute per IP (headroom for players
+    // signing in together from one office network).
+    {
+      "name": "LOGIN_LIMITER",
+      "namespace_id": "1002",
+      "simple": { "limit": 20, "period": 60 },
+    },
+  ],
+}

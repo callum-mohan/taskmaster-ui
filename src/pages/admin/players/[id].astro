@@ -1,0 +1,294 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PlayerForm from "../../../components/admin/PlayerForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import AdminField from "../../../components/admin/AdminField.astro";
+import AccountStatusBadge from "../../../components/admin/AccountStatusBadge.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import {
+  btnDanger,
+  btnGhost,
+  btnPrimary,
+} from "../../../components/admin/styles";
+import {
+  deletePlayer,
+  describeWriteError,
+  getPlayer,
+  getPlayerDeleteImpact,
+  updatePlayer,
+} from "../../../data/admin";
+import {
+  accountStatus,
+  getPlayerAccount,
+  setMustChangePassword,
+  setPlayerEmail,
+} from "../../../data/accounts";
+import { resetUserPassword, temporaryPassword } from "../../../lib/auth";
+import {
+  parsePlayerEmailForm,
+  parsePlayerForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+import { withSeason } from "../../../lib/admin-season";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const id = Astro.params.id!;
+const player = await getPlayer(id);
+if (!player) return Astro.rewrite("/404");
+const season = (await Astro.locals.getSeasons()).getSeason(player.seasonId);
+const rosterHref = (query = "") =>
+  withBase(withSeason(`/admin/roster${query}`, season));
+
+let account = await getPlayerAccount(id);
+
+let values: FormValues = {
+  id: player.id,
+  name: player.name,
+  bio: player.bio ?? "",
+  avatarUrl: player.avatarUrl ?? "",
+  sortOrder: String(player.sortOrder),
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+let accountEmail = account?.email ?? "";
+let accountError: string | undefined;
+// Shown once, in this response only: never put it in a redirect URL.
+let resetPassword: { password: string; signedOut: boolean } | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  if (intent === "delete") {
+    await deletePlayer(id);
+    const query = new URLSearchParams({ done: "deleted", name: player.name });
+    return Astro.redirect(rosterHref(`?${query}`));
+  }
+  if (intent === "reset-password") {
+    if (!account?.userId) {
+      accountError = "This player has no sign-in account to reset yet.";
+    } else {
+      // Flag the account first so the player can never sign in with the
+      // temporary password without being made to replace it.
+      const previous = account.mustChangePassword;
+      await setMustChangePassword(id, true);
+      const password = temporaryPassword();
+      const result = await resetUserPassword(Astro, account.userId, password);
+      if (result.ok) {
+        resetPassword = { password, signedOut: result.signedOut };
+      } else {
+        if (!previous) await setMustChangePassword(id, false);
+        accountError = result.message;
+      }
+      account = await getPlayerAccount(id);
+    }
+  } else if (intent === "account") {
+    const parsed = parsePlayerEmailForm(form);
+    accountEmail = parsed.values.email ?? "";
+    if (!parsed.ok) {
+      accountError = parsed.errors.email;
+    } else {
+      try {
+        const saved = await setPlayerEmail(id, parsed.data.email);
+        if (saved) {
+          return Astro.redirect(
+            withBase(`/admin/players/${id}?done=account#account`),
+          );
+        }
+        accountError =
+          "This player already has an account; reset it with the script below.";
+        account = await getPlayerAccount(id);
+      } catch (error) {
+        accountError = describeWriteError(error);
+        if (!accountError) throw error;
+      }
+    }
+  } else {
+    // The id is immutable; ignore whatever was posted for it.
+    form.set("id", id);
+    const parsed = parsePlayerForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updatePlayer(id, parsed.data);
+        const query = new URLSearchParams({
+          done: "saved",
+          name: parsed.data.name,
+        });
+        return Astro.redirect(rosterHref(`?${query}`));
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+
+const impact = await getPlayerDeleteImpact(id);
+const status = accountStatus(account);
+const linked = Boolean(account?.userId);
+const accountSaved = Astro.url.searchParams.get("done") === "account";
+const emailCommand = `npm run players:accounts -- --reset ${player.id} --email new@example.com`;
+const statusHelp: Record<typeof status, string> = {
+  none: "Add the player's email to invite them, then run the provisioning script.",
+  invited:
+    "Waiting for an account. Run the script below to create it with a temporary password.",
+  pending:
+    "The player must replace their temporary password at their next sign-in.",
+  active: "The player has signed in and set their own password.",
+};
+---
+
+<AdminLayout title={`Edit ${player.name}`}>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <a href={rosterHref()} class={btnGhost}>&larr; ROSTER</a>
+    <a
+      href={withBase(`/players/${player.id}`)}
+      class="text-xs text-cyan hover:underline"
+      target="_blank"
+      rel="noopener">view public profile ↗</a
+    >
+  </div>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> vim ~/players/{player.id}.md
+  </h1>
+  <TerminalWindow title={`~/players/${player.id}.md`} class="mt-6">
+    <PlayerForm
+      mode="edit"
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+  <section id="account" aria-labelledby="account-heading" class="mt-8">
+    <h2
+      id="account-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      sign-in account
+    </h2>
+    <TerminalWindow title={`~/players/${player.id}/account`}>
+      {
+        accountSaved && !accountError && (
+          <Notice tone="success" class="mb-5">
+            Account email saved.
+          </Notice>
+        )
+      }
+      <div class="flex flex-wrap items-center gap-3">
+        <AccountStatusBadge status={status} />
+        <p class="text-sm text-ink-dim">{statusHelp[status]}</p>
+      </div>
+      {
+        resetPassword && (
+          <Notice tone="success" class="mt-5">
+            Password reset
+            {resetPassword.signedOut
+              ? " and the player was signed out everywhere."
+              : ", but their existing sessions couldn't be signed out."}
+            <span class="mt-3 block text-ink">
+              temporary password:{" "}
+              <code class="select-all rounded border border-grid bg-term-bg px-2 py-1 text-acid">
+                {resetPassword.password}
+              </code>
+            </span>
+            <span class="mt-3 block text-ink-dim">
+              Send it to the player privately; it won't be shown again. They
+              sign in at /login and must choose a new password.
+            </span>
+          </Notice>
+        )
+      }
+      {
+        linked ? (
+          <div class="mt-5 space-y-3 text-sm">
+            <p class="text-ink">
+              <span class="text-ink-faint">email:</span> {account?.email}
+            </p>
+            <details class="group">
+              <summary
+                class:list={[
+                  btnGhost,
+                  "cursor-pointer list-none hover:border-danger/60 hover:text-danger",
+                ]}
+              >
+                reset password
+              </summary>
+              <div class="mt-3 space-y-3 rounded-md border border-danger/50 bg-danger/5 p-4">
+                <p class="text-ink-dim">
+                  Issue a new temporary password for {player.name}? Their
+                  current password stops working, they're signed out everywhere,
+                  and they must choose a new password when they next sign in.
+                </p>
+                <form method="post">
+                  <input type="hidden" name="intent" value="reset-password" />
+                  <button type="submit" class={btnDanger}>
+                    confirm reset
+                  </button>
+                </form>
+              </div>
+            </details>
+            <p class="text-ink-dim">
+              To change the email, run (this also issues a new temporary
+              password):
+            </p>
+            <p class="overflow-x-auto whitespace-nowrap rounded-md border border-grid bg-term-bg px-3 py-2 text-xs text-ink">
+              <span class="text-acid" aria-hidden="true">
+                ${" "}
+              </span>
+              <code>{emailCommand}</code>
+            </p>
+          </div>
+        ) : (
+          <form method="post" class="mt-5 space-y-4" novalidate>
+            <input type="hidden" name="intent" value="account" />
+            <AdminField
+              label="email"
+              name="email"
+              type="email"
+              value={accountEmail}
+              error={accountError}
+              autocomplete="off"
+              hint="Private: used only for sign-in. Leave blank to withdraw the invite."
+            />
+            <button type="submit" class={btnPrimary}>
+              save email
+            </button>
+            {status === "invited" && (
+              <p class="text-xs text-ink-faint">
+                Then run <code class="text-ink">npm run players:accounts</code>{" "}
+                to create the account.
+              </p>
+            )}
+          </form>
+        )
+      }
+      {
+        linked && accountError && (
+          <Notice tone="error" class="mt-5">
+            {accountError}
+          </Notice>
+        )
+      }
+    </TerminalWindow>
+  </section>
+  <section aria-labelledby="danger-heading" class="mt-8">
+    <h2
+      id="danger-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      danger zone
+    </h2>
+    <ConfirmDelete
+      subject={`player "${player.name}"`}
+      impact={impact}
+      label="delete player"
+    />
+  </section>
+</AdminLayout>

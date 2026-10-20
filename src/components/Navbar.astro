@@ -1,6 +1,18 @@
 ---
 // Site navigation styled as a terminal window title bar.
+import NotificationBell from "./NotificationBell.astro";
+import NotificationPanel from "./NotificationPanel.astro";
 import { withBase } from "../lib/url";
+import type { NotificationFeed, Viewer } from "../types";
+
+interface Props {
+  /** Who is signed in; switches "login" for profile/admin/logout links. */
+  viewer?: Viewer;
+  /** Signed-in players' feed; the bell only shows when this is set. */
+  notifications?: NotificationFeed;
+}
+
+const { viewer, notifications } = Astro.props;
 
 interface NavItem {
   href: string;
@@ -20,6 +32,8 @@ const navGroups: NavGroup[] = [
     children: [
       { href: "/tasks", label: "tasks" },
       { href: "/recaps", label: "recaps" },
+      { href: "/live", label: "live" },
+      { href: "/rules", label: "rules" },
     ],
   },
   {
@@ -28,6 +42,7 @@ const navGroups: NavGroup[] = [
       { href: "/leaderboard", label: "leaderboard" },
       { href: "/teams", label: "teams" },
       { href: "/stats", label: "stats" },
+      { href: "/hall-of-fame", label: "hall of fame" },
     ],
   },
   {
@@ -46,6 +61,17 @@ const isActive = (href: string) => {
 };
 const isGroupActive = (group: NavGroup) =>
   group.children.some((child) => isActive(child.href));
+// Account links: players get their profile, admins the admin area, and
+// anyone signed in a logout button (a POST form, so it can't be triggered by
+// a stray link). On desktop they sit in one "account" dropdown so the bar
+// never overflows; the mobile menu lists them flat.
+const accountLinks: NavItem[] = viewer
+  ? [
+      ...(viewer.playerId ? [{ href: "/account", label: "profile" }] : []),
+      ...(viewer.isAdmin ? [{ href: "/admin", label: "admin" }] : []),
+    ]
+  : [{ href: "/login", label: "login" }];
+const isAccountActive = accountLinks.some((link) => isActive(link.href));
 ---
 
 <header
@@ -56,7 +82,7 @@ const isGroupActive = (group: NavGroup) =>
     aria-label="Primary"
   >
     <!-- Brand / terminal traffic lights -->
-    <a href={withBase("/")} class="group flex items-center gap-3">
+    <a href={withBase("/")} class="group mr-auto flex items-center gap-3">
       <span class="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
         <span class="h-3 w-3 rounded-full bg-dot-red" data-tl="red"></span>
         <span class="h-3 w-3 rounded-full bg-dot-amber" data-tl="amber"></span>
@@ -142,28 +168,112 @@ const isGroupActive = (group: NavGroup) =>
           </li>
         ))
       }
-      <li>
-        <a
-          href={withBase("/about")}
-          aria-current={isActive("/about") ? "page" : undefined}
-          class:list={[
-            "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
-            isActive("/about") ? "text-acid" : "text-ink-dim hover:text-ink",
-          ]}
-        >
-          <span
-            class:list={[
-              "mr-1",
-              isActive("/about")
-                ? "text-acid"
-                : "text-ink-faint group-hover:text-acid",
-            ]}
-          >
-            ./
-          </span>
-          about
-        </a>
-      </li>
+      {
+        viewer ? (
+          <li class="relative" data-nav-dropdown>
+            <button
+              type="button"
+              data-nav-dropdown-trigger
+              aria-haspopup="true"
+              aria-expanded="false"
+              title={`Signed in as ${viewer.name}`}
+              class:list={[
+                "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
+                isAccountActive ? "text-acid" : "text-ink-dim hover:text-ink",
+              ]}
+            >
+              <span
+                class:list={[
+                  "mr-1",
+                  isAccountActive
+                    ? "text-acid"
+                    : "text-ink-faint group-hover:text-acid",
+                ]}
+              >
+                ./
+              </span>
+              account
+              <span
+                class="ml-0.5 text-[10px] text-ink-faint transition-transform group-aria-expanded:rotate-180"
+                aria-hidden="true"
+              >
+                ▾
+              </span>
+            </button>
+            <ul
+              data-nav-dropdown-menu
+              class="absolute right-0 top-full z-50 mt-1 hidden min-w-[13rem] rounded-md border border-grid bg-term-panel p-1 shadow-lg shadow-acid/5"
+            >
+              <li class="truncate px-3 pb-1 pt-2 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+                signed in as {viewer.name}
+              </li>
+              {accountLinks.map((child) => (
+                <li>
+                  <a
+                    href={withBase(child.href)}
+                    aria-current={isActive(child.href) ? "page" : undefined}
+                    class:list={[
+                      "group/item flex items-center gap-2 rounded px-3 py-2 text-sm tracking-wide transition-colors",
+                      isActive(child.href)
+                        ? "text-acid"
+                        : "text-ink-dim hover:bg-term-panel-2 hover:text-ink",
+                    ]}
+                  >
+                    <span
+                      class:list={[
+                        isActive(child.href)
+                          ? "text-acid"
+                          : "text-ink-faint group-hover/item:text-acid",
+                      ]}
+                    >
+                      ./
+                    </span>
+                    {child.label}
+                  </a>
+                </li>
+              ))}
+              <li>
+                <form method="post" action={withBase("/logout")}>
+                  <button
+                    type="submit"
+                    class="group/item flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm tracking-wide text-ink-dim transition-colors hover:bg-term-panel-2 hover:text-ink"
+                  >
+                    <span class="text-ink-faint group-hover/item:text-acid">
+                      ./
+                    </span>
+                    logout
+                  </button>
+                </form>
+              </li>
+            </ul>
+          </li>
+        ) : (
+          <li>
+            <a
+              href={withBase("/login")}
+              aria-current={isActive("/login") ? "page" : undefined}
+              class:list={[
+                "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
+                isActive("/login")
+                  ? "text-acid"
+                  : "text-ink-dim hover:text-ink",
+              ]}
+            >
+              <span
+                class:list={[
+                  "mr-1",
+                  isActive("/login")
+                    ? "text-acid"
+                    : "text-ink-faint group-hover:text-acid",
+                ]}
+              >
+                ./
+              </span>
+              login
+            </a>
+          </li>
+        )
+      }
       <li>
         <button
           type="button"
@@ -217,6 +327,15 @@ const isGroupActive = (group: NavGroup) =>
         </button>
       </li>
     </ul>
+
+    {
+      notifications && (
+        <NotificationBell
+          unreadCount={notifications.unreadCount}
+          class="-ml-2"
+        />
+      )
+    }
 
     <!-- Mobile toggle -->
     <button
@@ -298,25 +417,60 @@ const isGroupActive = (group: NavGroup) =>
         ))
       }
       <li class="border-b border-grid-soft py-2 last:border-b-0">
-        <a
-          href={withBase("/about")}
-          aria-current={isActive("/about") ? "page" : undefined}
-          class:list={[
-            "flex items-center gap-2 py-2 text-sm tracking-wide",
-            isActive("/about") ? "text-acid" : "text-ink-dim",
-          ]}
-        >
-          <span
-            class:list={[isActive("/about") ? "text-acid" : "text-ink-faint"]}
-          >
-            ./
-          </span>
-          about
-        </a>
+        {
+          viewer && (
+            <p class="py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+              signed in as {viewer.name}
+            </p>
+          )
+        }
+        <ul>
+          {
+            accountLinks.map((link) => (
+              <li>
+                <a
+                  href={withBase(link.href)}
+                  aria-current={isActive(link.href) ? "page" : undefined}
+                  class:list={[
+                    "flex items-center gap-2 py-2 text-sm tracking-wide",
+                    viewer && "pl-3",
+                    isActive(link.href) ? "text-acid" : "text-ink-dim",
+                  ]}
+                >
+                  <span
+                    class:list={[
+                      isActive(link.href) ? "text-acid" : "text-ink-faint",
+                    ]}
+                  >
+                    ./
+                  </span>
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+          {
+            viewer && (
+              <li>
+                <form method="post" action={withBase("/logout")}>
+                  <button
+                    type="submit"
+                    class="flex w-full items-center gap-2 py-2 pl-3 text-left text-sm tracking-wide text-ink-dim"
+                  >
+                    <span class="text-ink-faint">./</span>
+                    logout
+                  </button>
+                </form>
+              </li>
+            )
+          }
+        </ul>
       </li>
     </ul>
   </div>
 </header>
+
+{notifications && <NotificationPanel feed={notifications} />}
 
 <script>
   import {

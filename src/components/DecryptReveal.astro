@@ -1,0 +1,216 @@
+---
+interface Props {
+  taskId: string;
+  /**
+   * `always` plays right after the visitor entered the password;
+   * `if-unseen` plays once per browser (e.g. after an admin reveal).
+   */
+  play: "always" | "if-unseen";
+  /** File-style label shown while decrypting, e.g. `week-07.brief`. */
+  label: string;
+}
+
+const { taskId, play, label } = Astro.props;
+const storageKey = `tm-decrypted-${taskId}`;
+---
+
+<!--
+  Runs during parsing, before the [data-decrypt] content below it paints, so
+  the real text never flashes ahead of the animation. Without JS (or with
+  reduced motion) nothing is hidden and the task simply shows.
+-->
+<script is:inline define:vars={{ storageKey, play }}>
+  (function () {
+    try {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        localStorage.setItem(storageKey, "1");
+        return;
+      }
+      if (play !== "always" && localStorage.getItem(storageKey)) return;
+    } catch {
+      if (play !== "always") return;
+    }
+    const root = document.documentElement;
+    root.classList.add("decrypt-pending");
+    root.dataset.decryptKey = storageKey;
+    // Safety net: never leave the content hidden if the animation can't run.
+    setTimeout(function () {
+      root.classList.remove("decrypt-pending");
+    }, 4000);
+  })();
+</script>
+
+<div class="reveal-overlay" data-reveal-overlay hidden>
+  <div
+    class="mx-4 w-full max-w-md rounded-lg border border-acid-dim bg-term-panel p-6 shadow-[0_0_60px_-20px_var(--color-acid)]"
+  >
+    <p class="text-xs text-ink-dim">
+      <span class="text-acid">$</span> decrypt ~/tasks/{label}
+    </p>
+    <p class="mt-2 text-xs text-ink-faint" aria-hidden="true">
+      <span class="text-cyan">&gt;</span> key accepted · cipher unwound
+    </p>
+    <p
+      class="reveal-granted mt-5 text-center text-3xl font-extrabold tracking-[0.2em] text-acid text-glow sm:text-4xl"
+    >
+      ACCESS GRANTED
+    </p>
+    <p class="mt-4 text-center text-[10px] tracking-[0.3em] text-ink-faint">
+      CLICK OR PRESS ESC TO SKIP
+    </p>
+  </div>
+</div>
+<p class="sr-only" role="status" aria-live="polite" data-reveal-status></p>
+
+<script>
+  const GLYPHS = "!<>-_\\/[]{}=+*^?#%&$01░▒▓ABCDEFXZ";
+  const STAGGER_MS = 160;
+  const SCRAMBLE_START_MS = 1550; // as the ACCESS GRANTED overlay fades
+
+  const randomGlyph = () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+
+  interface Piece {
+    original: Text;
+    text: string;
+    resolved: HTMLSpanElement;
+    noise: HTMLSpanElement;
+  }
+
+  /** Swaps each text node for a resolved + noise span pair. */
+  function prepare(element: HTMLElement): Piece[] {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const nodes: Text[] = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode as Text;
+      if (node.data.trim()) nodes.push(node);
+    }
+    return nodes.map((original) => {
+      const resolved = document.createElement("span");
+      const noise = document.createElement("span");
+      noise.className = "decrypt-noise";
+      noise.setAttribute("aria-hidden", "true");
+      const wrapper = document.createElement("span");
+      wrapper.append(resolved, noise);
+      original.replaceWith(wrapper);
+      return { original, text: original.data, resolved, noise };
+    });
+  }
+
+  function render(piece: Piece, revealed: number) {
+    const { text } = piece;
+    piece.resolved.textContent = text.slice(0, revealed);
+    let noise = "";
+    for (let i = revealed; i < text.length; i++) {
+      noise += /\s/.test(text[i]) ? text[i] : randomGlyph();
+    }
+    piece.noise.textContent = noise;
+  }
+
+  function restore(pieces: Piece[]) {
+    for (const piece of pieces) {
+      piece.resolved.parentElement?.replaceWith(piece.original);
+    }
+  }
+
+  function run() {
+    const root = document.documentElement;
+    const key = root.dataset.decryptKey;
+    if (!root.classList.contains("decrypt-pending") || !key) return;
+
+    const overlay = document.querySelector<HTMLElement>(
+      "[data-reveal-overlay]",
+    );
+    const status = document.querySelector<HTMLElement>("[data-reveal-status]");
+    const targets = [
+      ...document.querySelectorAll<HTMLElement>("[data-decrypt]"),
+    ];
+    try {
+      localStorage.setItem(key, "1");
+    } catch {
+      // Private mode etc.: it will just replay next time.
+    }
+
+    // Drop the one-off `?decrypted=1` so a reload doesn't look like a fresh
+    // unlock.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("decrypted")) {
+      url.searchParams.delete("decrypted");
+      history.replaceState(history.state, "", url);
+    }
+
+    const groups = targets.map((el) => ({ el, pieces: prepare(el) }));
+    groups.forEach(({ el, pieces }) => {
+      el.setAttribute("aria-busy", "true");
+      pieces.forEach((piece) => render(piece, 0));
+    });
+
+    let finished = false;
+    let frame = 0;
+    const timers: number[] = [];
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      cancelAnimationFrame(frame);
+      timers.forEach((t) => clearTimeout(t));
+      groups.forEach(({ el, pieces }) => {
+        restore(pieces);
+        el.removeAttribute("aria-busy");
+      });
+      root.classList.remove("decrypt-pending");
+      if (overlay) overlay.hidden = true;
+      if (status) status.textContent = "Access granted. Task decrypted.";
+      document.removeEventListener("keydown", onKey);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") finish();
+    };
+
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.addEventListener("click", finish, { once: true });
+      overlay.addEventListener("animationend", (event) => {
+        if (event.animationName === "reveal-overlay-out") overlay.hidden = true;
+      });
+    }
+    document.addEventListener("keydown", onKey);
+    // The scrambled noise is safe to show; the real text isn't there yet.
+    root.classList.remove("decrypt-pending");
+
+    timers.push(
+      window.setTimeout(() => {
+        const start = performance.now();
+        const plan = groups.map(({ pieces }, index) => {
+          const length = pieces.reduce((n, p) => n + p.text.length, 0);
+          return {
+            delay: index * STAGGER_MS,
+            duration: Math.min(1800, Math.max(700, length * 12)),
+          };
+        });
+        const tick = (now: number) => {
+          let done = true;
+          groups.forEach(({ pieces }, index) => {
+            const { delay, duration } = plan[index];
+            const progress = Math.min(
+              1,
+              Math.max(0, (now - start - delay) / duration),
+            );
+            if (progress < 1) done = false;
+            const total = pieces.reduce((n, p) => n + p.text.length, 0);
+            let budget = Math.floor(progress * total);
+            for (const piece of pieces) {
+              const revealed = Math.min(piece.text.length, budget);
+              budget -= revealed;
+              render(piece, revealed);
+            }
+          });
+          if (done) finish();
+          else frame = requestAnimationFrame(tick);
+        };
+        frame = requestAnimationFrame(tick);
+      }, SCRAMBLE_START_MS),
+    );
+  }
+
+  run();
+</script>

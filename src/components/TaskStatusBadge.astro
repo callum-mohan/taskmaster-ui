@@ -3,10 +3,12 @@ import type { TaskStatus } from "../types";
 
 interface Props {
   status: TaskStatus;
+  /** A live task whose brief is still encrypted behind a reveal password. */
+  locked?: boolean;
   class?: string;
 }
 
-const { status, class: className = "" } = Astro.props;
+const { status, locked = false, class: className = "" } = Astro.props;
 
 const config: Record<
   TaskStatus,
@@ -27,7 +29,9 @@ const config: Record<
   },
 };
 
-const { label, classes, live } = config[status];
+const { label: baseLabel, classes, live } = config[status];
+const label =
+  locked && status === "live" ? `${baseLabel} · ENCRYPTED` : baseLabel;
 ---
 
 <span

@@ -1,31 +1,32 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import TerminalWindow from "../../components/TerminalWindow.astro";
 import StatCard from "../../components/StatCard.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
 import { withBase } from "../../lib/url";
-import { teams } from "../../data/teams";
-import { getTeamTasks } from "../../data/tasks";
-import {
-  getTeamStanding,
-  getTeamResults,
-  getPlayerStanding,
-} from "../../data/queries";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
 
-export const getStaticPaths = (() => {
-  return teams.map((team) => ({ params: { id: team.id } }));
-}) satisfies GetStaticPaths;
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const scope = await recordScope(Astro.locals, "team", Astro.params.id, {
+  isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
+
+const { getTeamTasks, getTeamStanding, getTeamResults, getPlayerStanding } =
+  scope.queries;
 
 const { id } = Astro.params;
 const standing = getTeamStanding(id!);
 
 // Unknown id → 404 rather than a broken page.
 if (!standing) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const { team, members, rank } = standing;
@@ -60,15 +61,26 @@ const positionClasses = (position: number) => {
 
 <Layout title={team.name} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/teams" label="ALL TEAMS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${team.name} · EAYL Taskmaster`}
-        shareText={pageDescription}
-        label="SHARE SQUAD"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          isAdmin && (
+            <AdminEditLink
+              href={`/admin/teams/${team.id}`}
+              subject={`the ${team.name} team`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${team.name} · EAYL Taskmaster`}
+          shareText={pageDescription}
+          label="SHARE SQUAD"
+        />
+      </div>
     </div>
 
     <!-- Header -->

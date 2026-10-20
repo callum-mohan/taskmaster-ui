@@ -3,7 +3,9 @@ import Layout from "../layouts/Layout.astro";
 import StatCard from "../components/StatCard.astro";
 import AwardCard from "../components/AwardCard.astro";
 import { withBase } from "../lib/url";
-import { getCompetitionStats, getAwards } from "../data/queries";
+
+const { season, getCompetitionStats, getAwards } =
+  await Astro.locals.getQueries();
 
 const stats = getCompetitionStats();
 const awards = getAwards();
@@ -32,8 +34,12 @@ const btnPrimary =
       <p
         class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim sm:text-base"
       >
-        <span class="text-acid">//</span> The numbers behind the chaos. Records, superlatives,
-        and the odd bragging right — handed out by the Taskmaster's spreadsheet.
+        <span class="text-acid">//</span> The numbers behind {season.name}.
+        Records, superlatives, and the odd bragging right — handed out by the
+        Taskmaster's spreadsheet. Past seasons live in the{" "}
+        <a href={withBase("/hall-of-fame")} class="text-cyan hover:underline"
+          >Hall of Fame</a
+        >.
       </p>
     </header>
 

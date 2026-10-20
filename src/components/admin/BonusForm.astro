@@ -1,0 +1,101 @@
+---
+import { btnPrimary, btnGhost, inputClass } from "./styles";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+
+interface Props {
+  /** Every player, in roster order. */
+  players: { id: string; name: string }[];
+  values: FormValues;
+  errors?: FieldErrors;
+  /** Set when editing an existing bonus row. */
+  rowId?: number;
+}
+
+const { players, values, errors = {}, rowId } = Astro.props;
+const prefix = rowId ? `bonus-${rowId}` : "bonus-new";
+const describe = (field: string) =>
+  errors[field] ? `${prefix}-${field}-error` : undefined;
+---
+
+<form
+  method="post"
+  class="grid items-start gap-3 sm:grid-cols-[minmax(0,12rem)_7rem_minmax(0,1fr)_auto]"
+>
+  <input
+    type="hidden"
+    name="intent"
+    value={rowId ? "update-bonus" : "add-bonus"}
+  />
+  {rowId && <input type="hidden" name="rowId" value={rowId} />}
+  <div>
+    <select
+      name="playerId"
+      aria-label="Player"
+      aria-invalid={errors.playerId ? "true" : undefined}
+      aria-describedby={describe("playerId")}
+      class={inputClass(Boolean(errors.playerId))}
+      required
+    >
+      <option value="" selected={!values.playerId}>— player —</option>
+      {
+        players.map((p) => (
+          <option value={p.id} selected={values.playerId === p.id}>
+            {p.name}
+          </option>
+        ))
+      }
+    </select>
+    {
+      errors.playerId && (
+        <p id={describe("playerId")} class="mt-1 text-xs text-danger">
+          {errors.playerId}
+        </p>
+      )
+    }
+  </div>
+  <div>
+    <input
+      type="number"
+      step="1"
+      inputmode="numeric"
+      name="points"
+      value={values.points ?? ""}
+      placeholder="±pts"
+      aria-label="Points (negative for a deduction)"
+      aria-invalid={errors.points ? "true" : undefined}
+      aria-describedby={describe("points")}
+      class:list={[inputClass(Boolean(errors.points)), "tabular-nums"]}
+      required
+    />
+    {
+      errors.points && (
+        <p id={describe("points")} class="mt-1 text-xs text-danger">
+          {errors.points}
+        </p>
+      )
+    }
+  </div>
+  <div>
+    <input
+      type="text"
+      name="reason"
+      value={values.reason ?? ""}
+      placeholder="reason"
+      aria-label="Reason"
+      aria-invalid={errors.reason ? "true" : undefined}
+      aria-describedby={describe("reason")}
+      class={inputClass(Boolean(errors.reason))}
+      required
+    />
+    {
+      errors.reason && (
+        <p id={describe("reason")} class="mt-1 text-xs text-danger">
+          {errors.reason}
+        </p>
+      )
+    }
+  </div>
+  <button type="submit" class={rowId ? btnGhost : btnPrimary}>
+    {rowId ? "save" : "+ add"}
+  </button>
+</form>

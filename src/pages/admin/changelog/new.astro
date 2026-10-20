@@ -1,0 +1,61 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import ChangelogForm from "../../../components/admin/ChangelogForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createChangelogEntry, describeWriteError } from "../../../data/admin";
+import {
+  parseChangelogForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+// Today's UK date, as YYYY-MM-DD.
+const today = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/London",
+}).format(new Date());
+let values: FormValues = { date: today, category: "new" };
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const parsed = parseChangelogForm(await Astro.request.formData());
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await createChangelogEntry(parsed.data);
+      const query = new URLSearchParams({
+        done: "saved",
+        name: parsed.data.title,
+      });
+      return Astro.redirect(withBase(`/admin/site?${query}#changelog`));
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+---
+
+<AdminLayout title="New changelog entry">
+  <a href={withBase("/admin/site#changelog")} class={btnGhost}
+    >&larr; POLLS &amp; CHANGELOG</a
+  >
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> git commit
+  </h1>
+  <TerminalWindow title="~/changelog/new.md" class="mt-6">
+    <ChangelogForm
+      mode="create"
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+</AdminLayout>

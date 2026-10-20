@@ -1,0 +1,2 @@
+ALTER TABLE "team_members" ADD CONSTRAINT "team_members_team_season_fk" FOREIGN KEY ("team_id","season_id") REFERENCES "public"."teams"("id","season_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "team_members" ADD CONSTRAINT "team_members_player_season_fk" FOREIGN KEY ("player_id","season_id") REFERENCES "public"."players"("id","season_id") ON DELETE cascade ON UPDATE no action;

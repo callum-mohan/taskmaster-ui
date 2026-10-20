@@ -1,0 +1,96 @@
+---
+import PasswordToggle from "./PasswordToggle.astro";
+import type { RevealError } from "../types";
+
+interface Props {
+  /** File-style label for the encrypted brief, e.g. `week-07.brief`. */
+  label: string;
+  error?: RevealError;
+  class?: string;
+}
+
+const { label, error, class: className = "" } = Astro.props;
+
+const errors: Record<RevealError, { title: string; detail: string }> = {
+  denied: {
+    title: "ACCESS DENIED",
+    detail: "That's not the password. Check with the Taskmaster.",
+  },
+  throttled: {
+    title: "TOO MANY ATTEMPTS",
+    detail: "Decryption locked for a minute. Try again shortly.",
+  },
+};
+const message = error ? errors[error] : undefined;
+---
+
+<div class:list={["py-4 text-center", className]}>
+  <p class="text-5xl" aria-hidden="true">🔐</p>
+  <p class="mt-4 text-sm text-ink-dim">
+    <span class="text-acid">$</span> cat {label}
+  </p>
+  <p class="mt-1 text-sm text-amber">
+    brief is encrypted: the Taskmaster holds the key
+  </p>
+
+  <form
+    method="post"
+    class:list={[
+      "mx-auto mt-6 max-w-md rounded-lg border bg-term-bg/60 p-4 text-left",
+      message ? "deny-shake border-danger/60" : "border-grid",
+    ]}
+  >
+    <label
+      for="reveal-password"
+      class="block text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase"
+    >
+      decryption key
+    </label>
+    <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+      <div
+        class="flex flex-1 items-center gap-2 rounded-md border border-grid bg-term-bg px-3 focus-within:border-acid"
+      >
+        <span class="text-acid" aria-hidden="true">&gt;</span>
+        {
+          /* Autofocus only after a failed guess, so the retry is a keystroke away. */
+          /* eslint-disable astro/jsx-a11y/no-autofocus */
+        }
+        <input
+          id="reveal-password"
+          name="password"
+          type="password"
+          required
+          maxlength={60}
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          autofocus={Boolean(message)}
+          aria-invalid={message ? "true" : undefined}
+          aria-describedby={message ? "reveal-error" : "reveal-hint"}
+          class="w-full bg-transparent py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
+          placeholder="enter password"
+        />
+        {/* eslint-enable astro/jsx-a11y/no-autofocus */}
+        <PasswordToggle for="reveal-password" />
+      </div>
+      <button
+        type="submit"
+        class="inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-4 py-2 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg"
+      >
+        [ DECRYPT ]
+      </button>
+    </div>
+    {
+      message ? (
+        <p id="reveal-error" class="mt-3 text-xs text-danger" role="alert">
+          <span class="font-bold tracking-widest">✗ {message.title}</span>
+          <span class="text-ink-dim"> {message.detail}</span>
+        </p>
+      ) : (
+        <p id="reveal-hint" class="mt-3 text-[11px] text-ink-faint">
+          <span class="text-acid">//</span> Case and spaces don't matter.
+        </p>
+      )
+    }
+  </form>
+</div>

@@ -1,9 +1,38 @@
 // Shared domain types for the Taskmaster competition UI.
-// These intentionally describe plain data shapes so the current mock
-// data layer can later be swapped for Supabase queries without touching
-// the UI components.
+// These intentionally describe plain data shapes: the data layer maps
+// Postgres rows (see `src/db/schema.ts`) onto them, so the UI components
+// never depend on the database.
 
 export type TaskStatus = "upcoming" | "live" | "completed";
+
+/**
+ * Derived from the season's weeks and whether an admin has closed it:
+ *   no week released yet   → "upcoming"
+ *   a week released        → "running"
+ *   closed by an admin     → "closed" (champion crowned)
+ */
+export type SeasonStatus = "upcoming" | "running" | "closed";
+
+/**
+ * One run of the competition (an academy cohort). Players, squads and weeks
+ * each belong to exactly one season; the public site shows the current one.
+ */
+export interface Season {
+  id: string;
+  /** Display name, e.g. "Cohort 2026". */
+  name: string;
+  /** Whether this is the season the public site shows. */
+  isCurrent: boolean;
+  /** When an admin closed the season and crowned its champion (ISO 8601). */
+  closedAt?: string;
+  createdAt: string;
+  status: SeasonStatus;
+  /** First week's release, once the season has weeks (ISO 8601). */
+  startsAt?: string;
+  /** Last week's deadline, once the season has weeks (ISO 8601). */
+  endsAt?: string;
+  weekCount: number;
+}
 
 /**
  * How a task is contested and scored:
@@ -17,6 +46,7 @@ export type TaskFormat = "individual" | "team";
 
 export interface Player {
   id: string;
+  seasonId: string;
   name: string;
   /** Optional team grouping, reserved for a future feature. */
   team?: string;
@@ -29,10 +59,11 @@ export interface Player {
 /**
  * A fixed squad of players (4–5) for team-format tasks. `memberIds` is the
  * single source of truth for who is on the team; the roster order is
- * irrelevant. Becomes a Supabase table later — keep the shape stable.
+ * irrelevant. Stored in the `teams` / `team_members` tables.
  */
 export interface Team {
   id: string;
+  seasonId: string;
   name: string;
   /** Player ids that make up the squad (4–5 members). */
   memberIds: string[];
@@ -42,6 +73,7 @@ export interface Team {
 
 export interface Task {
   id: string;
+  seasonId: string;
   weekNumber: number;
   title: string;
   /** Short summary shown on cards. Hidden for upcoming tasks. */
@@ -57,7 +89,41 @@ export interface Task {
   status: TaskStatus;
   /** Whether the task is contested individually or in teams. */
   format: TaskFormat;
+  /**
+   * Whether an admin set a reveal password. The password itself is never
+   * part of the public record.
+   */
+  passwordProtected: boolean;
+  /** An admin revealed this password-protected task to everyone. */
+  revealedToAll: boolean;
+  /**
+   * The task's content is withheld from this visitor: a password-protected,
+   * not-yet-completed task they haven't unlocked. When true, `title` is
+   * "???", `description` is empty and `brief` is absent.
+   */
+  locked: boolean;
+  /** Who may submit entries on the site, and how many (see `task_submissions`). */
+  submissions: TaskSubmissionSettings;
+  /**
+   * Results night: an admin is holding this week's results back. The public
+   * snapshot leaves out its scores and recorded bonuses until they're
+   * published; `/live` reveals them one at a time.
+   */
+  resultsHeld: boolean;
+  /** How many results `/live` has revealed so far (bottom first). */
+  resultsRevealCount: number;
 }
+
+/**
+ * How the request's task snapshot treats password-protected tasks:
+ * `public` redacts locked tasks unless the visitor unlocked them;
+ * `admin` never redacts (admins edit the real content).
+ */
+export type TaskRevealContext =
+  { mode: "public"; unlockedTaskIds: ReadonlySet<string> } | { mode: "admin" };
+
+/** Why a reveal-password attempt on a task page failed. */
+export type RevealError = "denied" | "throttled";
 
 export interface Score {
   taskId: string;
@@ -69,8 +135,29 @@ export interface Score {
 }
 
 /**
+ * A one-off points adjustment for a player, tied to the task week it was
+ * given in. Positive values are bonuses, negative values are deductions.
+ * Adjustments count toward the player's overall total but never change that
+ * week's finishing positions. Stored in the `bonus_points` table.
+ */
+export interface BonusPoint {
+  taskId: string;
+  playerId: string;
+  /** Points added (positive) or deducted (negative). */
+  points: number;
+  /** Why the bonus or deduction was given. */
+  reason: string;
+  /**
+   * The `bonus_points` row and when it was recorded (ISO 8601). Unset for
+   * bonuses derived from poll votes, which aren't stored as rows.
+   */
+  id?: number;
+  awardedAt?: string;
+}
+
+/**
  * A team's result on a single team-format task. The raw record the team
- * leaderboard is derived from; becomes a Supabase row later.
+ * leaderboard is derived from (points from `team_scores`, position derived).
  */
 export interface TeamScore {
   taskId: string;
@@ -81,13 +168,201 @@ export interface TeamScore {
   comment?: string;
 }
 
+/**
+ * The signed-in user behind an admin request (from Neon Auth). Only users with
+ * the `admin` role may use the admin area.
+ */
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  isAdmin: boolean;
+}
+
+export type ScoreAuditEntity = "task_score" | "team_score" | "bonus";
+export type ScoreAuditAction = "created" | "updated" | "deleted";
+
+/**
+ * One change to a week's scores or bonuses, from `score_audit_log`. Points and
+ * notes are unset on the side that didn't exist (before a create, after a
+ * delete).
+ */
+export interface ScoreAuditEntry {
+  id: number;
+  /** When the change was made (ISO 8601). */
+  at: string;
+  actorName: string;
+  entity: ScoreAuditEntity;
+  action: ScoreAuditAction;
+  /** Player id (task scores, bonuses) or team id (team scores). */
+  subjectId: string;
+  pointsBefore?: number;
+  pointsAfter?: number;
+  /** Score comment or bonus reason. */
+  noteBefore?: string;
+  noteAfter?: string;
+}
+
+/**
+ * Where a player's sign-in account is up to:
+ *   "none"    → no email set, so no account can be made.
+ *   "invited" → email set; waiting for `npm run players:accounts`.
+ *   "pending" → account created; still on the temporary password.
+ *   "active"  → the player has set their own password.
+ */
+export type PlayerAccountStatus = "none" | "invited" | "pending" | "active";
+
+/** A player's sign-in account (`player_accounts`), as the admin sees it. */
+export interface PlayerAccount {
+  playerId: string;
+  email: string;
+  userId?: string;
+  mustChangePassword: boolean;
+}
+
+/** The signed-in player behind an `/account` request. */
+export interface SessionPlayer {
+  userId: string;
+  email: string;
+  playerId: string;
+  playerName: string;
+  bio?: string;
+  avatarUrl?: string;
+  mustChangePassword: boolean;
+  /** Also holds the `admin` role, so `/admin` is available too. */
+  isAdmin: boolean;
+  /** When they last opened their notifications (ISO 8601); unset if never. */
+  notificationsReadAt?: string;
+}
+
+/**
+ * Whoever is signed in on a public page, for the navbar: players get a
+ * profile link, admins an admin link, and everyone signed in a logout.
+ */
+export interface Viewer {
+  name: string;
+  isAdmin: boolean;
+  /** Set when the account is linked to a player profile. */
+  playerId?: string;
+  /** Linked players only: when they last opened their notifications. */
+  notificationsReadAt?: string;
+}
+
+/**
+ * Every raw record for one request, loaded from Postgres in a single batch
+ * (see `data/competition.ts`). The selectors in `data/queries.ts` are pure
+ * computation over this snapshot.
+ */
+export interface CompetitionData {
+  /** The season this snapshot covers. */
+  season: Season;
+  players: Player[];
+  teams: Team[];
+  /** Ascending by week number, with status derived at load time. */
+  tasks: Task[];
+  scores: Score[];
+  teamScores: TeamScore[];
+  bonusPoints: BonusPoint[];
+  /**
+   * When each task's results were first recorded (ISO 8601), keyed by task id.
+   * Only tasks with scores for their format appear.
+   */
+  resultsPostedAt: Record<string, string>;
+  /** Every poll (drafts included), newest opening first. */
+  polls: Poll[];
+  /** Every People's Choice vote, with the entry it went to. */
+  peoplesChoiceVotes: PeoplesChoiceVote[];
+  /** Every winner prediction. */
+  predictions: Prediction[];
+  /** Editorial recap copy, keyed by task id. */
+  recaps: Record<string, WeekRecapContent>;
+  /** The site changelog, newest first. */
+  changelog: FeatureUpdate[];
+}
+
+// ── Polls ─────────────────────────────────────────────────────────────
+
+/** "single" → pick exactly one option; "multiple" → pick min–max options. */
+export type PollKind = "single" | "multiple";
+
+/**
+ * Derived from the poll's dates, like `TaskStatus`:
+ *   now < opensAt               → "scheduled"
+ *   opensAt <= now < closesAt   → "open"
+ *   now >= closesAt             → "closed"
+ */
+export type PollStatus = "scheduled" | "open" | "closed";
+
+/**
+ * Who sees the tallies (admins always do):
+ *   "always"      → everyone, even before voting.
+ *   "after_vote"  → players once they've voted; everyone once it closes.
+ *   "after_close" → everyone, but only once it closes.
+ *   "admin_only"  → never published.
+ */
+export type PollResultsVisibility =
+  "always" | "after_vote" | "after_close" | "admin_only";
+
+export interface PollOption {
+  id: number;
+  label: string;
+}
+
+/** One option a player picked. */
+export interface PollVote {
+  optionId: number;
+  playerId: string;
+}
+
+/** A poll's settings (no votes), safe to hand to components. */
+export interface PollSettings {
+  id: string;
+  question: string;
+  description?: string;
+  kind: PollKind;
+  /** Options a voter must pick (1 for single choice). */
+  minChoices: number;
+  /** Options a voter may pick (1 for single choice; capped at the option count). */
+  maxChoices: number;
+  opensAt: string; // ISO 8601
+  closesAt: string; // ISO 8601
+  resultsVisibility: PollResultsVisibility;
+  allowVoteChange: boolean;
+  /** Anonymous polls publish counts only; public polls name the voters. */
+  anonymous: boolean;
+  /** Days a closed poll stays on the homepage (0 = gone once closed). */
+  showOnHomeDays: number;
+  /** Drafts (false) are hidden from the site whatever the dates. */
+  published: boolean;
+  /** Bonus points each voter earns (0 = none). */
+  voteBonusPoints: number;
+  /**
+   * The week the voting bonus counts in: the admin's pick, or else the week
+   * live when the poll opens. Absent only when there are no tasks at all.
+   */
+  bonusTaskId?: string;
+  /** True when `bonusTaskId` was picked by an admin rather than derived. */
+  bonusTaskPinned: boolean;
+  status: PollStatus;
+  /** In display order. */
+  options: PollOption[];
+}
+
+/** A poll with its raw votes. Votes never leave the data layer as-is. */
+export interface Poll extends PollSettings {
+  votes: PollVote[];
+}
+
 // Derived view models used by the UI. Keeping these separate from the
 // raw records means pages receive ready-to-render data.
 
 export interface LeaderboardRow {
   rank: number;
   player: Player;
+  /** Overall total: task points plus net bonus points. */
   points: number;
+  /** Net bonus points (bonuses less deductions) included in `points`. */
+  bonusPoints: number;
   tasksCompleted: number;
   wins: number;
   averagePosition: number;
@@ -115,6 +390,27 @@ export interface TaskSummary {
   winningScore?: number;
   /** Winning squad of a completed team task, if any. */
   winningTeam?: Team;
+}
+
+/** A bonus or deduction with its task and player resolved, for display. */
+export interface BonusEntry {
+  task: Task;
+  player: Player;
+  /** Points added (positive) or deducted (negative). */
+  points: number;
+  reason: string;
+}
+
+/** A player's bonus/deduction ledger with running totals. */
+export interface PlayerBonusSummary {
+  /** Every adjustment for the player, oldest week first. */
+  entries: BonusEntry[];
+  /** Sum of all bonuses (positive adjustments). */
+  awarded: number;
+  /** Sum of all deductions (a negative number, or 0). */
+  deducted: number;
+  /** Net effect on the player's overall total. */
+  net: number;
 }
 
 /** One row of a completed task's full results table. */
@@ -185,6 +481,28 @@ export interface WhatsNewInfo {
   href: string;
 }
 
+/**
+ * How a changelog entry is tagged, driving its badge colour in the "what's
+ * new" modal: a brand-new capability, an improvement to an existing one, or a
+ * bug fix.
+ */
+export type FeatureCategory = "new" | "improved" | "fixed";
+
+/**
+ * One entry in the site changelog — a feature or change shipped to the
+ * Taskmaster UI, surfaced newest-first in the homepage "what's new" modal.
+ * Dates are ISO 8601 strings, formatted at the page level.
+ */
+export interface FeatureUpdate {
+  /** Stable id; also the change key for the trigger's unseen indicator. */
+  id: string;
+  /** ISO 8601 date the change shipped. */
+  date: string;
+  title: string;
+  description: string;
+  category: FeatureCategory;
+}
+
 /** One side of the previous/next task pager on a task detail page. */
 export interface TaskPagerLink {
   href: string;
@@ -213,6 +531,15 @@ export interface PlayerCompareOptions {
   rival?: CompareOpponent;
   /** Every other player, ordered by rank, for the dropdown. */
   opponents: CompareOpponent[];
+}
+
+/** A player's rank before and straight after one week's results. */
+export interface PlayerRankChange {
+  task: Task;
+  rank: number;
+  previousRank: number;
+  /** When the week's results were posted (ISO 8601). */
+  at: string;
 }
 
 /** A single player's outcome on one task, for the player detail page. */
@@ -255,8 +582,71 @@ export interface PlayerComparison {
   };
 }
 
-/** Which bucket a command-palette entry belongs to (section + icon). */
-export type CommandPaletteGroup = "page" | "task" | "team" | "player";
+/**
+ * Which bucket a command-palette entry belongs to (section + icon). `"action"`
+ * entries are synthesized on the client for dynamic commands (e.g. "jump to
+ * week N", "compare X vs Y") and are never emitted by the data layer.
+ * `"admin"` entries are only included for signed-in admins.
+ */
+export type CommandPaletteGroup =
+  "page" | "task" | "team" | "player" | "admin" | "action";
+
+/** One area of the admin panel (sub-nav tab, dashboard shortcut, palette entry). */
+export interface AdminSection {
+  /** Root-relative path, e.g. `/admin/weeks`. */
+  href: string;
+  /** Short tab label in the admin sub-nav. */
+  label: string;
+  /** Action-style title for the dashboard and command palette. */
+  title: string;
+  /** One-line description of what the section is for. */
+  hint: string;
+  /** Extra command-palette search terms. */
+  keywords?: string;
+  /** Other root-relative path prefixes that belong to this section. */
+  match?: string[];
+}
+
+/** A step of a week's admin workflow, and the tab that handles it. */
+export type WeekStepId = "brief" | "judge" | "live" | "recap";
+
+/**
+ * Where a week stands on a step: `done`; `active` (needs doing now);
+ * `waiting` (can't happen yet); `optional` (nothing required).
+ */
+export type WeekStepState = "done" | "active" | "waiting" | "optional";
+
+export interface WeekStep {
+  id: WeekStepId;
+  /** Tab label, e.g. `judge`. */
+  label: string;
+  /** Root-relative admin path of the step's tab. */
+  href: string;
+  state: WeekStepState;
+  /** Short status line, e.g. `8 / 12 scored`. */
+  detail: string;
+}
+
+/** Admin-side counts for one week, behind its workflow steps. */
+export interface WeekCounts {
+  individualScores: number;
+  teamScores: number;
+  bonuses: number;
+  entries: number;
+  hiddenEntries: number;
+  recapWritten: boolean;
+}
+
+/** A week's progress through the admin workflow (brief → recap). */
+export interface WeekProgress {
+  steps: WeekStep[];
+  /** The first step that needs doing now, if any. */
+  next?: WeekStep;
+  /** Players (or squads, on team tasks) with a score this week. */
+  scored: number;
+  /** Players (or squads) that can be scored. */
+  roster: number;
+}
 
 /** A single searchable destination in the global command palette. */
 export interface CommandPaletteItem {
@@ -293,7 +683,7 @@ export interface FollowRival {
 export interface FollowStanding {
   id: string;
   name: string;
-  /** Path to the player's assigned avatar SVG (already base-prefixed). */
+  /** Path to the player's assigned avatar image (already base-prefixed). */
   icon: string;
   rank: number;
   points: number;
@@ -372,10 +762,10 @@ export interface Award {
 // everything else is derived in queries.ts from scores + standings.
 
 /**
- * Hand-written editorial colour for a week, keyed by task id in
- * `src/data/recaps.ts`. Every field is optional — the recap page falls back
- * to auto-generated text when a week has not been written up yet. Becomes a
- * Supabase table later; keep the shape stable.
+ * Hand-written editorial colour for a week, from the `recaps` table (edited
+ * in the week's recap tab, `/admin/weeks/<task>/recap`). Every field is
+ * optional — the recap page falls back to auto-generated text when a week
+ * has not been written up yet.
  */
 export interface WeekRecapContent {
   /** Punchy episode headline, e.g. "Rose cracks the opener". */
@@ -461,4 +851,521 @@ export interface RecapSummary {
   winner?: Player;
   winningScore?: number;
   biggestClimber?: RecapMover;
+}
+
+/**
+ * A released task as filed in the 404 page's `lost.sh` text adventure, where
+ * the "archive" room lets players leaf through briefs that have aired so far.
+ */
+export interface LostArchiveEntry {
+  weekNumber: number;
+  title: string;
+  description: string;
+}
+
+// ── Poll view models ──────────────────────────────────────────────────
+
+/** Who is looking at a poll, which decides what they can do with it. */
+export type PollViewerKind = "guest" | "non-player" | "player";
+
+export interface PollViewer {
+  kind: PollViewerKind;
+  /** Set for `"player"` viewers. */
+  playerId?: string;
+}
+
+export interface PollOptionResult {
+  option: PollOption;
+  votes: number;
+  /** Share of voters (not of ticks) who picked it, 0–100, rounded. */
+  percent: number;
+  /** Has the most votes (ties all lead); false when nobody has voted. */
+  leading: boolean;
+  /** Who picked it, only for public (non-anonymous) polls. */
+  voters?: Player[];
+}
+
+export interface PollResults {
+  /** Players who voted. */
+  voterCount: number;
+  /** Roster size, for turnout ("12 of 25 voted"). */
+  eligibleCount: number;
+  options: PollOptionResult[];
+}
+
+/** Everything a homepage poll card needs for one viewer. */
+export interface PollCard {
+  poll: PollSettings;
+  viewer: PollViewerKind;
+  /** Option ids this viewer picked (empty if they haven't voted). */
+  myChoices: number[];
+  hasVoted: boolean;
+  /** The ballot form is shown (open poll, player, and not locked in). */
+  canVote: boolean;
+  /** Tallies, when this viewer may see them. */
+  results?: PollResults;
+  /** Why results are hidden, e.g. "Results appear once you vote." */
+  resultsHint?: string;
+}
+
+/** A row in the admin poll list. */
+export interface PollSummary {
+  poll: PollSettings;
+  voterCount: number;
+}
+
+// ── Notifications ─────────────────────────────────────────────────────
+
+/**
+ * What happened; each kind is derived from records already in the snapshot.
+ * Results, rank, bonus and deduction notifications are personal to a player.
+ */
+export type NotificationKind =
+  | "task-released"
+  | "poll-opened"
+  | "deadline-soon"
+  | "results-posted"
+  | "rank-up"
+  | "bonus-awarded"
+  | "points-deducted";
+
+/** One entry in a player's notification feed. */
+export interface NotificationItem {
+  /** Stable per event, e.g. `task:week-05`, `poll:best-egg` or `bonus:12`. */
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  /** Secondary line, e.g. "Week 05 · team task". */
+  detail?: string;
+  /** Base-prefixed link to what the notification is about. */
+  href: string;
+  /** When it happened (ISO 8601). */
+  at: string;
+  /** Happened after the player last opened their notifications. */
+  unread: boolean;
+}
+
+/** A player's newest notifications, newest first. */
+export interface NotificationFeed {
+  items: NotificationItem[];
+  unreadCount: number;
+}
+
+// ── Task submissions ──────────────────────────────────────────────────
+
+/** "photo" → an image in Object Storage (with an optional caption); "text" → a written entry. */
+export type SubmissionKind = "photo" | "text";
+
+/** A task's submission rules, set by an admin. */
+export interface TaskSubmissionSettings {
+  /** Entries allowed per player (or per squad on team tasks); 0 = closed. */
+  max: number;
+  /** Which kinds of entry are accepted. Empty when closed. */
+  kinds: SubmissionKind[];
+}
+
+/** One entry from `task_submissions`. */
+export interface TaskSubmission {
+  id: number;
+  taskId: string;
+  /** The player who submitted it. */
+  playerId: string;
+  /** The squad that owns it, on team tasks. */
+  teamId?: string;
+  kind: SubmissionKind;
+  /** The text entry, or a photo's caption. */
+  text?: string;
+  /** Photos only: where the image lives in the storage bucket. */
+  objectKey?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  /** An admin hid it from the public gallery. */
+  hidden: boolean;
+  /** When it was submitted (ISO 8601). */
+  createdAt: string;
+}
+
+/** Whose entry slots a submission uses: the player's, or their squad's. */
+export type SubmissionOwnerRef =
+  { type: "player"; id: string } | { type: "team"; id: string };
+
+/** A submission owner ready to render. */
+export interface SubmissionOwner {
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+}
+
+/** A submission ready to render, with its submitter and image link. */
+export interface SubmissionEntry extends TaskSubmission {
+  submitterName: string;
+  /** Base-prefixed, access-checked image URL (photos only). */
+  mediaUrl?: string;
+}
+
+/** Who is looking at a task's submissions. */
+export interface SubmissionViewer {
+  signedIn: boolean;
+  isAdmin: boolean;
+  /** Set when the account is linked to a player profile. */
+  playerId?: string;
+}
+
+/**
+ * Why a viewer can't submit right now:
+ *   "upcoming" / "completed" → outside the task window;
+ *   "encrypted" → the brief is still password-locked for them;
+ *   "closed"    → the task doesn't take entries on the site;
+ *   "guest"     → not signed in; "no-player" → account has no player profile;
+ *   "no-team"   → team task, but the player isn't in a squad;
+ *   "full"      → every entry slot is used.
+ */
+export type SubmissionBlockReason =
+  | "upcoming"
+  | "completed"
+  | "encrypted"
+  | "closed"
+  | "guest"
+  | "no-player"
+  | "no-team"
+  | "full";
+
+/** The "your entries" panel on a task page. */
+export interface SubmissionPanel {
+  settings: TaskSubmissionSettings;
+  /** Set when the viewer has entry slots on this task. */
+  owner?: SubmissionOwner;
+  /** The owner's own entries, oldest first. */
+  entries: SubmissionEntry[];
+  remaining: number;
+  canSubmit: boolean;
+  blockedBy?: SubmissionBlockReason;
+  /** Entries can still be withdrawn (the task is live). */
+  canDelete: boolean;
+}
+
+/** One player's or squad's entries in a gallery. */
+export interface SubmissionGalleryGroup {
+  owner: SubmissionOwner;
+  entries: SubmissionEntry[];
+}
+
+/** A player an admin can add an entry for. */
+export interface SubmitterOption {
+  id: string;
+  name: string;
+}
+
+/** Players an admin can add entries for, grouped by squad on team tasks. */
+export interface SubmitterOptionGroup {
+  /** The squad's name (team tasks only). */
+  label?: string;
+  players: SubmitterOption[];
+}
+
+/** What happened to a player's submission attempt (shown on the task page). */
+export type SubmissionOutcome =
+  | "submitted"
+  | "deleted"
+  | "closed"
+  | "full"
+  | "kind"
+  | "invalid"
+  | "too-large"
+  | "bad-type"
+  | "heic"
+  | "upload-failed";
+
+// ── Reactions & People's Choice ───────────────────────────────────────
+
+/** The emoji reactions a player can leave on a gallery entry. */
+export type ReactionKind = "laugh" | "fire" | "clap" | "mind_blown" | "egg";
+
+/** One player's reaction to an entry (`submission_reactions`). */
+export interface SubmissionReaction {
+  submissionId: number;
+  playerId: string;
+  kind: ReactionKind;
+}
+
+/** One reaction button under a gallery entry. */
+export interface ReactionTally {
+  kind: ReactionKind;
+  /** Decorative glyph (pair it with `label`). */
+  emoji: string;
+  label: string;
+  count: number;
+  /** The viewer left this reaction. */
+  mine: boolean;
+  /** Who reacted, for the tooltip. */
+  names: string[];
+}
+
+/** A People's Choice vote (`peoples_choice_votes`) with the entry it went to. */
+export interface PeoplesChoiceVote {
+  taskId: string;
+  /** The voter. */
+  playerId: string;
+  submissionId: number;
+  /** Who submitted the entry, and their squad on team tasks. */
+  submitterId: string;
+  teamId?: string;
+  /** The entry was hidden by an admin, so the vote doesn't count. */
+  entryHidden: boolean;
+}
+
+/**
+ * Where a task's People's Choice vote is up to: it opens at the deadline
+ * (when the gallery goes up) and closes a fixed time later, when the bonus
+ * is awarded.
+ */
+export type PeoplesChoiceStatus = "not-open" | "open" | "closed";
+
+/** The People's Choice vote on one task, for one viewer. */
+export interface PeoplesChoiceSummary {
+  status: PeoplesChoiceStatus;
+  /** When voting closes (ISO 8601). */
+  closesAt: string;
+  /** Points each winner earns. */
+  bonusPoints: number;
+  /** Players who have voted. */
+  voterCount: number;
+  /** The viewer is a player and voting is open. */
+  canVote: boolean;
+  /** The entry the viewer voted for. */
+  myVote?: number;
+  /** Winning entry ids (closed votes with at least one vote). */
+  winners: number[];
+}
+
+/** What a viewer can do with one gallery entry, and how it's doing. */
+export interface GalleryEntrySocial {
+  reactions: ReactionTally[];
+  /** The viewer is a player, so the reaction buttons work. */
+  canReact: boolean;
+  /** The viewer may vote for this entry (open vote, not their own). */
+  canVote: boolean;
+  /** The viewer's People's Choice vote went here. */
+  votedFor: boolean;
+  /** People's Choice votes, once voting has closed. */
+  votes?: number;
+  /** Won (or tied for) People's Choice. */
+  winner: boolean;
+}
+
+/** A gallery entry with its reactions and People's Choice state. */
+export interface GalleryEntry extends SubmissionEntry {
+  social: GalleryEntrySocial;
+}
+
+/** One player's or squad's entries in the public gallery. */
+export interface PublicGalleryGroup {
+  owner: SubmissionOwner;
+  entries: GalleryEntry[];
+}
+
+/** What happened to a reaction or People's Choice vote (shown on the task page). */
+export type GalleryOutcome =
+  | "reacted"
+  | "unreacted"
+  | "voted"
+  | "vote-changed"
+  | "vote-withdrawn"
+  | "vote-closed"
+  | "own-entry"
+  | "invalid";
+
+// ── Predictions ───────────────────────────────────────────────────────
+
+/** Who a prediction backs: a player, or a squad on team tasks. */
+export type PredictionPick =
+  { type: "player"; id: string } | { type: "team"; id: string };
+
+/** A player's call on who wins a week (`predictions`). */
+export interface Prediction {
+  taskId: string;
+  /** The player making the call. */
+  playerId: string;
+  pick: PredictionPick;
+}
+
+/** A pick ready to render. */
+export interface PredictionChoice {
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+}
+
+/** Everyone who backed one pick, once predictions are revealed. */
+export interface PredictionTallyRow {
+  choice: PredictionChoice;
+  backers: Player[];
+  /** The pick won (set once results are in). */
+  correct?: boolean;
+}
+
+/**
+ * Where a week's predictions are up to:
+ *   "open"     → the task is live, calls can be made or changed;
+ *   "locked"   → the deadline passed, calls are revealed, results pending;
+ *   "settled"  → the results are in and correct calls earned their bonus;
+ *   "upcoming" → the task hasn't been released yet.
+ */
+export type PredictionStatus = "upcoming" | "open" | "locked" | "settled";
+
+/** The "call the winner" panel on a task page, for one viewer. */
+export interface PredictionPanel {
+  status: PredictionStatus;
+  /** Points a correct call earns. */
+  bonusPoints: number;
+  /** The viewer is a player and calls are open. */
+  canPredict: boolean;
+  /** Why a signed-out or non-player viewer can't predict. */
+  viewer: "guest" | "non-player" | "player";
+  /** Who the viewer can back (never themselves or their own squad). */
+  options: PredictionChoice[];
+  myPick?: PredictionChoice;
+  /** The viewer's call won (settled weeks only). */
+  myPickCorrect?: boolean;
+  /** How many players have made a call. */
+  count: number;
+  /** Every pick and its backers, once the deadline has passed. */
+  tally: PredictionTallyRow[];
+}
+
+/** What happened to a player's prediction (shown on the task page). */
+export type PredictionOutcome =
+  "saved" | "changed" | "withdrawn" | "closed" | "invalid";
+
+// ── Live results night ────────────────────────────────────────────────
+
+/** One revealed result on the live board. */
+export interface LiveResultRow {
+  position: number;
+  type: "player" | "team";
+  id: string;
+  name: string;
+  /** Base-prefixed profile link. */
+  href: string;
+  points: number;
+  comment?: string;
+  /** Squad members, on team tasks. */
+  members?: Player[];
+  /** Player avatar source, on individual tasks. */
+  player?: Player;
+  /** The most recent reveal. */
+  latest: boolean;
+}
+
+/**
+ * The live results board for the week being revealed. Unrevealed results
+ * are only counted, never sent to the page.
+ */
+export interface LiveShow {
+  task: Task;
+  /** Results to reveal in total. */
+  total: number;
+  /** Revealed so far, best position first. */
+  revealed: LiveResultRow[];
+  /** Results still to come. */
+  hiddenCount: number;
+  /** Every result is out (the winner included). */
+  complete: boolean;
+  /** Changes whenever the board does; the page polls for it. */
+  version: string;
+}
+
+/** One step of an admin's reveal running order. */
+export interface LiveRunStep {
+  /** 1 = revealed first (last place). */
+  step: number;
+  position: number;
+  name: string;
+  points: number;
+  revealed: boolean;
+}
+
+/**
+ * A week whose results are held, as read straight from the database (the
+ * cached snapshot may be a few minutes behind the show).
+ */
+export interface LiveHold {
+  taskId: string;
+  revealCount: number;
+}
+
+// ── Rules ─────────────────────────────────────────────────────────────
+
+/**
+ * The competition facts the rules page quotes, read from the same constants
+ * and data the app enforces so the copy can't drift from the real rules.
+ */
+export interface GameRules {
+  totalWeeks: number;
+  individualTasks: number;
+  teamTasks: number;
+  playerCount: number;
+  teamCount: number;
+  /** Smallest and largest squad sizes (equal when every squad matches). */
+  teamSize: { min: number; max: number };
+  peoplesChoice: { bonusPoints: number; windowDays: number };
+  predictionBonusPoints: number;
+  submissions: {
+    maxPhotoMb: number;
+    maxTextChars: number;
+    maxCaptionChars: number;
+  };
+}
+
+// ── Seasons & Hall of Fame ───────────────────────────────────────────
+
+/**
+ * Which season each player, squad and week belongs to, plus the season list
+ * (oldest first). Lets detail pages load the right season's snapshot.
+ */
+export interface SeasonDirectory {
+  seasons: Season[];
+  current?: Season;
+  getSeason(id: string): Season | undefined;
+  seasonOfPlayer(playerId: string): Season | undefined;
+  seasonOfTeam(teamId: string): Season | undefined;
+  seasonOfTask(taskId: string): Season | undefined;
+}
+
+/** A closed season's honours, derived from its final standings. */
+export interface HallOfFameSeason {
+  season: Season;
+  /** The top three (fewer when the roster is smaller), champion first. */
+  podium: LeaderboardRow[];
+  /** The top squad, when the season had team tasks scored. */
+  winningSquad?: TeamStanding;
+  awards: Award[];
+  playerCount: number;
+  weekCount: number;
+}
+
+/** An all-time record across every closed season. */
+export interface AllTimeRecord {
+  id: string;
+  /** Record name, e.g. "Highest season total". */
+  title: string;
+  /** Command-style sub-label, e.g. "max season.points". */
+  command: string;
+  player: Player;
+  season: Season;
+  /** Headline value, pre-formatted, e.g. "142 pts". */
+  value: string;
+  /** Supporting context, e.g. the week it was set in. */
+  detail?: string;
+  accent: "acid" | "magenta" | "amber" | "cyan";
+}
+
+export interface HallOfFame {
+  /** Closed seasons, most recent first. */
+  seasons: HallOfFameSeason[];
+  records: AllTimeRecord[];
 }

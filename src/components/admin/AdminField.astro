@@ -1,0 +1,117 @@
+---
+import PasswordToggle from "../PasswordToggle.astro";
+import { inputClass, labelClass } from "./styles";
+
+interface Props {
+  label: string;
+  name: string;
+  value?: string | number | null;
+  error?: string;
+  hint?: string;
+  type?: "text" | "number" | "url" | "datetime-local" | "email" | "password";
+  /** Renders a `<textarea>` with this many rows instead of an `<input>`. */
+  rows?: number;
+  required?: boolean;
+  readonly?: boolean;
+  placeholder?: string;
+  autocomplete?: string;
+  min?: number;
+  max?: number;
+  /** Extra attributes for the control, e.g. `data-*` hooks for scripts. */
+  attrs?: Record<string, string>;
+  class?: string;
+}
+
+const {
+  label,
+  name,
+  value,
+  error,
+  hint,
+  type = "text",
+  rows,
+  required = false,
+  readonly = false,
+  placeholder,
+  autocomplete,
+  min,
+  max,
+  attrs = {},
+  class: className,
+} = Astro.props;
+
+const id = `field-${name}`;
+const hintId = hint ? `${id}-hint` : undefined;
+const errorId = error ? `${id}-error` : undefined;
+const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined;
+const shared = {
+  id,
+  name,
+  required,
+  readonly,
+  placeholder,
+  "aria-invalid": error ? ("true" as const) : undefined,
+  "aria-describedby": describedBy,
+  class: inputClass(Boolean(error)),
+  ...attrs,
+};
+---
+
+<div class:list={["space-y-1.5", className]}>
+  <label for={id} class={labelClass}>
+    {label}
+    {
+      required && (
+        <span class="text-acid" aria-hidden="true">
+          {" "}
+          *
+        </span>
+      )
+    }
+  </label>
+  {
+    rows ? (
+      <textarea {...shared} rows={rows} set:text={value ?? ""} />
+    ) : type === "password" ? (
+      <div class="relative">
+        <input
+          {...shared}
+          class={`${shared.class} pr-10`}
+          type="password"
+          value={value ?? ""}
+          autocomplete={autocomplete}
+        />
+        <PasswordToggle
+          for={id}
+          class="absolute top-1/2 right-2 -translate-y-1/2"
+        />
+      </div>
+    ) : (
+      <input
+        {...shared}
+        type={type}
+        value={value ?? ""}
+        autocomplete={autocomplete}
+        min={min}
+        max={max}
+        step={type === "number" ? 1 : undefined}
+        inputmode={type === "number" ? "numeric" : undefined}
+      />
+    )
+  }
+  {
+    hint && (
+      <p id={hintId} class="text-xs text-ink-faint">
+        {hint}
+      </p>
+    )
+  }
+  {
+    error && (
+      <p id={errorId} class="text-xs text-danger">
+        <span aria-hidden="true">✗ </span>
+        {error}
+      </p>
+    )
+  }
+</div>

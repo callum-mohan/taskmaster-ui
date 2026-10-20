@@ -1,0 +1,47 @@
+---
+// Stroke icons for compact admin controls. Always decorative: the control
+// carrying the icon provides the accessible name.
+
+export type AdminIconName = "eye" | "eye-off" | "trash";
+
+interface Props {
+  name: AdminIconName;
+  class?: string;
+}
+
+const { name, class: className = "h-4 w-4" } = Astro.props;
+
+const paths: Record<AdminIconName, string[]> = {
+  eye: [
+    "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z",
+    "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6Z",
+  ],
+  "eye-off": [
+    "M9.9 4.24A9.1 9.1 0 0 1 12 4c6.5 0 10 8 10 8a17.6 17.6 0 0 1-2.16 3.19",
+    "M14.12 14.12a3 3 0 1 1-4.24-4.24",
+    "M17.94 17.94A10.1 10.1 0 0 1 12 20c-6.5 0-10-8-10-8a18.4 18.4 0 0 1 5.06-5.94",
+    "M2 2l20 20",
+  ],
+  trash: [
+    "M3 6h18",
+    "M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2",
+    "M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6",
+    "M10 11v6",
+    "M14 11v6",
+  ],
+};
+---
+
+<svg
+  class={className}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  {paths[name].map((d) => <path d={d} />)}
+</svg>

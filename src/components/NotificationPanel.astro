@@ -1,0 +1,219 @@
+---
+import NotificationList from "./NotificationList.astro";
+import type { NotificationFeed } from "../types";
+import { withBase } from "../lib/url";
+
+interface Props {
+  feed: NotificationFeed;
+  class?: string;
+}
+
+const { feed, class: className = "" } = Astro.props;
+---
+
+<!--
+  Rendered outside the sticky header: its backdrop-filter would otherwise trap
+  the fixed-position mobile drawer inside the header's box. Only shown by the
+  script below; without JS the bell is a plain link to the full list.
+-->
+<div
+  id="notification-panel-root"
+  data-read-url={withBase("/account/notifications/read")}
+  data-unread-count={feed.unreadCount}
+  class:list={["hidden", className]}
+>
+  <div
+    data-notification-backdrop
+    class="fixed inset-0 z-[80] bg-term-bg/80 backdrop-blur-sm sm:hidden"
+    aria-hidden="true"
+  >
+  </div>
+
+  <div
+    id="notification-panel"
+    role="dialog"
+    aria-labelledby="notification-panel-title"
+    tabindex="-1"
+    class="fixed inset-y-0 right-0 z-[80] flex w-full max-w-sm flex-col overflow-hidden border-l border-grid bg-term-panel shadow-[0_0_40px_-12px] shadow-acid/20 sm:inset-y-auto sm:max-h-[70vh] sm:w-96 sm:rounded-lg sm:border"
+  >
+    <div
+      class="flex items-center gap-3 border-b border-grid bg-term-panel-2 px-4 py-2.5"
+    >
+      <span class="flex items-center gap-1.5" aria-hidden="true">
+        <span class="h-3 w-3 rounded-full bg-dot-red"></span>
+        <span class="h-3 w-3 rounded-full bg-dot-amber"></span>
+        <span class="h-3 w-3 rounded-full bg-dot-green"></span>
+      </span>
+      <h2
+        id="notification-panel-title"
+        class="text-xs tracking-[0.2em] text-ink-faint"
+      >
+        ~/notifications
+      </h2>
+      <button
+        type="button"
+        data-notification-close
+        aria-label="Close notifications"
+        class="ml-auto rounded px-1.5 py-1 text-ink-faint transition-colors hover:text-ink"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
+
+    <p
+      class="prompt border-b border-grid px-4 py-2.5 text-[10px] font-bold tracking-[0.3em] text-ink-dim uppercase"
+    >
+      notify --latest
+    </p>
+
+    <div class="flex-1 overflow-y-auto">
+      <NotificationList items={feed.items} />
+    </div>
+
+    <a
+      href={withBase("/account/notifications")}
+      class="flex items-center gap-2 border-t border-grid bg-term-panel-2 px-4 py-2.5 text-[10px] tracking-[0.15em] text-ink-faint uppercase transition-colors hover:text-acid"
+    >
+      <span class="text-acid" aria-hidden="true">$</span>
+      <span>view all notifications</span>
+    </a>
+  </div>
+</div>
+
+<script>
+  const root = document.getElementById("notification-panel-root");
+  const panel = document.getElementById("notification-panel");
+  const bell = document.querySelector<HTMLAnchorElement>(
+    "[data-notification-bell]",
+  );
+
+  if (root && panel && bell) {
+    const readUrl = root.dataset.readUrl ?? "";
+    let unread = Number(root.dataset.unreadCount ?? "0");
+    let markedRead = false;
+    const desktop = window.matchMedia("(min-width: 640px)");
+
+    // Upgrade the plain link into a disclosure button for the panel.
+    bell.setAttribute("role", "button");
+    bell.setAttribute("aria-haspopup", "dialog");
+    bell.setAttribute("aria-controls", "notification-panel");
+    bell.setAttribute("aria-expanded", "false");
+
+    const isOpen = () => !root.classList.contains("hidden");
+
+    // On wider screens the panel drops down under the bell; on phones it's a
+    // full-height drawer, so the inline position is cleared.
+    const position = () => {
+      if (!desktop.matches) {
+        panel.style.top = "";
+        panel.style.right = "";
+        return;
+      }
+      const rect = bell.getBoundingClientRect();
+      const viewport = document.documentElement.clientWidth;
+      panel.style.top = `${Math.round(rect.bottom + 8)}px`;
+      panel.style.right = `${Math.max(8, Math.round(viewport - rect.right))}px`;
+    };
+
+    const markRead = async () => {
+      if (markedRead || unread === 0) return;
+      markedRead = true;
+      try {
+        const body = new FormData();
+        const res = await fetch(readUrl, {
+          method: "POST",
+          body,
+          headers: { "X-Requested-With": "fetch" },
+          credentials: "same-origin",
+        });
+        if (res.status !== 204) throw new Error(`HTTP ${res.status}`);
+        unread = 0;
+        bell.querySelector("[data-notification-badge]")?.remove();
+        bell.setAttribute("aria-label", "Notifications");
+      } catch {
+        // Leave the badge up so the next open tries again.
+        markedRead = false;
+      }
+    };
+
+    // Highlights stay while the panel is open, so the player can see what
+    // was new; once it closes (and the read was saved) they clear.
+    const clearHighlights = () => {
+      if (unread > 0) return;
+      panel
+        .querySelectorAll<HTMLElement>("[data-notification-item][data-unread]")
+        .forEach((item) => item.removeAttribute("data-unread"));
+      panel
+        .querySelectorAll<HTMLElement>(
+          "[data-notification-dot], [data-notification-new]",
+        )
+        .forEach((el) => el.remove());
+    };
+
+    const open = () => {
+      position();
+      root.classList.remove("hidden");
+      bell.setAttribute("aria-expanded", "true");
+      if (!desktop.matches) document.body.style.overflow = "hidden";
+      panel.focus();
+      void markRead();
+    };
+
+    const close = (restoreFocus = true) => {
+      if (!isOpen()) return;
+      root.classList.add("hidden");
+      bell.setAttribute("aria-expanded", "false");
+      document.body.style.overflow = "";
+      clearHighlights();
+      if (restoreFocus) bell.focus();
+    };
+
+    bell.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (isOpen()) close();
+      else open();
+    });
+    // Links acting as buttons should also respond to Space.
+    bell.addEventListener("keydown", (event) => {
+      if (event.key === " ") {
+        event.preventDefault();
+        bell.click();
+      }
+    });
+
+    panel
+      .querySelector<HTMLButtonElement>("[data-notification-close]")
+      ?.addEventListener("click", () => close());
+    root
+      .querySelector<HTMLElement>("[data-notification-backdrop]")
+      ?.addEventListener("click", () => close());
+    panel
+      .querySelectorAll("[data-notification-item]")
+      .forEach((item) => item.addEventListener("click", () => close(false)));
+
+    // Capture phase, so nav dropdown triggers (which stop propagation) still
+    // dismiss the panel when clicked.
+    document.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target as Node | null;
+        if (!isOpen() || !target) return;
+        if (panel.contains(target) || bell.contains(target)) return;
+        close(false);
+      },
+      true,
+    );
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && isOpen()) {
+        event.preventDefault();
+        close();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (!isOpen()) return;
+      position();
+      document.body.style.overflow = desktop.matches ? "" : "hidden";
+    });
+  }
+</script>

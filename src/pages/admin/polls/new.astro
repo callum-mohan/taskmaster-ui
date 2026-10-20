@@ -1,0 +1,102 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PollForm from "../../../components/admin/PollForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createPoll, describeWriteError, getPoll } from "../../../data/admin";
+import {
+  applyPollPreset,
+  formValues,
+  newPollFormValues,
+  parsePollForm,
+  pollBonusWeeks,
+  pollFormValues,
+  slugify,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { resolveBonusTask } from "../../../data/polls";
+import { wallClockToIso } from "../../../lib/time";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const { players, teams, tasks } = await Astro.locals.getQueries();
+
+// `?from=<id>` duplicates an existing poll's question, options and rules.
+const fromId = Astro.url.searchParams.get("from");
+const source = fromId ? await getPoll(fromId) : undefined;
+
+let values: FormValues = source
+  ? pollFormValues(source, true)
+  : newPollFormValues();
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const preset = form.get("preset");
+  if (typeof preset === "string") {
+    values = applyPollPreset(formValues(form), preset, {
+      players: players.map((p) => p.name),
+      teams: teams.map((t) => t.name),
+    });
+  } else {
+    // Default the id to the question, like players and teams do.
+    if (!String(form.get("id") ?? "").trim()) {
+      form.set("id", slugify(String(form.get("question") ?? "")));
+    }
+    const parsed = parsePollForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await createPoll(parsed.data);
+        const query = new URLSearchParams({
+          done: "saved",
+          name: `poll "${parsed.data.question}"`,
+        });
+        return Astro.redirect(withBase(`/admin/site?${query}`));
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+
+const weeks = pollBonusWeeks(tasks);
+const autoWeekId = values.opensAt
+  ? resolveBonusTask(wallClockToIso(values.opensAt), tasks)
+  : undefined;
+const autoWeekLabel = weeks.find((w) => w.id === autoWeekId)?.label;
+---
+
+<AdminLayout title="New poll">
+  <a href={withBase("/admin/site")} class={btnGhost}
+    >&larr; POLLS &amp; CHANGELOG</a
+  >
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch ~/polls/new.poll
+  </h1>
+  {
+    source && (
+      <p class="mt-2 text-sm text-ink-dim">
+        Copied from <span class="text-ink">{source.question}</span>. Votes
+        aren't copied.
+      </p>
+    )
+  }
+  <TerminalWindow title="~/polls/new.poll" class="mt-6">
+    <PollForm
+      mode="create"
+      values={values}
+      errors={errors}
+      formError={formError}
+      weeks={weeks}
+      autoWeekLabel={autoWeekLabel}
+    />
+  </TerminalWindow>
+</AdminLayout>

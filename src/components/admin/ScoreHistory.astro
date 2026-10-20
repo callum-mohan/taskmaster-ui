@@ -1,0 +1,141 @@
+---
+import type {
+  ScoreAuditAction,
+  ScoreAuditEntity,
+  ScoreAuditEntry,
+} from "../../types";
+import { ukDateFormat } from "../../lib/time";
+import { tableCell, tableHead } from "./styles";
+
+interface Props {
+  entries: ScoreAuditEntry[];
+  /** Display names for player and team ids; unknown ids show as-is. */
+  names: Record<string, string>;
+  class?: string;
+}
+
+const { entries, names, class: className = "" } = Astro.props;
+
+const dateFmt = ukDateFormat({
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const entityLabel: Record<ScoreAuditEntity, string> = {
+  task_score: "score",
+  team_score: "squad score",
+  bonus: "bonus",
+};
+
+const actionConfig: Record<ScoreAuditAction, { label: string; class: string }> =
+  {
+    created: { label: "added", class: "text-acid" },
+    updated: { label: "changed", class: "text-amber" },
+    deleted: { label: "removed", class: "text-danger" },
+  };
+
+const points = (value: number | undefined) =>
+  value === undefined ? "—" : String(value);
+---
+
+{
+  entries.length === 0 ? (
+    <p class:list={["text-sm text-ink-faint", className]}>
+      <span class="text-acid" aria-hidden="true">
+        &gt;{" "}
+      </span>
+      No changes recorded yet. Saves from now on are logged here.
+    </p>
+  ) : (
+    <div class:list={["overflow-x-auto", className]}>
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class={tableHead}>
+              when
+            </th>
+            <th scope="col" class={tableHead}>
+              who
+            </th>
+            <th scope="col" class={tableHead}>
+              change
+            </th>
+            <th scope="col" class={tableHead}>
+              points
+            </th>
+            <th scope="col" class={tableHead}>
+              note
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const action = actionConfig[entry.action];
+            const noteChanged = entry.noteBefore !== entry.noteAfter;
+            return (
+              <tr>
+                <td
+                  class:list={[tableCell, "whitespace-nowrap text-ink-faint"]}
+                >
+                  <time datetime={entry.at} class="tabular-nums">
+                    {dateFmt.format(new Date(entry.at))}
+                  </time>
+                </td>
+                <td class:list={[tableCell, "text-ink-dim"]}>
+                  {entry.actorName}
+                </td>
+                <td class={tableCell}>
+                  <span class={action.class}>{action.label}</span>{" "}
+                  <span class="text-ink-faint">
+                    {entityLabel[entry.entity]} ·
+                  </span>{" "}
+                  <span class="text-ink">
+                    {names[entry.subjectId] ?? entry.subjectId}
+                  </span>
+                </td>
+                <td class:list={[tableCell, "whitespace-nowrap tabular-nums"]}>
+                  {entry.action === "updated" ? (
+                    <>
+                      <span class="text-ink-faint">
+                        {points(entry.pointsBefore)}
+                      </span>
+                      <span class="text-ink-faint" aria-hidden="true">
+                        {" → "}
+                      </span>
+                      <span class="sr-only"> to </span>
+                      <span class="text-ink">{points(entry.pointsAfter)}</span>
+                    </>
+                  ) : (
+                    <span
+                      class:list={
+                        entry.action === "deleted"
+                          ? "text-ink-faint line-through"
+                          : "text-ink"
+                      }
+                    >
+                      {points(entry.pointsAfter ?? entry.pointsBefore)}
+                    </span>
+                  )}
+                </td>
+                <td class:list={[tableCell, "text-xs text-ink-dim"]}>
+                  {entry.action === "updated" && noteChanged ? (
+                    <>
+                      <span class="text-ink-faint line-through">
+                        {entry.noteBefore ?? "—"}
+                      </span>{" "}
+                      {entry.noteAfter ?? "—"}
+                    </>
+                  ) : (
+                    (entry.noteAfter ?? entry.noteBefore ?? "")
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}

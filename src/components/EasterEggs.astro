@@ -8,7 +8,7 @@ import { withBase } from "../lib/url";
 const eggSrc = withBase("/favicon.svg");
 ---
 
-<!-- Carries build-time config (the favicon URL) into the client script. -->
+<!-- Carries server-rendered config (the favicon URL) into the client script. -->
 <div id="egg-config" data-egg-src={eggSrc} hidden></div>
 
 <!-- Terminal-style toast notifications for easter-egg triggers. -->
@@ -36,10 +36,17 @@ const eggSrc = withBase("/favicon.svg");
     amber: "border-amber text-amber",
   };
 
-  function toast(message: string, tone: Tone = "acid") {
+  function toast(message: string, tone: Tone = "acid", siren = false) {
     if (!toastLayer) return;
     const el = document.createElement("div");
     el.className = `pointer-events-none translate-y-2 rounded-md border bg-term-panel/95 px-4 py-2 text-sm font-semibold tracking-wide opacity-0 shadow-xl transition-all duration-300 ${toneClass[tone]}`;
+    if (siren) {
+      const icon = document.createElement("span");
+      icon.className = "egg-toast-siren";
+      icon.setAttribute("aria-hidden", "true");
+      toastLayer.classList.add("is-urgent");
+      el.appendChild(icon);
+    }
     const dollar = document.createElement("span");
     dollar.setAttribute("aria-hidden", "true");
     dollar.textContent = "$ ";
@@ -52,7 +59,8 @@ const eggSrc = withBase("/favicon.svg");
     window.setTimeout(() => {
       el.classList.add("opacity-0");
       window.setTimeout(() => el.remove(), 350);
-    }, 2600);
+      if (siren) toastLayer.classList.remove("is-urgent");
+    }, siren ? 2000 : 2600);
   }
 
   // Expose so component-local scripts (countdown, score badge) can reuse it.

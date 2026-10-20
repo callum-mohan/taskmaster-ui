@@ -1,0 +1,143 @@
+---
+import Notice from "./Notice.astro";
+import { btnGhost, btnPrimary } from "./styles";
+import type { TaskStatus } from "../../types";
+
+interface Props {
+  /** The task's reveal password, or null when it has none. */
+  password: string | null;
+  status: TaskStatus;
+  /** Pre-formatted time the task was revealed to everyone, if it was. */
+  revealedAt?: string;
+  /** Outcome of the last reveal/re-lock action, for the success notice. */
+  done?: "revealed" | "relocked";
+  class?: string;
+}
+
+const { password, status, revealedAt, done, class: className } = Astro.props;
+
+type GateState = "none" | "completed" | "revealed" | "locked";
+const state: GateState = !password
+  ? "none"
+  : status === "completed"
+    ? "completed"
+    : revealedAt
+      ? "revealed"
+      : "locked";
+
+const config: Record<GateState, { label: string; tone: string; text: string }> =
+  {
+    none: {
+      label: "OPEN",
+      tone: "text-ink-faint",
+      text: "No reveal password: the task shows openly once it's live. Set one in the form above.",
+    },
+    locked: {
+      label: "ENCRYPTED",
+      tone: "text-amber",
+      text:
+        status === "upcoming"
+          ? "Once live, visitors must enter the password to decrypt the title and brief."
+          : "Visitors must enter the password on the task page to decrypt the title and brief.",
+    },
+    revealed: {
+      label: "REVEALED",
+      tone: "text-acid",
+      text: `Revealed to everyone ${revealedAt ?? ""}. Re-locking hides it again from anyone who hasn't entered the password.`,
+    },
+    completed: {
+      label: "PUBLIC",
+      tone: "text-acid",
+      text: "The task is completed, so its content is public for everyone.",
+    },
+  };
+const { label, tone, text } = config[state];
+---
+
+<div class:list={["space-y-4", className]}>
+  {
+    done && (
+      <Notice tone="success">
+        {done === "revealed"
+          ? "Task revealed to everyone."
+          : "Task re-locked. Visitors need the password again."}
+      </Notice>
+    )
+  }
+  <p class="flex flex-wrap items-center gap-3 text-sm">
+    <span
+      class:list={["text-[10px] font-bold tracking-[0.2em]", tone]}
+      data-gate-state={state}
+    >
+      ● {label}
+    </span>
+    <span class="text-ink-dim">{text}</span>
+  </p>
+
+  {
+    password && (
+      <div class="flex flex-wrap items-center gap-3">
+        <code
+          class="rounded-md border border-grid bg-term-bg px-3 py-2 text-sm font-bold text-acid"
+          data-reveal-password
+        >
+          {password}
+        </code>
+        <button
+          type="button"
+          class={btnGhost}
+          data-copy-password
+          aria-describedby="copy-password-status"
+        >
+          copy
+        </button>
+        <span
+          id="copy-password-status"
+          class="text-xs text-ink-faint"
+          role="status"
+          aria-live="polite"
+          data-copy-status
+        />
+      </div>
+    )
+  }
+
+  {
+    (state === "locked" || state === "revealed") && (
+      <form method="post">
+        <input
+          type="hidden"
+          name="intent"
+          value={state === "locked" ? "reveal" : "relock"}
+        />
+        <button
+          type="submit"
+          class={state === "locked" ? btnPrimary : btnGhost}
+        >
+          {state === "locked" ? "reveal to everyone" : "re-lock"}
+        </button>
+      </form>
+    )
+  }
+</div>
+
+<script>
+  document
+    .querySelectorAll<HTMLButtonElement>("[data-copy-password]")
+    .forEach((button) => {
+      const root = button.parentElement;
+      const value = root?.querySelector<HTMLElement>(
+        "[data-reveal-password]",
+      )?.textContent;
+      const status = root?.querySelector<HTMLElement>("[data-copy-status]");
+      button.addEventListener("click", async () => {
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value.trim());
+          if (status) status.textContent = "copied to clipboard";
+        } catch {
+          if (status) status.textContent = "copy failed, select it instead";
+        }
+      });
+    });
+</script>

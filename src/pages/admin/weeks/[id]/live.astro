@@ -1,0 +1,313 @@
+---
+import { queriesForTask } from "../../../../lib/season-scope";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../../components/TerminalWindow.astro";
+import Notice from "../../../../components/admin/Notice.astro";
+import WeekHeader from "../../../../components/admin/WeekHeader.astro";
+import {
+  btnDanger,
+  btnGhost,
+  btnPrimary,
+  tableCell,
+  tableHead,
+} from "../../../../components/admin/styles";
+import {
+  getWeekCounts,
+  publishHeldResults,
+  setResultsHeld,
+  stepResultsReveal,
+} from "../../../../data/admin";
+import { loadTaskResultRows } from "../../../../data/live";
+import { weekHref } from "../../../../lib/admin-nav";
+import { getWeekProgress } from "../../../../data/week-progress";
+import { withBase } from "../../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const { players, teams, getTaskById, getLiveRunOrder, getLiveTask } =
+  await queriesForTask(Astro.locals, Astro.params.id);
+const task = getTaskById(Astro.params.id!);
+if (!task) return Astro.rewrite("/404");
+
+const selfUrl = withBase(weekHref(task.id, "live"));
+const judgeUrl = withBase(weekHref(task.id, "judge"));
+const rows = await loadTaskResultRows(task.id);
+const runOrder = getLiveRunOrder(task, rows);
+const total = runOrder.length;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  const back = (done: string) =>
+    Astro.redirect(`${selfUrl}?done=${done}#controls`);
+  switch (intent) {
+    case "hold":
+      await setResultsHeld(task.id, true);
+      return back("held");
+    case "release":
+      await setResultsHeld(task.id, false);
+      return back("released");
+    case "next":
+      await stepResultsReveal(task.id, 1, total);
+      return back("next");
+    case "back":
+      await stepResultsReveal(task.id, -1, total);
+      return back("back");
+    case "restart":
+      await stepResultsReveal(task.id, -total, total);
+      return back("restart");
+    case "publish":
+      await publishHeldResults(task.id);
+      return back("published");
+  }
+  return back("unknown");
+}
+
+const revealed = Math.min(task.resultsRevealCount, total);
+const nextStep = runOrder[revealed];
+const onAir = getLiveTask()?.id === task.id;
+const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
+const progress = getWeekProgress(task, (await getWeekCounts()).get(task.id), {
+  players: players.length,
+  teams: teams.length,
+});
+const disabledClass =
+  "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-40";
+const done = Astro.url.searchParams.get("done");
+const doneMessage: Record<string, string> = {
+  held: "Results held. The public site won't show this week's scores or bonuses until you publish.",
+  released:
+    "Hold released without a show. The results are public now (if any are recorded).",
+  next: "Revealed the next result.",
+  back: "Took the last reveal back.",
+  restart: "Reveal restarted from the top.",
+  published:
+    "Published. The leaderboard, task page and notifications are updated.",
+};
+---
+
+<AdminLayout title={`Results night · ${weekLabel}`}>
+  <WeekHeader task={task} progress={progress} active="live">
+    <a
+      slot="links"
+      href={withBase("/live")}
+      class="text-cyan hover:underline"
+      target="_blank"
+      rel="noopener">open /live ↗</a
+    >
+  </WeekHeader>
+
+  <p class="mt-6 max-w-prose text-sm text-ink-dim">
+    <span class="text-ink">Optional.</span> Skip this tab and results go public the
+    moment you save scores in the judge tab.
+  </p>
+
+  {
+    done && doneMessage[done] && (
+      <Notice tone="success" class="mt-6">
+        {doneMessage[done]}
+      </Notice>
+    )
+  }
+
+  <section id="controls" aria-labelledby="controls-heading" class="mt-6">
+    <h2 id="controls-heading" class="sr-only">Controls</h2>
+    <TerminalWindow
+      title={`~/weeks/${task.id}/results.live`}
+      meta={task.resultsHeld ? `${revealed} / ${total} revealed` : "off air"}
+    >
+      {
+        !task.resultsHeld ? (
+          <div class="space-y-4 text-sm text-ink-dim">
+            <p>
+              Hold this week's results to keep them off the public site — the
+              leaderboard, task page, recaps, stats and notifications — while
+              you record scores and bonuses. Then reveal them one at a time on{" "}
+              <a
+                href={withBase("/live")}
+                class="text-cyan hover:underline"
+                target="_blank"
+                rel="noopener"
+              >
+                /live
+              </a>
+              , last place first.
+            </p>
+            <p class="text-xs text-ink-faint">
+              Holding hides any results already recorded for this week. Hold
+              before you start scoring so nothing leaks early.
+            </p>
+            <form method="post">
+              <input type="hidden" name="intent" value="hold" />
+              <button type="submit" class={btnPrimary}>
+                hold results
+              </button>
+            </form>
+          </div>
+        ) : (
+          <div class="space-y-5">
+            {task.status !== "completed" && (
+              <Notice tone="error">
+                /live only goes on air once the deadline has passed.
+              </Notice>
+            )}
+            {task.status === "completed" && !onAir && (
+              <Notice tone="error">
+                Another held week is on air. Publish or release it first.
+              </Notice>
+            )}
+            {total === 0 ? (
+              <p class="text-sm text-ink-dim">
+                <span class="text-amber">!</span> No scores recorded yet.{" "}
+                <a href={judgeUrl} class="text-acid hover:underline">
+                  Score them in the judge tab
+                </a>
+                , then come back to reveal.
+              </p>
+            ) : (
+              <p class="text-sm text-ink-dim">
+                {nextStep ? (
+                  <>
+                    Up next (step {nextStep.step} of {total}):{" "}
+                    <span class="font-bold text-ink">{nextStep.name}</span>{" "}
+                    <span class="text-ink-faint">
+                      — #{nextStep.position}, {nextStep.points} pts
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span class="text-acid">✓</span> Every result is out.
+                    Publish to update the rest of the site.
+                  </>
+                )}
+              </p>
+            )}
+            <div class="flex flex-wrap gap-3">
+              <form method="post">
+                <input type="hidden" name="intent" value="next" />
+                <button
+                  type="submit"
+                  class={`${btnPrimary} ${disabledClass}`}
+                  disabled={!nextStep}
+                >
+                  reveal next &rarr;
+                </button>
+              </form>
+              <form method="post">
+                <input type="hidden" name="intent" value="back" />
+                <button
+                  type="submit"
+                  class={`${btnGhost} ${disabledClass}`}
+                  disabled={revealed === 0}
+                >
+                  &larr; back one
+                </button>
+              </form>
+              <form method="post">
+                <input type="hidden" name="intent" value="restart" />
+                <button
+                  type="submit"
+                  class={`${btnGhost} ${disabledClass}`}
+                  disabled={revealed === 0}
+                >
+                  restart
+                </button>
+              </form>
+            </div>
+            <div class="flex flex-wrap gap-3 border-t border-grid pt-5">
+              <form method="post">
+                <input type="hidden" name="intent" value="publish" />
+                <button type="submit" class={btnPrimary}>
+                  publish results
+                </button>
+              </form>
+              <form method="post">
+                <input type="hidden" name="intent" value="release" />
+                <button type="submit" class={btnDanger}>
+                  release hold (no show)
+                </button>
+              </form>
+            </div>
+            <p class="text-xs text-ink-faint">
+              Publishing (or releasing) ends the show and puts this week's
+              results on the leaderboard. Players' "results are in"
+              notifications arrive then too.
+            </p>
+          </div>
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  {
+    total > 0 && (
+      <section aria-labelledby="order-heading" class="mt-8">
+        <h2
+          id="order-heading"
+          class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          running order (last place first)
+        </h2>
+        <TerminalWindow title="~/results/running-order" bodyClass="p-0 sm:p-0">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" class={tableHead}>
+                    step
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    pos
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    {task.format === "team" ? "squad" : "player"}
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    pts
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    state
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {runOrder.map((step) => (
+                  <tr
+                    class:list={[
+                      step.step === revealed + 1 &&
+                        task.resultsHeld &&
+                        "bg-amber/5",
+                    ]}
+                  >
+                    <td class:list={[tableCell, "tabular-nums text-ink-faint"]}>
+                      {step.step}
+                    </td>
+                    <td class:list={[tableCell, "tabular-nums"]}>
+                      #{step.position}
+                    </td>
+                    <td class:list={[tableCell, "text-ink"]}>{step.name}</td>
+                    <td class:list={[tableCell, "tabular-nums"]}>
+                      {step.points}
+                    </td>
+                    <td class:list={[tableCell, "text-xs"]}>
+                      {!task.resultsHeld ? (
+                        <span class="text-ink-faint">—</span>
+                      ) : step.revealed ? (
+                        <span class="text-acid">revealed</span>
+                      ) : step.step === revealed + 1 ? (
+                        <span class="text-amber">up next</span>
+                      ) : (
+                        <span class="text-ink-faint">hidden</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </TerminalWindow>
+      </section>
+    )
+  }
+</AdminLayout>

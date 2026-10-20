@@ -1,931 +1,1180 @@
 <!doctype html>
 <html lang="en">
-
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#080b10">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080b10" />
     <title>Egg Pong | Taskmaster</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
-        :root {
-            color-scheme: dark;
-            --ink: #080b10;
-            --panel: #0e141c;
-            --line: #1d2a38;
-            --paper: #dbe4ee;
-            --muted: #a3afc0;
-            --lime: #3ef08b;
-            --coral: #ff5f56;
-            --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-            --sans: var(--mono);
+      :root {
+        color-scheme: dark;
+        --ink: #080b10;
+        --panel: #0e141c;
+        --line: #1d2a38;
+        --paper: #dbe4ee;
+        --muted: #a3afc0;
+        --lime: #3ef08b;
+        --coral: #ff5f56;
+        --mono:
+          "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
+          monospace;
+        --sans: var(--mono);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        color: var(--paper);
+        background-color: var(--ink);
+        background-image:
+          linear-gradient(#152030 1px, transparent 1px),
+          linear-gradient(90deg, #152030 1px, transparent 1px);
+        background-size: 36px 36px;
+        background-position: center center;
+        font-family: var(--sans);
+      }
+
+      .rage-atmosphere {
+        position: fixed;
+        z-index: 0;
+        inset: 0;
+        overflow: hidden;
+        background: linear-gradient(
+          0deg,
+          rgba(166, 20, 18, 0.31),
+          rgba(145, 24, 18, 0.105) 44%,
+          transparent 80%
+        );
+        pointer-events: none;
+      }
+
+      .rage-ember {
+        position: absolute;
+        bottom: -8px;
+        left: var(--ember-x);
+        width: 2px;
+        height: 4px;
+        background: var(--coral);
+        box-shadow: 0 0 10px rgba(255, 75, 64, 0.76);
+        opacity: 0;
+        image-rendering: pixelated;
+        animation: ember-rise var(--ember-duration) linear var(--ember-delay)
+          infinite;
+      }
+
+      .rage-ember:nth-child(3n + 1) {
+        width: 3px;
+        height: 5px;
+        background: #ffb454;
+      }
+
+      .rage-ember:nth-child(3n + 2) {
+        width: 2px;
+        height: 3px;
+        background: #ff8066;
+      }
+
+      @keyframes ember-rise {
+        0% {
+          opacity: 0;
+          transform: translate3d(0, 0, 0);
         }
 
-        * {
-            box-sizing: border-box;
+        12% {
+          opacity: 0.56;
         }
 
-        body {
-            min-width: 320px;
-            min-height: 100vh;
-            margin: 0;
-            color: var(--paper);
-            background-color: var(--ink);
-            background-image: linear-gradient(#152030 1px, transparent 1px), linear-gradient(90deg, #152030 1px, transparent 1px);
-            background-size: 36px 36px;
-            background-position: center center;
-            font-family: var(--sans);
+        78% {
+          opacity: 0.36;
         }
 
-        .rage-atmosphere {
-            position: fixed;
-            z-index: 0;
-            inset: 0;
-            overflow: hidden;
-            background: linear-gradient(0deg, rgba(166, 20, 18, 0.31), rgba(145, 24, 18, 0.105) 44%, transparent 80%);
-            pointer-events: none;
+        100% {
+          opacity: 0;
+          transform: translate3d(18px, -105vh, 0);
         }
+      }
 
+      @media (prefers-reduced-motion: reduce) {
         .rage-ember {
-            position: absolute;
-            bottom: -8px;
-            left: var(--ember-x);
-            width: 2px;
-            height: 4px;
-            background: var(--coral);
-            box-shadow: 0 0 10px rgba(255, 75, 64, 0.76);
-            opacity: 0;
-            image-rendering: pixelated;
-            animation: ember-rise var(--ember-duration) linear var(--ember-delay) infinite;
+          display: none;
+          animation: none;
         }
+      }
 
-        .rage-ember:nth-child(3n + 1) {
-            width: 3px;
-            height: 5px;
-            background: #ffb454;
-        }
+      button {
+        font: inherit;
+      }
 
-        .rage-ember:nth-child(3n + 2) {
-            width: 2px;
-            height: 3px;
-            background: #ff8066;
-        }
+      .shell {
+        position: relative;
+        z-index: 1;
+        width: min(1120px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 28px 0 22px;
+      }
 
-        @keyframes ember-rise {
-            0% {
-                opacity: 0;
-                transform: translate3d(0, 0, 0);
-            }
+      .topbar,
+      .topbar-brand,
+      .topbar-meta,
+      .section-heading,
+      .game-tools,
+      .match-meta,
+      .legend,
+      .legend-item,
+      .button-row {
+        display: flex;
+        align-items: center;
+      }
 
-            12% {
-                opacity: 0.56;
-            }
+      .topbar {
+        justify-content: space-between;
+        min-height: 34px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 17px;
+      }
 
-            78% {
-                opacity: 0.36;
-            }
+      .topbar-brand {
+        gap: 11px;
+      }
 
-            100% {
-                opacity: 0;
-                transform: translate3d(18px, -105vh, 0);
-            }
-        }
+      .brand-mark {
+        display: grid;
+        width: 27px;
+        aspect-ratio: 1;
+        place-items: center;
+        border: 1px solid var(--lime);
+        color: var(--lime);
+        font-family: var(--mono);
+        font-size: 13px;
+        line-height: 1;
+      }
 
-        @media (prefers-reduced-motion: reduce) {
-            .rage-ember {
-                display: none;
-                animation: none;
-            }
-        }
+      .brand-name,
+      .topbar-meta,
+      .eyebrow,
+      .match-label,
+      .score-label,
+      .legend,
+      .control-hint {
+        font-family: var(--mono);
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
 
-        button {
-            font: inherit;
-        }
+      .brand-name {
+        font-size: 12px;
+        font-weight: 500;
+      }
 
+      .topbar-meta {
+        gap: 9px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .live-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--lime);
+      }
+
+      .intro {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        padding: 36px 0 24px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        color: var(--lime);
+        font-size: 10px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(37px, 7vw, 66px);
+        font-weight: 700;
+        line-height: 0.9;
+      }
+
+      h1 span {
+        color: var(--lime);
+      }
+
+      .intro-note {
+        max-width: 210px;
+        margin: 0 2px 2px 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .match-stage {
+        filter: drop-shadow(0 0 15px rgba(255, 180, 84, 0.14))
+          drop-shadow(0 0 28px rgba(255, 65, 48, 0.2))
+          drop-shadow(0 0 40px rgba(255, 106, 193, 0.06));
+      }
+
+      .match-bar {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        min-height: 78px;
+        padding: 10px 20px;
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        background: var(--panel);
+        box-shadow:
+          0 0 16px rgba(255, 65, 48, 0.16),
+          0 0 22px rgba(255, 106, 193, 0.04),
+          inset 0 1px 0 rgba(255, 180, 84, 0.16);
+      }
+
+      .player-score {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .player-score.right {
+        justify-content: flex-end;
+        text-align: right;
+      }
+
+      .score-number {
+        font-size: 39px;
+        font-weight: 600;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .score-number.left-score {
+        color: var(--lime);
+      }
+
+      .score-number.right-score {
+        color: var(--coral);
+      }
+
+      .score-label {
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .player-name {
+        margin-top: 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .match-meta {
+        flex-direction: column;
+        gap: 5px;
+        color: var(--muted);
+      }
+
+      .match-label {
+        font-size: 9px;
+      }
+
+      .target-label {
+        color: var(--paper);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .court-wrap {
+        position: relative;
+        border: 1px solid var(--line);
+        background: #080b10;
+        overflow: hidden;
+        box-shadow:
+          0 0 22px rgba(255, 180, 84, 0.16),
+          0 0 34px rgba(255, 65, 48, 0.16),
+          0 0 42px rgba(255, 106, 193, 0.05),
+          inset 0 0 0 1px rgba(255, 180, 84, 0.12);
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        touch-action: none;
+        cursor: crosshair;
+      }
+
+      .game-tools {
+        justify-content: flex-end;
+        gap: 16px;
+        min-height: 72px;
+        border: 1px solid var(--line);
+        border-top: 0;
+        padding: 12px 16px;
+        background:
+          linear-gradient(
+            0deg,
+            rgba(255, 132, 48, 0.2),
+            rgba(255, 104, 40, 0.08) 48%,
+            transparent 100%
+          ),
+          var(--panel);
+        box-shadow:
+          0 0 18px rgba(255, 65, 48, 0.18),
+          0 0 22px rgba(255, 106, 193, 0.04),
+          inset 0 -1px 0 rgba(255, 153, 54, 0.3);
+      }
+
+      .button-row {
+        gap: 8px;
+      }
+
+      .action-button {
+        display: inline-flex;
+        min-height: 38px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        color: var(--paper);
+        background: transparent;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        transition:
+          background-color 0.16s ease,
+          color 0.16s ease,
+          border-color 0.16s ease,
+          box-shadow 0.16s ease;
+      }
+
+      .action-button:hover {
+        border-color: var(--paper);
+      }
+
+      .action-button.primary {
+        border-color: var(--lime);
+        color: var(--ink);
+        background: var(--lime);
+        box-shadow: 0 0 12px rgba(255, 95, 86, 0.2);
+      }
+
+      .action-button.primary:hover {
+        border-color: #e6ff87;
+        background: #e6ff87;
+        box-shadow: 0 0 16px rgba(255, 95, 86, 0.32);
+      }
+
+      .action-button:focus-visible {
+        outline: 2px solid var(--coral);
+        outline-offset: 3px;
+        box-shadow: 0 0 14px rgba(255, 95, 86, 0.32);
+      }
+
+      .legend {
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 2px 0;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .legend-items {
+        display: flex;
+        gap: 22px;
+      }
+
+      .legend-item {
+        gap: 7px;
+      }
+
+      .keycap {
+        color: var(--paper);
+      }
+
+      .legend-accent {
+        color: var(--lime);
+      }
+
+      .footer-note {
+        color: #72776c;
+      }
+
+      @media (max-width: 640px) {
         .shell {
-            position: relative;
-            z-index: 1;
-            width: min(1120px, calc(100% - 48px));
-            margin: 0 auto;
-            padding: 28px 0 22px;
-        }
-
-        .topbar,
-        .topbar-brand,
-        .topbar-meta,
-        .section-heading,
-        .game-tools,
-        .match-meta,
-        .legend,
-        .legend-item,
-        .button-row {
-            display: flex;
-            align-items: center;
+          width: min(100% - 28px, 540px);
+          padding-top: 18px;
         }
 
         .topbar {
-            justify-content: space-between;
-            min-height: 34px;
-            border-bottom: 1px solid var(--line);
-            padding-bottom: 17px;
-        }
-
-        .topbar-brand {
-            gap: 11px;
-        }
-
-        .brand-mark {
-            display: grid;
-            width: 27px;
-            aspect-ratio: 1;
-            place-items: center;
-            border: 1px solid var(--lime);
-            color: var(--lime);
-            font-family: var(--mono);
-            font-size: 13px;
-            line-height: 1;
-        }
-
-        .brand-name,
-        .topbar-meta,
-        .eyebrow,
-        .match-label,
-        .score-label,
-        .legend,
-        .control-hint {
-            font-family: var(--mono);
-            text-transform: uppercase;
-            letter-spacing: 0;
-        }
-
-        .brand-name {
-            font-size: 12px;
-            font-weight: 500;
-        }
-
-        .topbar-meta {
-            gap: 9px;
-            color: var(--muted);
-            font-size: 10px;
-        }
-
-        .live-dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--lime);
+          padding-bottom: 13px;
         }
 
         .intro {
-            display: flex;
-            align-items: end;
-            justify-content: space-between;
-            gap: 24px;
-            padding: 36px 0 24px;
-        }
-
-        .eyebrow {
-            margin: 0 0 8px;
-            color: var(--lime);
-            font-size: 10px;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: clamp(37px, 7vw, 66px);
-            font-weight: 700;
-            line-height: .9;
-        }
-
-        h1 span {
-            color: var(--lime);
+          align-items: start;
+          padding: 27px 0 19px;
         }
 
         .intro-note {
-            max-width: 210px;
-            margin: 0 2px 2px 0;
-            color: var(--muted);
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .match-stage {
-            filter: drop-shadow(0 0 15px rgba(255, 180, 84, 0.14)) drop-shadow(0 0 28px rgba(255, 65, 48, 0.2)) drop-shadow(0 0 40px rgba(255, 106, 193, 0.06));
+          max-width: 140px;
+          font-size: 11px;
         }
 
         .match-bar {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            min-height: 78px;
-            padding: 10px 20px;
-            border: 1px solid var(--line);
-            border-bottom: 0;
-            background: var(--panel);
-            box-shadow: 0 0 16px rgba(255, 65, 48, 0.16), 0 0 22px rgba(255, 106, 193, 0.04), inset 0 1px 0 rgba(255, 180, 84, 0.16);
+          min-height: 68px;
+          padding: 8px 12px;
         }
 
         .player-score {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
-
-        .player-score.right {
-            justify-content: flex-end;
-            text-align: right;
+          gap: 9px;
         }
 
         .score-number {
-            font-size: 39px;
-            font-weight: 600;
-            line-height: 1;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .score-number.left-score {
-            color: var(--lime);
-        }
-
-        .score-number.right-score {
-            color: var(--coral);
-        }
-
-        .score-label {
-            color: var(--muted);
-            font-size: 9px;
+          font-size: 33px;
         }
 
         .player-name {
-            margin-top: 4px;
-            font-size: 12px;
-            font-weight: 600;
+          font-size: 10px;
         }
 
-        .match-meta {
-            flex-direction: column;
-            gap: 5px;
-            color: var(--muted);
-        }
-
+        .score-label,
         .match-label {
-            font-size: 9px;
-        }
-
-        .target-label {
-            color: var(--paper);
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .court-wrap {
-            position: relative;
-            border: 1px solid var(--line);
-            background: #080b10;
-            overflow: hidden;
-            box-shadow: 0 0 22px rgba(255, 180, 84, 0.16), 0 0 34px rgba(255, 65, 48, 0.16), 0 0 42px rgba(255, 106, 193, 0.05), inset 0 0 0 1px rgba(255, 180, 84, 0.12);
-        }
-
-        canvas {
-            display: block;
-            width: 100%;
-            aspect-ratio: 16 / 9;
-            touch-action: none;
-            cursor: crosshair;
+          font-size: 8px;
         }
 
         .game-tools {
-            justify-content: flex-end;
-            gap: 16px;
-            min-height: 72px;
-            border: 1px solid var(--line);
-            border-top: 0;
-            padding: 12px 16px;
-            background: linear-gradient(0deg, rgba(255, 132, 48, 0.2), rgba(255, 104, 40, 0.08) 48%, transparent 100%), var(--panel);
-            box-shadow: 0 0 18px rgba(255, 65, 48, 0.18), 0 0 22px rgba(255, 106, 193, 0.04), inset 0 -1px 0 rgba(255, 153, 54, 0.3);
-        }
-
-        .button-row {
-            gap: 8px;
+          flex-wrap: wrap;
+          padding: 11px 10px;
         }
 
         .action-button {
-            display: inline-flex;
-            min-height: 38px;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 0 14px;
-            border: 1px solid var(--line);
-            color: var(--paper);
-            background: transparent;
-            cursor: pointer;
-            font-size: 11px;
-            font-weight: 600;
-            transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
-        }
-
-        .action-button:hover {
-            border-color: var(--paper);
-        }
-
-        .action-button.primary {
-            border-color: var(--lime);
-            color: var(--ink);
-            background: var(--lime);
-            box-shadow: 0 0 12px rgba(255, 95, 86, 0.2);
-        }
-
-        .action-button.primary:hover {
-            border-color: #e6ff87;
-            background: #e6ff87;
-            box-shadow: 0 0 16px rgba(255, 95, 86, 0.32);
-        }
-
-        .action-button:focus-visible {
-            outline: 2px solid var(--coral);
-            outline-offset: 3px;
-            box-shadow: 0 0 14px rgba(255, 95, 86, 0.32);
+          min-height: 34px;
+          padding: 0 9px;
+          font-size: 10px;
         }
 
         .legend {
-            justify-content: space-between;
-            gap: 16px;
-            padding: 14px 2px 0;
-            color: var(--muted);
-            font-size: 9px;
+          align-items: start;
+          flex-direction: column;
+          gap: 10px;
         }
 
         .legend-items {
-            display: flex;
-            gap: 22px;
+          flex-wrap: wrap;
+          gap: 8px 16px;
+        }
+      }
+
+      @media (max-width: 380px) {
+        .shell {
+          width: calc(100% - 20px);
         }
 
-        .legend-item {
-            gap: 7px;
+        .intro-note {
+          max-width: 116px;
         }
 
-        .keycap {
-            color: var(--paper);
+        .player-name {
+          max-width: 70px;
         }
 
-        .legend-accent {
-            color: var(--lime);
+        .action-button {
+          padding: 0 7px;
         }
-
-        .footer-note {
-            color: #72776c;
-        }
-
-        @media (max-width: 640px) {
-            .shell {
-                width: min(100% - 28px, 540px);
-                padding-top: 18px;
-            }
-
-            .topbar {
-                padding-bottom: 13px;
-            }
-
-            .intro {
-                align-items: start;
-                padding: 27px 0 19px;
-            }
-
-            .intro-note {
-                max-width: 140px;
-                font-size: 11px;
-            }
-
-            .match-bar {
-                min-height: 68px;
-                padding: 8px 12px;
-            }
-
-            .player-score {
-                gap: 9px;
-            }
-
-            .score-number {
-                font-size: 33px;
-            }
-
-            .player-name {
-                font-size: 10px;
-            }
-
-            .score-label,
-            .match-label {
-                font-size: 8px;
-            }
-
-            .game-tools {
-                flex-wrap: wrap;
-                padding: 11px 10px;
-            }
-
-            .action-button {
-                min-height: 34px;
-                padding: 0 9px;
-                font-size: 10px;
-            }
-
-            .legend {
-                align-items: start;
-                flex-direction: column;
-                gap: 10px;
-            }
-
-            .legend-items {
-                flex-wrap: wrap;
-                gap: 8px 16px;
-            }
-
-        }
-
-        @media (max-width: 380px) {
-            .shell {
-                width: calc(100% - 20px);
-            }
-
-            .intro-note {
-                max-width: 116px;
-            }
-
-            .player-name {
-                max-width: 70px;
-            }
-
-            .action-button {
-                padding: 0 7px;
-            }
-        }
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <div class="rage-atmosphere" aria-hidden="true">
-        <span class="rage-ember" style="--ember-x: 7%; --ember-duration: 13s; --ember-delay: -8s"></span>
-        <span class="rage-ember" style="--ember-x: 19%; --ember-duration: 16s; --ember-delay: -2s"></span>
-        <span class="rage-ember" style="--ember-x: 34%; --ember-duration: 12s; --ember-delay: -10s"></span>
-        <span class="rage-ember" style="--ember-x: 52%; --ember-duration: 15s; --ember-delay: -5s"></span>
-        <span class="rage-ember" style="--ember-x: 68%; --ember-duration: 14s; --ember-delay: -11s"></span>
-        <span class="rage-ember" style="--ember-x: 83%; --ember-duration: 17s; --ember-delay: -4s"></span>
-        <span class="rage-ember" style="--ember-x: 94%; --ember-duration: 12s; --ember-delay: -7s"></span>
-        <span class="rage-ember" style="--ember-x: 13%; --ember-duration: 18s; --ember-delay: -14s"></span>
-        <span class="rage-ember" style="--ember-x: 27%; --ember-duration: 14s; --ember-delay: -6s"></span>
-        <span class="rage-ember" style="--ember-x: 41%; --ember-duration: 19s; --ember-delay: -12s"></span>
-        <span class="rage-ember" style="--ember-x: 58%; --ember-duration: 13s; --ember-delay: -9s"></span>
-        <span class="rage-ember" style="--ember-x: 74%; --ember-duration: 16s; --ember-delay: -3s"></span>
-        <span class="rage-ember" style="--ember-x: 89%; --ember-duration: 15s; --ember-delay: -15s"></span>
-        <span class="rage-ember" style="--ember-x: 3%; --ember-duration: 20s; --ember-delay: -5s"></span>
-        <span class="rage-ember" style="--ember-x: 22%; --ember-duration: 12s; --ember-delay: -16s"></span>
-        <span class="rage-ember" style="--ember-x: 47%; --ember-duration: 17s; --ember-delay: -1s"></span>
-        <span class="rage-ember" style="--ember-x: 63%; --ember-duration: 19s; --ember-delay: -8s"></span>
-        <span class="rage-ember" style="--ember-x: 79%; --ember-duration: 14s; --ember-delay: -13s"></span>
-        <span class="rage-ember" style="--ember-x: 10%; --ember-duration: 16s; --ember-delay: -3s"></span>
-        <span class="rage-ember" style="--ember-x: 17%; --ember-duration: 12s; --ember-delay: -11s"></span>
-        <span class="rage-ember" style="--ember-x: 31%; --ember-duration: 18s; --ember-delay: -7s"></span>
-        <span class="rage-ember" style="--ember-x: 38%; --ember-duration: 14s; --ember-delay: -15s"></span>
-        <span class="rage-ember" style="--ember-x: 44%; --ember-duration: 20s; --ember-delay: -4s"></span>
-        <span class="rage-ember" style="--ember-x: 56%; --ember-duration: 13s; --ember-delay: -17s"></span>
-        <span class="rage-ember" style="--ember-x: 61%; --ember-duration: 16s; --ember-delay: -6s"></span>
-        <span class="rage-ember" style="--ember-x: 71%; --ember-duration: 19s; --ember-delay: -9s"></span>
-        <span class="rage-ember" style="--ember-x: 77%; --ember-duration: 12s; --ember-delay: -2s"></span>
-        <span class="rage-ember" style="--ember-x: 86%; --ember-duration: 15s; --ember-delay: -12s"></span>
-        <span class="rage-ember" style="--ember-x: 91%; --ember-duration: 18s; --ember-delay: -5s"></span>
-        <span class="rage-ember" style="--ember-x: 97%; --ember-duration: 14s; --ember-delay: -14s"></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 7%; --ember-duration: 13s; --ember-delay: -8s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 19%; --ember-duration: 16s; --ember-delay: -2s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 34%; --ember-duration: 12s; --ember-delay: -10s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 52%; --ember-duration: 15s; --ember-delay: -5s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 68%; --ember-duration: 14s; --ember-delay: -11s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 83%; --ember-duration: 17s; --ember-delay: -4s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 94%; --ember-duration: 12s; --ember-delay: -7s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 13%; --ember-duration: 18s; --ember-delay: -14s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 27%; --ember-duration: 14s; --ember-delay: -6s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 41%; --ember-duration: 19s; --ember-delay: -12s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 58%; --ember-duration: 13s; --ember-delay: -9s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 74%; --ember-duration: 16s; --ember-delay: -3s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 89%; --ember-duration: 15s; --ember-delay: -15s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 3%; --ember-duration: 20s; --ember-delay: -5s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 22%; --ember-duration: 12s; --ember-delay: -16s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 47%; --ember-duration: 17s; --ember-delay: -1s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 63%; --ember-duration: 19s; --ember-delay: -8s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 79%; --ember-duration: 14s; --ember-delay: -13s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 10%; --ember-duration: 16s; --ember-delay: -3s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 17%; --ember-duration: 12s; --ember-delay: -11s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 31%; --ember-duration: 18s; --ember-delay: -7s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 38%; --ember-duration: 14s; --ember-delay: -15s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 44%; --ember-duration: 20s; --ember-delay: -4s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 56%; --ember-duration: 13s; --ember-delay: -17s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 61%; --ember-duration: 16s; --ember-delay: -6s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 71%; --ember-duration: 19s; --ember-delay: -9s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 77%; --ember-duration: 12s; --ember-delay: -2s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 86%; --ember-duration: 15s; --ember-delay: -12s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 91%; --ember-duration: 18s; --ember-delay: -5s"
+      ></span>
+      <span
+        class="rage-ember"
+        style="--ember-x: 97%; --ember-duration: 14s; --ember-delay: -14s"
+      ></span>
     </div>
     <main class="shell">
-        <header class="topbar">
-            <div class="topbar-brand">
-                <span class="brand-mark" aria-hidden="true">$</span>
-                <span class="brand-name">EAYL TASKMASTER</span>
-            </div>
-            <div class="topbar-meta"><span class="live-dot" aria-hidden="true"></span><span>PUNISHMENT MODE</span></div>
-        </header>
-
-        <section class="intro" aria-labelledby="page-title">
-            <div>
-                <p class="eyebrow">egg-break penalty // 001</p>
-                <h1 id="page-title">EGG PONG<span>.</span></h1>
-            </div>
-            <p class="intro-note">First to 3 points wins.<br>Beat the CPU to return to the homepage.</p>
-        </section>
-
-        <section class="match-stage" aria-label="Pong match">
-            <div class="match-bar" aria-live="polite">
-                <div class="player-score">
-                    <div class="score-number left-score" id="left-score">0</div>
-                    <div>
-                        <div class="score-label">Player 01</div>
-                        <div class="player-name">YOU</div>
-                    </div>
-                </div>
-                <div class="match-meta"><span class="match-label" id="match-status">READY</span><span
-                        class="target-label">FIRST TO 3</span></div>
-                <div class="player-score right">
-                    <div>
-                        <div class="score-label">OPPONENT</div>
-                        <div class="player-name">CPU</div>
-                    </div>
-                    <div class="score-number right-score" id="right-score">0</div>
-                </div>
-            </div>
-
-            <div class="court-wrap">
-                <canvas id="court"
-                    aria-label="Pong court. Move your paddle with W and S; the CPU controls the opposite paddle."
-                    role="img"></canvas>
-            </div>
-
-            <div class="game-tools">
-                <div class="button-row">
-                    <button class="action-button primary" id="start-button" type="button">Start match</button>
-                </div>
-            </div>
-        </section>
-
-        <div class="legend" aria-label="Controls">
-            <div class="legend-items">
-                <span class="legend-item"><span class="legend-accent">P1</span><span class="keycap">W / S</span></span>
-                <span class="legend-item" id="right-controls"><span class="legend-accent">CPU</span><span
-                        class="keycap">Tracks the ball</span></span>
-                <span class="legend-item"><span class="keycap">Drag</span><span>paddle with pointer or
-                        touch</span></span>
-                <span class="legend-item"><span class="keycap">Space</span><span>pause / resume</span></span>
-            </div>
+      <header class="topbar">
+        <div class="topbar-brand">
+          <span class="brand-mark" aria-hidden="true">$</span>
+          <span class="brand-name">EAYL TASKMASTER</span>
         </div>
+        <div class="topbar-meta">
+          <span class="live-dot" aria-hidden="true"></span
+          ><span>PUNISHMENT MODE</span>
+        </div>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">egg-break penalty // 001</p>
+          <h1 id="page-title">EGG PONG<span>.</span></h1>
+        </div>
+        <p class="intro-note">
+          First to 3 points wins.<br />Beat the CPU to return to the homepage.
+        </p>
+      </section>
+
+      <section class="match-stage" aria-label="Pong match">
+        <div class="match-bar" aria-live="polite">
+          <div class="player-score">
+            <div class="score-number left-score" id="left-score">0</div>
+            <div>
+              <div class="score-label">Player 01</div>
+              <div class="player-name">YOU</div>
+            </div>
+          </div>
+          <div class="match-meta">
+            <span class="match-label" id="match-status">READY</span
+            ><span class="target-label">FIRST TO 3</span>
+          </div>
+          <div class="player-score right">
+            <div>
+              <div class="score-label">OPPONENT</div>
+              <div class="player-name">CPU</div>
+            </div>
+            <div class="score-number right-score" id="right-score">0</div>
+          </div>
+        </div>
+
+        <div class="court-wrap">
+          <canvas
+            id="court"
+            aria-label="Pong court. Move your paddle with W and S; the CPU controls the opposite paddle."
+            role="img"
+          ></canvas>
+        </div>
+
+        <div class="game-tools">
+          <div class="button-row">
+            <button
+              class="action-button primary"
+              id="start-button"
+              type="button"
+            >
+              Start match
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div class="legend" aria-label="Controls">
+        <div class="legend-items">
+          <span class="legend-item"
+            ><span class="legend-accent">P1</span
+            ><span class="keycap">W / S</span></span
+          >
+          <span class="legend-item" id="right-controls"
+            ><span class="legend-accent">CPU</span
+            ><span class="keycap">Tracks the ball</span></span
+          >
+          <span class="legend-item"
+            ><span class="keycap">Drag</span
+            ><span>paddle with pointer or touch</span></span
+          >
+          <span class="legend-item"
+            ><span class="keycap">Space</span><span>pause / resume</span></span
+          >
+        </div>
+      </div>
     </main>
 
     <script>
-        (() => {
-            const canvas = document.querySelector("#court");
-            const context = canvas.getContext("2d");
-            const width = 960;
-            const height = 540;
-            const paddleHeight = 88;
-            const paddleWidth = 12;
-            const eggRadius = 12;
-            const winningScore = 3;
-            const sideWall = 82;
-            const splatWidth = 80;
-            const leftSplatX = sideWall - splatWidth / 2;
-            const rightSplatX = width - sideWall + splatWidth / 2;
-            const splatDuration = 650;
-            const paddleHitSamples = ["sample-0012.wav", "sample-0010.wav", "sample-0007.wav"];
-            const splatImage = new Image();
-            splatImage.src = new URL("egg-splat.svg", window.location.href).toString();
-            const keys = new Set();
-            const scoreElements = [document.querySelector("#left-score"), document.querySelector("#right-score")];
-            const statusElement = document.querySelector("#match-status");
-            const startButton = document.querySelector("#start-button");
-            const punishmentKey = "eayl-pong-punishment";
+      (() => {
+        const canvas = document.querySelector("#court");
+        const context = canvas.getContext("2d");
+        const width = 960;
+        const height = 540;
+        const paddleHeight = 88;
+        const paddleWidth = 12;
+        const eggRadius = 12;
+        const winningScore = 3;
+        const sideWall = 82;
+        const splatWidth = 80;
+        const leftSplatX = sideWall - splatWidth / 2;
+        const rightSplatX = width - sideWall + splatWidth / 2;
+        const splatDuration = 650;
+        const paddleHitSamples = [
+          "sample-0012.wav",
+          "sample-0010.wav",
+          "sample-0007.wav",
+        ];
+        const splatImage = new Image();
+        splatImage.src = new URL(
+          "egg-splat.svg",
+          window.location.href,
+        ).toString();
+        const keys = new Set();
+        const scoreElements = [
+          document.querySelector("#left-score"),
+          document.querySelector("#right-score"),
+        ];
+        const statusElement = document.querySelector("#match-status");
+        const startButton = document.querySelector("#start-button");
+        const punishmentKey = "eayl-pong-punishment";
 
-            const paddles = [
-                { x: sideWall + 18, y: height / 2 - paddleHeight / 2, targetY: height / 2 },
-                { x: width - sideWall - 18 - paddleWidth, y: height / 2 - paddleHeight / 2, targetY: height / 2 }
-            ];
-            const ball = { x: width / 2, y: height / 2, vx: 0, vy: 0, trail: [] };
-            let scores = [0, 0];
-            let state = "ready";
-            let winner = null;
-            let splat = null;
-            let serveDelay = 0;
-            let serveDirection = Math.random() < 0.5 ? -1 : 1;
-            let lastTime = 0;
-            let animationFrame = 0;
+        const paddles = [
+          {
+            x: sideWall + 18,
+            y: height / 2 - paddleHeight / 2,
+            targetY: height / 2,
+          },
+          {
+            x: width - sideWall - 18 - paddleWidth,
+            y: height / 2 - paddleHeight / 2,
+            targetY: height / 2,
+          },
+        ];
+        const ball = { x: width / 2, y: height / 2, vx: 0, vy: 0, trail: [] };
+        let scores = [0, 0];
+        let state = "ready";
+        let winner = null;
+        let splat = null;
+        let serveDelay = 0;
+        let serveDirection = Math.random() < 0.5 ? -1 : 1;
+        let lastTime = 0;
+        let animationFrame = 0;
 
-            try {
-                if (localStorage.getItem(punishmentKey) === "1") {
-                    const historyState = { pongPunishment: true };
-                    window.history.pushState(historyState, "", window.location.href);
-                    window.addEventListener("popstate", () => {
-                        window.history.pushState(historyState, "", window.location.href);
-                    });
-                }
-            } catch {
-                // History locking is optional when browser storage is unavailable.
-            }
-
-            function resizeCanvas() {
-                const bounds = canvas.getBoundingClientRect();
-                const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-                canvas.width = Math.max(1, Math.round(bounds.width * pixelRatio));
-                canvas.height = Math.max(1, Math.round(bounds.height * pixelRatio));
-                context.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
-                draw();
-            }
-
-            function updateScore() {
-                scoreElements[0].textContent = scores[0];
-                scoreElements[1].textContent = scores[1];
-            }
-
-            function centerBall(direction = serveDirection) {
-                ball.x = width / 2;
-                ball.y = height / 2;
-                ball.vx = 0;
-                ball.vy = 0;
-                ball.trail = [];
-                serveDirection = direction;
-                serveDelay = 0.7;
-            }
-
-            function resetMatch() {
-                scores = [0, 0];
-                winner = null;
-                paddles.forEach(paddle => { paddle.y = height / 2 - paddleHeight / 2; });
-                state = "ready";
-                centerBall(Math.random() < 0.5 ? -1 : 1);
-                updateScore();
-                updateStatus();
-                draw();
-            }
-
-            function updateStatus() {
-                const labels = { ready: "READY", running: "IN PLAY", paused: "PAUSED", over: winner === 0 ? "WIN" : "LOSS" };
-                statusElement.textContent = labels[state];
-                startButton.textContent = state === "running" ? "Pause" : state === "paused" ? "Resume" : state === "over" ? "Match over" : "Start match";
-                startButton.disabled = state === "over" && winner === 0;
-            }
-
-            function startMatch() {
-                if (state === "over") return;
-                state = "running";
-                if (ball.vx === 0) {
-                    serveDelay = Math.min(serveDelay, 0.55);
-                }
-                updateStatus();
-            }
-
-            function togglePause() {
-                if (state === "running") {
-                    keys.clear();
-                    state = "paused";
-                    updateStatus();
-                } else if (state === "paused") {
-                    state = "running";
-                    updateStatus();
-                } else if (state === "ready") {
-                    startMatch();
-                }
-            }
-
-            function launchBall() {
-                const angle = (Math.random() * 0.82 - 0.41);
-                const speed = 390;
-                ball.vx = Math.cos(angle) * speed * serveDirection;
-                ball.vy = Math.sin(angle) * speed;
-            }
-
-            function playPaddleHit() {
-                const sample = paddleHitSamples[Math.floor(Math.random() * paddleHitSamples.length)];
-                const sound = new Audio(new URL(`audio/${sample}`, window.location.href).toString());
-                void sound.play().catch(() => { });
-            }
-
-            function scorePoint(player) {
-                scores[player] += 1;
-                splat = {
-                    x: player === 1 ? leftSplatX : rightSplatX,
-                    y: ball.y,
-                    startedAt: performance.now()
-                };
-                const splatSound = new Audio(new URL("audio/egg-splat.mp3", window.location.href).toString());
-                void splatSound.play().catch(() => { });
-                updateScore();
-                if (scores[player] >= winningScore) {
-                    state = "over";
-                    winner = player;
-                    ball.vx = 0;
-                    ball.vy = 0;
-                    if (player === 1) {
-                        scores = [0, 0];
-                        updateScore();
-                    } else {
-                        try {
-                            localStorage.removeItem("eayl-pong-punishment");
-                            localStorage.removeItem("eayl-egg-breaks");
-                        } catch {
-                            // The game still ends if storage is unavailable.
-                        }
-                        const homeUrl = new URL("./", window.location.href).toString();
-                        const returnHome = () => window.location.replace(homeUrl);
-                        const endAudio = new Audio(new URL("audio/rage-end.ogg", window.location.href).toString());
-                        let redirectTimer;
-                        const finishSound = () => {
-                            window.clearTimeout(redirectTimer);
-                            returnHome();
-                        };
-                        endAudio.addEventListener("ended", finishSound, { once: true });
-                        endAudio.addEventListener("error", finishSound, { once: true });
-                        redirectTimer = window.setTimeout(finishSound, 4000);
-                        void endAudio.play().catch(finishSound);
-                    }
-                } else {
-                    serveDirection = player === 0 ? 1 : -1;
-                    centerBall(serveDirection);
-                }
-                updateStatus();
-            }
-
-            function movePaddle(paddle, direction, delta) {
-                paddle.y += direction * 440 * delta;
-                paddle.y = Math.max(24, Math.min(height - paddleHeight - 24, paddle.y));
-            }
-
-            function update(delta) {
-                if (state !== "running") return;
-
-                if (keys.has("w")) movePaddle(paddles[0], -1, delta);
-                if (keys.has("s")) movePaddle(paddles[0], 1, delta);
-                const ai = paddles[1];
-                const aim = ball.vx > 0 ? ball.y - paddleHeight / 2 : height / 2 - paddleHeight / 2;
-                ai.y += (aim - ai.y) * Math.min(1, delta * 3.8);
-                ai.y = Math.max(24, Math.min(height - paddleHeight - 24, ai.y));
-
-                if (serveDelay > 0) {
-                    serveDelay -= delta;
-                    if (serveDelay <= 0) launchBall();
-                    return;
-                }
-
-                ball.trail.push({ x: ball.x, y: ball.y });
-                if (ball.trail.length > 5) ball.trail.shift();
-                ball.x += ball.vx * delta;
-                ball.y += ball.vy * delta;
-
-                if (ball.y - eggRadius < 22 || ball.y + eggRadius > height - 22) {
-                    ball.vy *= -1;
-                    ball.y = Math.max(22 + eggRadius, Math.min(height - 22 - eggRadius, ball.y));
-                }
-
-                for (let index = 0; index < paddles.length; index += 1) {
-                    const paddle = paddles[index];
-                    const movingTowardPaddle = index === 0 ? ball.vx < 0 : ball.vx > 0;
-                    const overlapsY = ball.y + eggRadius >= paddle.y && ball.y - eggRadius <= paddle.y + paddleHeight;
-                    const overlapsX = ball.x + eggRadius >= paddle.x && ball.x - eggRadius <= paddle.x + paddleWidth;
-                    if (movingTowardPaddle && overlapsY && overlapsX) {
-                        playPaddleHit();
-                        const offset = (ball.y - (paddle.y + paddleHeight / 2)) / (paddleHeight / 2);
-                        const speed = Math.min(670, Math.hypot(ball.vx, ball.vy) * 1.055);
-                        const angle = offset * 0.92;
-                        ball.vx = Math.cos(angle) * speed * (index === 0 ? 1 : -1);
-                        ball.vy = Math.sin(angle) * speed;
-                        ball.x = index === 0 ? paddle.x + paddleWidth + eggRadius : paddle.x - eggRadius;
-                    }
-                }
-
-                if (ball.x <= leftSplatX) {
-                    ball.x = leftSplatX;
-                    scorePoint(1);
-                } else if (ball.x >= rightSplatX) {
-                    ball.x = rightSplatX;
-                    scorePoint(0);
-                }
-            }
-
-            function drawEgg(x, y, alpha = 1) {
-                context.save();
-                context.globalAlpha = alpha;
-                context.translate(x, y);
-                context.rotate(Math.atan2(ball.vy, ball.vx) * 0.12);
-                context.fillStyle = "#dbe4ee";
-                context.strokeStyle = "#3ef08b";
-                context.lineWidth = 1.5;
-                context.beginPath();
-                context.moveTo(0, -15);
-                context.bezierCurveTo(6, -14, 12, -3, 12, 5);
-                context.bezierCurveTo(12, 12, 6, 16, 0, 16);
-                context.bezierCurveTo(-7, 16, -12, 11, -12, 5);
-                context.bezierCurveTo(-12, -3, -6, -14, 0, -15);
-                context.closePath();
-                context.fill();
-                context.stroke();
-                context.restore();
-            }
-
-            function drawCourt() {
-                context.fillStyle = "#080b10";
-                context.fillRect(0, 0, width, height);
-                context.fillStyle = "#ffffff05";
-                for (let x = 18; x < width; x += 48) {
-                    for (let y = 18; y < height; y += 48) context.fillRect(x, y, 1, 1);
-                }
-                context.strokeStyle = "#3ef08b55";
-                context.lineWidth = 2;
-                context.setLineDash([7, 11]);
-                context.beginPath();
-                context.moveTo(width / 2, 22);
-                context.lineTo(width / 2, height - 22);
-                context.stroke();
-                context.setLineDash([]);
-                context.beginPath();
-                context.arc(width / 2, height / 2, 62, 0, Math.PI * 2);
-                context.strokeStyle = "#3ef08b25";
-                context.stroke();
-                context.strokeStyle = "#ffffff20";
-                context.strokeRect(sideWall, 22, width - sideWall * 2, height - 44);
-            }
-
-            function draw() {
-                drawCourt();
-                paddles.forEach((paddle, index) => {
-                    context.fillStyle = index === 0 ? "#3ef08b" : "#ff5f56";
-                    context.fillRect(paddle.x, paddle.y, paddleWidth, paddleHeight);
-                });
-                const splatAge = splat ? performance.now() - splat.startedAt : splatDuration;
-                if (splat && splatAge < splatDuration) {
-                    const progress = Math.min(1, splatAge / 180);
-                    const spriteWidth = splatWidth * progress;
-                    const spriteHeight = spriteWidth * 0.75;
-                    if (splatImage.complete) {
-                        context.drawImage(
-                            splatImage,
-                            splat.x - spriteWidth / 2,
-                            splat.y - spriteHeight / 2,
-                            spriteWidth,
-                            spriteHeight,
-                        );
-                    }
-                } else if (state !== "over") {
-                    ball.trail.forEach((point, index) => {
-                        drawEgg(point.x, point.y, (index + 1) / (ball.trail.length + 1) * 0.25);
-                    });
-                    drawEgg(ball.x, ball.y);
-                }
-
-                if (state !== "running") {
-                    context.fillStyle = "#080b107a";
-                    context.fillRect(0, 0, width, height);
-                    context.textAlign = "center";
-                    context.textBaseline = "middle";
-                    context.fillStyle = state === "over" ? (winner === 0 ? "#3ef08b" : "#ff5f56") : "#3ef08b";
-                    context.font = "600 13px 'JetBrains Mono', monospace";
-                    const message = state === "ready" ? "READY TO SERVE" : state === "paused" ? "MATCH PAUSED" : state === "over" ? (winner === 0 ? "YOU WIN" : "YOU LOSE") : "";
-                    context.fillText(message, width / 2, height / 2 - 15);
-                    context.fillStyle = "#dbe4eecc";
-                    context.font = "500 10px 'JetBrains Mono', monospace";
-                    const hint = state === "ready" ? "PRESS ENTER OR START MATCH" : state === "paused" ? "PRESS SPACE TO RESUME" : state === "over" ? (winner === 0 ? "RETURNING HOME" : "EGGY REMAINS VICTORIOUS") : "";
-                    context.fillText(hint, width / 2, height / 2 + 13);
-                }
-            }
-
-            function frame(timestamp) {
-                const delta = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.032) : 0;
-                lastTime = timestamp;
-                if (splat && timestamp - splat.startedAt >= splatDuration) splat = null;
-                update(delta);
-                draw();
-                animationFrame = window.requestAnimationFrame(frame);
-            }
-
-            function movePaddleToPointer(event) {
-                if (state === "paused" || state === "over") return;
-                const bounds = canvas.getBoundingClientRect();
-                const x = (event.clientX - bounds.left) / bounds.width * width;
-                const y = (event.clientY - bounds.top) / bounds.height * height;
-                if (x >= width / 2) return;
-                const paddle = paddles[0];
-                paddle.y = Math.max(24, Math.min(height - paddleHeight - 24, y - paddleHeight / 2));
-                if (state === "ready") draw();
-            }
-
-            startButton.addEventListener("click", () => {
-                if (state === "running") togglePause();
-                else if (state === "over" && winner === 1) resetMatch();
-                else startMatch();
+        try {
+          if (localStorage.getItem(punishmentKey) === "1") {
+            const historyState = { pongPunishment: true };
+            window.history.pushState(historyState, "", window.location.href);
+            window.addEventListener("popstate", () => {
+              window.history.pushState(historyState, "", window.location.href);
             });
-            canvas.addEventListener("pointermove", event => {
-                if (event.pointerType === "mouse" || event.buttons > 0) movePaddleToPointer(event);
-            });
-            canvas.addEventListener("pointerdown", event => {
-                canvas.setPointerCapture(event.pointerId);
-                movePaddleToPointer(event);
-                if (state === "ready") startMatch();
-            });
-            window.addEventListener("keydown", event => {
-                const key = event.key.toLowerCase();
-                if (key === " ") event.preventDefault();
-                if ((key === " " || key === "enter") && !event.repeat) togglePause();
-                if (["w", "s"].includes(key) && state === "running") {
-                    keys.add(key);
-                }
-            });
-            window.addEventListener("keyup", event => keys.delete(event.key.toLowerCase()));
-            window.addEventListener("blur", () => keys.clear());
-            window.addEventListener("resize", resizeCanvas);
+          }
+        } catch {
+          // History locking is optional when browser storage is unavailable.
+        }
 
-            centerBall();
+        function resizeCanvas() {
+          const bounds = canvas.getBoundingClientRect();
+          const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+          canvas.width = Math.max(1, Math.round(bounds.width * pixelRatio));
+          canvas.height = Math.max(1, Math.round(bounds.height * pixelRatio));
+          context.setTransform(
+            canvas.width / width,
+            0,
+            0,
+            canvas.height / height,
+            0,
+            0,
+          );
+          draw();
+        }
+
+        function updateScore() {
+          scoreElements[0].textContent = scores[0];
+          scoreElements[1].textContent = scores[1];
+        }
+
+        function centerBall(direction = serveDirection) {
+          ball.x = width / 2;
+          ball.y = height / 2;
+          ball.vx = 0;
+          ball.vy = 0;
+          ball.trail = [];
+          serveDirection = direction;
+          serveDelay = 0.7;
+        }
+
+        function resetMatch() {
+          scores = [0, 0];
+          winner = null;
+          paddles.forEach((paddle) => {
+            paddle.y = height / 2 - paddleHeight / 2;
+          });
+          state = "ready";
+          centerBall(Math.random() < 0.5 ? -1 : 1);
+          updateScore();
+          updateStatus();
+          draw();
+        }
+
+        function updateStatus() {
+          const labels = {
+            ready: "READY",
+            running: "IN PLAY",
+            paused: "PAUSED",
+            over: winner === 0 ? "WIN" : "LOSS",
+          };
+          statusElement.textContent = labels[state];
+          startButton.textContent =
+            state === "running"
+              ? "Pause"
+              : state === "paused"
+                ? "Resume"
+                : state === "over"
+                  ? "Match over"
+                  : "Start match";
+          startButton.disabled = state === "over" && winner === 0;
+        }
+
+        function startMatch() {
+          if (state === "over") return;
+          state = "running";
+          if (ball.vx === 0) {
+            serveDelay = Math.min(serveDelay, 0.55);
+          }
+          updateStatus();
+        }
+
+        function togglePause() {
+          if (state === "running") {
+            keys.clear();
+            state = "paused";
             updateStatus();
-            resizeCanvas();
-            animationFrame = window.requestAnimationFrame(frame);
-        })();
-    </script>
-</body>
+          } else if (state === "paused") {
+            state = "running";
+            updateStatus();
+          } else if (state === "ready") {
+            startMatch();
+          }
+        }
 
+        function launchBall() {
+          const angle = Math.random() * 0.82 - 0.41;
+          const speed = 390;
+          ball.vx = Math.cos(angle) * speed * serveDirection;
+          ball.vy = Math.sin(angle) * speed;
+        }
+
+        function playPaddleHit() {
+          const sample =
+            paddleHitSamples[
+              Math.floor(Math.random() * paddleHitSamples.length)
+            ];
+          const sound = new Audio(
+            new URL(`audio/${sample}`, window.location.href).toString(),
+          );
+          void sound.play().catch(() => {});
+        }
+
+        function scorePoint(player) {
+          scores[player] += 1;
+          splat = {
+            x: player === 1 ? leftSplatX : rightSplatX,
+            y: ball.y,
+            startedAt: performance.now(),
+          };
+          const splatSound = new Audio(
+            new URL("audio/egg-splat.mp3", window.location.href).toString(),
+          );
+          void splatSound.play().catch(() => {});
+          updateScore();
+          if (scores[player] >= winningScore) {
+            state = "over";
+            winner = player;
+            ball.vx = 0;
+            ball.vy = 0;
+            if (player === 1) {
+              scores = [0, 0];
+              updateScore();
+            } else {
+              try {
+                localStorage.removeItem("eayl-pong-punishment");
+                localStorage.removeItem("eayl-egg-breaks");
+              } catch {
+                // The game still ends if storage is unavailable.
+              }
+              const homeUrl = new URL("./", window.location.href).toString();
+              const returnHome = () => window.location.replace(homeUrl);
+              const endAudio = new Audio(
+                new URL("audio/rage-end.ogg", window.location.href).toString(),
+              );
+              let redirectTimer;
+              const finishSound = () => {
+                window.clearTimeout(redirectTimer);
+                returnHome();
+              };
+              endAudio.addEventListener("ended", finishSound, { once: true });
+              endAudio.addEventListener("error", finishSound, { once: true });
+              redirectTimer = window.setTimeout(finishSound, 4000);
+              void endAudio.play().catch(finishSound);
+            }
+          } else {
+            serveDirection = player === 0 ? 1 : -1;
+            centerBall(serveDirection);
+          }
+          updateStatus();
+        }
+
+        function movePaddle(paddle, direction, delta) {
+          paddle.y += direction * 440 * delta;
+          paddle.y = Math.max(
+            24,
+            Math.min(height - paddleHeight - 24, paddle.y),
+          );
+        }
+
+        function update(delta) {
+          if (state !== "running") return;
+
+          if (keys.has("w")) movePaddle(paddles[0], -1, delta);
+          if (keys.has("s")) movePaddle(paddles[0], 1, delta);
+          const ai = paddles[1];
+          const aim =
+            ball.vx > 0
+              ? ball.y - paddleHeight / 2
+              : height / 2 - paddleHeight / 2;
+          ai.y += (aim - ai.y) * Math.min(1, delta * 3.8);
+          ai.y = Math.max(24, Math.min(height - paddleHeight - 24, ai.y));
+
+          if (serveDelay > 0) {
+            serveDelay -= delta;
+            if (serveDelay <= 0) launchBall();
+            return;
+          }
+
+          ball.trail.push({ x: ball.x, y: ball.y });
+          if (ball.trail.length > 5) ball.trail.shift();
+          ball.x += ball.vx * delta;
+          ball.y += ball.vy * delta;
+
+          if (ball.y - eggRadius < 22 || ball.y + eggRadius > height - 22) {
+            ball.vy *= -1;
+            ball.y = Math.max(
+              22 + eggRadius,
+              Math.min(height - 22 - eggRadius, ball.y),
+            );
+          }
+
+          for (let index = 0; index < paddles.length; index += 1) {
+            const paddle = paddles[index];
+            const movingTowardPaddle = index === 0 ? ball.vx < 0 : ball.vx > 0;
+            const overlapsY =
+              ball.y + eggRadius >= paddle.y &&
+              ball.y - eggRadius <= paddle.y + paddleHeight;
+            const overlapsX =
+              ball.x + eggRadius >= paddle.x &&
+              ball.x - eggRadius <= paddle.x + paddleWidth;
+            if (movingTowardPaddle && overlapsY && overlapsX) {
+              playPaddleHit();
+              const offset =
+                (ball.y - (paddle.y + paddleHeight / 2)) / (paddleHeight / 2);
+              const speed = Math.min(670, Math.hypot(ball.vx, ball.vy) * 1.055);
+              const angle = offset * 0.92;
+              ball.vx = Math.cos(angle) * speed * (index === 0 ? 1 : -1);
+              ball.vy = Math.sin(angle) * speed;
+              ball.x =
+                index === 0
+                  ? paddle.x + paddleWidth + eggRadius
+                  : paddle.x - eggRadius;
+            }
+          }
+
+          if (ball.x <= leftSplatX) {
+            ball.x = leftSplatX;
+            scorePoint(1);
+          } else if (ball.x >= rightSplatX) {
+            ball.x = rightSplatX;
+            scorePoint(0);
+          }
+        }
+
+        function drawEgg(x, y, alpha = 1) {
+          context.save();
+          context.globalAlpha = alpha;
+          context.translate(x, y);
+          context.rotate(Math.atan2(ball.vy, ball.vx) * 0.12);
+          context.fillStyle = "#dbe4ee";
+          context.strokeStyle = "#3ef08b";
+          context.lineWidth = 1.5;
+          context.beginPath();
+          context.moveTo(0, -15);
+          context.bezierCurveTo(6, -14, 12, -3, 12, 5);
+          context.bezierCurveTo(12, 12, 6, 16, 0, 16);
+          context.bezierCurveTo(-7, 16, -12, 11, -12, 5);
+          context.bezierCurveTo(-12, -3, -6, -14, 0, -15);
+          context.closePath();
+          context.fill();
+          context.stroke();
+          context.restore();
+        }
+
+        function drawCourt() {
+          context.fillStyle = "#080b10";
+          context.fillRect(0, 0, width, height);
+          context.fillStyle = "#ffffff05";
+          for (let x = 18; x < width; x += 48) {
+            for (let y = 18; y < height; y += 48) context.fillRect(x, y, 1, 1);
+          }
+          context.strokeStyle = "#3ef08b55";
+          context.lineWidth = 2;
+          context.setLineDash([7, 11]);
+          context.beginPath();
+          context.moveTo(width / 2, 22);
+          context.lineTo(width / 2, height - 22);
+          context.stroke();
+          context.setLineDash([]);
+          context.beginPath();
+          context.arc(width / 2, height / 2, 62, 0, Math.PI * 2);
+          context.strokeStyle = "#3ef08b25";
+          context.stroke();
+          context.strokeStyle = "#ffffff20";
+          context.strokeRect(sideWall, 22, width - sideWall * 2, height - 44);
+        }
+
+        function draw() {
+          drawCourt();
+          paddles.forEach((paddle, index) => {
+            context.fillStyle = index === 0 ? "#3ef08b" : "#ff5f56";
+            context.fillRect(paddle.x, paddle.y, paddleWidth, paddleHeight);
+          });
+          const splatAge = splat
+            ? performance.now() - splat.startedAt
+            : splatDuration;
+          if (splat && splatAge < splatDuration) {
+            const progress = Math.min(1, splatAge / 180);
+            const spriteWidth = splatWidth * progress;
+            const spriteHeight = spriteWidth * 0.75;
+            if (splatImage.complete) {
+              context.drawImage(
+                splatImage,
+                splat.x - spriteWidth / 2,
+                splat.y - spriteHeight / 2,
+                spriteWidth,
+                spriteHeight,
+              );
+            }
+          } else if (state !== "over") {
+            ball.trail.forEach((point, index) => {
+              drawEgg(
+                point.x,
+                point.y,
+                ((index + 1) / (ball.trail.length + 1)) * 0.25,
+              );
+            });
+            drawEgg(ball.x, ball.y);
+          }
+
+          if (state !== "running") {
+            context.fillStyle = "#080b107a";
+            context.fillRect(0, 0, width, height);
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillStyle =
+              state === "over"
+                ? winner === 0
+                  ? "#3ef08b"
+                  : "#ff5f56"
+                : "#3ef08b";
+            context.font = "600 13px 'JetBrains Mono', monospace";
+            const message =
+              state === "ready"
+                ? "READY TO SERVE"
+                : state === "paused"
+                  ? "MATCH PAUSED"
+                  : state === "over"
+                    ? winner === 0
+                      ? "YOU WIN"
+                      : "YOU LOSE"
+                    : "";
+            context.fillText(message, width / 2, height / 2 - 15);
+            context.fillStyle = "#dbe4eecc";
+            context.font = "500 10px 'JetBrains Mono', monospace";
+            const hint =
+              state === "ready"
+                ? "PRESS ENTER OR START MATCH"
+                : state === "paused"
+                  ? "PRESS SPACE TO RESUME"
+                  : state === "over"
+                    ? winner === 0
+                      ? "RETURNING HOME"
+                      : "EGGY REMAINS VICTORIOUS"
+                    : "";
+            context.fillText(hint, width / 2, height / 2 + 13);
+          }
+        }
+
+        function frame(timestamp) {
+          const delta = lastTime
+            ? Math.min((timestamp - lastTime) / 1000, 0.032)
+            : 0;
+          lastTime = timestamp;
+          if (splat && timestamp - splat.startedAt >= splatDuration)
+            splat = null;
+          update(delta);
+          draw();
+          animationFrame = window.requestAnimationFrame(frame);
+        }
+
+        function movePaddleToPointer(event) {
+          if (state === "paused" || state === "over") return;
+          const bounds = canvas.getBoundingClientRect();
+          const x = ((event.clientX - bounds.left) / bounds.width) * width;
+          const y = ((event.clientY - bounds.top) / bounds.height) * height;
+          if (x >= width / 2) return;
+          const paddle = paddles[0];
+          paddle.y = Math.max(
+            24,
+            Math.min(height - paddleHeight - 24, y - paddleHeight / 2),
+          );
+          if (state === "ready") draw();
+        }
+
+        startButton.addEventListener("click", () => {
+          if (state === "running") togglePause();
+          else if (state === "over" && winner === 1) resetMatch();
+          else startMatch();
+        });
+        canvas.addEventListener("pointermove", (event) => {
+          if (event.pointerType === "mouse" || event.buttons > 0)
+            movePaddleToPointer(event);
+        });
+        canvas.addEventListener("pointerdown", (event) => {
+          canvas.setPointerCapture(event.pointerId);
+          movePaddleToPointer(event);
+          if (state === "ready") startMatch();
+        });
+        window.addEventListener("keydown", (event) => {
+          const key = event.key.toLowerCase();
+          if (key === " ") event.preventDefault();
+          if ((key === " " || key === "enter") && !event.repeat) togglePause();
+          if (["w", "s"].includes(key) && state === "running") {
+            keys.add(key);
+          }
+        });
+        window.addEventListener("keyup", (event) =>
+          keys.delete(event.key.toLowerCase()),
+        );
+        window.addEventListener("blur", () => keys.clear());
+        window.addEventListener("resize", resizeCanvas);
+
+        centerBall();
+        updateStatus();
+        resizeCanvas();
+        animationFrame = window.requestAnimationFrame(frame);
+      })();
+    </script>
+  </body>
 </html>

@@ -58,7 +58,8 @@ const activateAudioSrc = withBase("/audio/rage-activate.ogg");
     const eggSrc = root.dataset.eggSrc ?? "/favicon.svg";
     const crackedSrc = root.dataset.crackedSrc ?? eggSrc;
     const pongHref = root.dataset.pongHref ?? "/pong";
-    const activateAudioSrc = root.dataset.activateAudioSrc ?? "/audio/rage-activate.ogg";
+    const activateAudioSrc =
+      root.dataset.activateAudioSrc ?? "/audio/rage-activate.ogg";
     const BREAKS_KEY = "eayl-egg-breaks";
     const PUNISHMENT_KEY = "eayl-pong-punishment";
 
@@ -176,7 +177,9 @@ const activateAudioSrc = withBase("/audio/rage-activate.ogg");
           __eggToast?: (m: string, t?: string, siren?: boolean) => void;
         }
       ).__eggToast?.(
-        breaks >= 5 ? "Eggy has had enough. pong penalty incoming." : "Eggy is not amused.",
+        breaks >= 5
+          ? "Eggy has had enough. pong penalty incoming."
+          : "Eggy is not amused.",
         breaks >= 5 ? "amber" : "magenta",
         breaks >= 5,
       );

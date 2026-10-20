@@ -200,9 +200,11 @@ body {
   font-family: var(--font-mono);
   /* Subtle CRT-style background: grid + vignette, drawn once, fixed. */
   background-image:
-    radial-gradient(ellipse at 50% -10%,
+    radial-gradient(
+      ellipse at 50% -10%,
       rgba(62, 240, 139, 0.08),
-      transparent 55%),
+      transparent 55%
+    ),
     linear-gradient(var(--color-grid-soft) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid-soft) 1px, transparent 1px);
   background-size:
@@ -221,11 +223,13 @@ body::before {
   inset: 0;
   pointer-events: none;
   z-index: 60;
-  background: repeating-linear-gradient(to bottom,
-      var(--color-scanline) 0px,
-      var(--color-scanline) 1px,
-      transparent 1px,
-      transparent 3px);
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--color-scanline) 0px,
+    var(--color-scanline) 1px,
+    transparent 1px,
+    transparent 3px
+  );
 }
 
 /* ----------------------------- helpers ---------------------------- */
@@ -257,7 +261,6 @@ body::before {
 }
 
 @keyframes term-blink {
-
   0%,
   50% {
     opacity: 1;
@@ -271,7 +274,6 @@ body::before {
 
 /* Soft pulse used to draw attention to the live task badge. */
 @keyframes live-pulse {
-
   0%,
   100% {
     opacity: 1;
@@ -337,7 +339,6 @@ body::before {
 }
 
 @keyframes cd-urgent-pulse {
-
   0%,
   100% {
     box-shadow: 0 0 0 0 rgba(255, 95, 86, 0.4);
@@ -361,8 +362,14 @@ body::before {
   color: var(--color-acid);
 }
 
-[data-sortable-standings] th[aria-sort="ascending"] button[data-sort-key] .cd-sort-arrow,
-[data-sortable-standings] th[aria-sort="descending"] button[data-sort-key] .cd-sort-arrow {
+[data-sortable-standings]
+  th[aria-sort="ascending"]
+  button[data-sort-key]
+  .cd-sort-arrow,
+[data-sortable-standings]
+  th[aria-sort="descending"]
+  button[data-sort-key]
+  .cd-sort-arrow {
   color: inherit;
   opacity: 1;
 }
@@ -402,7 +409,6 @@ a[data-me-row].is-me {
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   .caret::after,
   .live-dot {
     animation: none;
@@ -446,19 +452,23 @@ a[data-me-row].is-me {
 
 :root[data-turbo] body {
   background-image:
-    radial-gradient(ellipse at 50% -10%,
+    radial-gradient(
+      ellipse at 50% -10%,
       rgba(62, 240, 139, 0.16),
-      transparent 55%),
+      transparent 55%
+    ),
     linear-gradient(var(--color-grid-soft) 1px, transparent 1px),
     linear-gradient(90deg, var(--color-grid-soft) 1px, transparent 1px);
 }
 
 :root[data-turbo] body::before {
-  background: repeating-linear-gradient(to bottom,
-      var(--color-scanline) 0px,
-      var(--color-scanline) 1px,
-      transparent 1px,
-      transparent 2px);
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--color-scanline) 0px,
+    var(--color-scanline) 1px,
+    transparent 1px,
+    transparent 2px
+  );
   animation: turbo-scan 6s linear infinite;
 }
 
@@ -540,7 +550,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes score-shake {
-
   0%,
   100% {
     transform: translateX(0) rotate(0);
@@ -784,7 +793,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes egg-siren-flash {
-
   0%,
   100% {
     filter: brightness(1);
@@ -826,7 +834,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes egg-waddle {
-
   0%,
   100% {
     transform: scaleX(var(--egg-face, 1)) rotate(-7deg) translateY(0);
@@ -838,7 +845,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes egg-step {
-
   0%,
   100% {
     transform: translateY(0) scaleY(1);
@@ -850,7 +856,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes egg-crack-shake {
-
   0%,
   100% {
     transform: translateX(0) rotate(0);
@@ -879,7 +884,6 @@ a[data-me-row].is-me {
 }
 
 @keyframes cd-glitch {
-
   0%,
   100% {
     transform: translate(0, 0);

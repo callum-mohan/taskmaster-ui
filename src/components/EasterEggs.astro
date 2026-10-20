@@ -56,11 +56,14 @@ const eggSrc = withBase("/favicon.svg");
     requestAnimationFrame(() =>
       el.classList.remove("opacity-0", "translate-y-2"),
     );
-    window.setTimeout(() => {
-      el.classList.add("opacity-0");
-      window.setTimeout(() => el.remove(), 350);
-      if (siren) toastLayer.classList.remove("is-urgent");
-    }, siren ? 2000 : 2600);
+    window.setTimeout(
+      () => {
+        el.classList.add("opacity-0");
+        window.setTimeout(() => el.remove(), 350);
+        if (siren) toastLayer.classList.remove("is-urgent");
+      },
+      siren ? 2000 : 2600,
+    );
   }
 
   // Expose so component-local scripts (countdown, score badge) can reuse it.

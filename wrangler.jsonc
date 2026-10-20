@@ -7,6 +7,11 @@
   "observability": {
     "enabled": true,
   },
+  // The deployed version's id keys the competition rows cache, so a deploy
+  // never reads rows cached by the previous version.
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA",
+  },
   // Both hosts are served by this Worker; the middleware 301s `www` to the
   // apex so there's a single canonical origin (and one Neon Auth domain).
   "routes": [

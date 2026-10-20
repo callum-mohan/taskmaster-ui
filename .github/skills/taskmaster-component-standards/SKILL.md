@@ -14,8 +14,10 @@ description: >-
 
 The UI is **Astro + TypeScript + Tailwind v4**, **no React**, rendered on
 request on **Cloudflare Workers** (`output: "server"`). Competition data lives
-in **Neon Postgres** (Drizzle ORM over Neon's HTTP driver) and is read **per
-request**, so edits made in `/admin` show up immediately. The goal is a clean,
+in **Neon Postgres** (Drizzle ORM over Neon's HTTP driver). Public requests
+read the raw rows through a 5-minute per-data-centre edge cache that every
+signed-in write purges (see README → Caching), so edits made in `/admin`
+show up immediately. The goal is a clean,
 prop-driven component set backed by a database-agnostic data layer.
 
 ## Architecture: strict data-layer separation
@@ -24,7 +26,7 @@ Data flows one direction. Keep every layer in its place:
 ```
 src/db/schema.ts        ← Drizzle tables (raw facts only)
 src/types/index.ts      ← shape definitions (interfaces, unions)
-src/data/competition.ts ← load every table per request (one db.batch)
+src/data/competition.ts ← load every table (one db.batch; rows edge-cached)
 src/data/*.ts           ← pure mappers: rows → raw records (types)
 src/data/queries.ts     ← createQueries(data): derived selectors / view models
 src/middleware.ts       ← Astro.locals.getQueries() (lazy, once per request)
@@ -39,6 +41,9 @@ Rules:
   `const { getLeaderboard } = await Astro.locals.getQueries();`, then hand
   ready-to-render data to components. Never cache competition data in
   module-level state: a Worker isolate serves many requests concurrently.
+  The only cache is the raw-rows edge cache in `competition.ts`; new
+  competition writes must happen in a `POST` under `/admin` or `/account`
+  so the middleware purges it.
 - All cross-record computation (leaderboard ranking, stats, recent results,
   initials) lives in `queries.ts` as pure functions — not in components or
   page markup.

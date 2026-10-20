@@ -1,5 +1,9 @@
 import { defineMiddleware, sequence } from "astro:middleware";
-import { loadCompetition, type CompetitionViewer } from "./data/competition";
+import {
+  invalidateCompetitionCache,
+  loadCompetition,
+  type CompetitionViewer,
+} from "./data/competition";
 import { createQueries, type Queries } from "./data/queries";
 import { getSessionPlayer } from "./data/accounts";
 import { getSessionUser, hasSessionCookie } from "./lib/auth";
@@ -8,6 +12,8 @@ import {
   isAccountPath,
   isAdminPath,
   isAuthPagePath,
+  isCompetitionNeutralRoute,
+  isSafeMethod,
   LEGACY_ADMIN_LOGIN_PATH,
   LOGIN_PATH,
   loginRedirectPath,
@@ -33,9 +39,10 @@ const app = defineMiddleware(async (context, next) => {
 
   // Load the competition data lazily and at most once per request, so routes
   // that never ask for it (e.g. the sitemap index) skip the query. Guarded
-  // admin routes (only reached by admins, see below) see real task content;
-  // everywhere else password-protected tasks are redacted unless the
-  // visitor unlocked them.
+  // admin routes (only reached by admins, see below) see real task content
+  // read straight from the database; everywhere else password-protected
+  // tasks are redacted unless the visitor unlocked them, and the raw rows
+  // come from the per-data-centre cache (see `data/competition.ts`).
   let queries: Promise<Queries> | undefined;
   const isGuardedAdmin =
     matchesRoute(context, isAdminPath) &&
@@ -44,7 +51,9 @@ const app = defineMiddleware(async (context, next) => {
     ? { mode: "admin" }
     : { mode: "public", revealTokens: readRevealCookies(context.request) };
   context.locals.getQueries = () =>
-    (queries ??= loadCompetition(viewer).then(createQueries));
+    (queries ??= loadCompetition(viewer, context.url.origin).then(
+      createQueries,
+    ));
 
   // The signed-in user and their player link, each looked up at most once
   // per request and only when something asks (guards, the navbar).
@@ -119,6 +128,16 @@ const app = defineMiddleware(async (context, next) => {
   }
 
   const response = await next();
+  // A signed-in admin or player just changed something: drop the cached
+  // rows (in this data centre) before the redirect, so their next page view
+  // shows it. Anonymous posts never purge, so they can't force reloads.
+  if (
+    (context.locals.admin || context.locals.player) &&
+    !isSafeMethod(context.request.method) &&
+    !isCompetitionNeutralRoute(route)
+  ) {
+    await invalidateCompetitionCache(context.url.origin);
+  }
   // Sign-in and account pages are per-user and must never be cached or indexed.
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");

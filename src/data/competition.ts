@@ -1,4 +1,5 @@
 import { asc, desc, eq } from "drizzle-orm";
+import { env } from "cloudflare:workers";
 import type { CompetitionData, TaskRevealContext } from "../types";
 import { getDb } from "../db";
 import {
@@ -31,6 +32,7 @@ import { derivePredictionBonusRows, mapPredictions } from "./predictions";
 import { mapChangelog, mapRecaps } from "./editorial";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
+import { cachedJson, purgeCached } from "../lib/edge-cache";
 
 /**
  * Who the snapshot is for: public visitors (with any task reveal cookies
@@ -40,14 +42,30 @@ export type CompetitionViewer =
   | { mode: "public"; revealTokens: ReadonlyMap<string, string> }
   | { mode: "admin" };
 
+// The raw rows are the same for every viewer (reveal cookies, admin mode and
+// held results are applied after loading), so public requests share one
+// copy cached per Cloudflare data centre. Data only changes through writes,
+// and every signed-in write purges it (see `src/middleware.ts`), so the TTL
+// only bounds how stale other data centres and script/console edits can be.
+const ROWS_CACHE_TTL_SECONDS = 5 * 60;
+
 /**
- * Loads every competition record for the current request in one HTTP round
- * trip and maps the rows onto the `src/types` shapes. Nothing is cached, so
- * admin edits are visible on the very next page view.
+ * The cache key for the raw rows. It includes the deployed Worker version so
+ * a deploy (whose code may expect a new column) never reads rows cached by
+ * the previous one. The path isn't a route, and the Worker runs before the
+ * cache, so the entry can't be fetched from outside.
  */
-export async function loadCompetition(
-  viewer: CompetitionViewer = { mode: "public", revealTokens: new Map() },
-): Promise<CompetitionData> {
+const rowsCacheKey = (origin: string) =>
+  `${origin}/__cache/competition-rows/${
+    env.CF_VERSION_METADATA?.id ?? "local"
+  }`;
+
+/** Drops the cached rows in this data centre, after a write. */
+export const invalidateCompetitionCache = (origin: string) =>
+  purgeCached(rowsCacheKey(origin));
+
+/** Every competition table's rows, in one HTTP round trip. */
+async function fetchCompetitionRows() {
   const db = getDb();
   const [
     playerRows,
@@ -104,7 +122,67 @@ export async function loadCompetition(
       .from(changelogTable)
       .orderBy(desc(changelogTable.date), desc(changelogTable.createdAt)),
   ]);
+  return {
+    playerRows,
+    teamRows,
+    memberRows,
+    taskRows,
+    taskScoreRows,
+    teamScoreRows,
+    bonusRows,
+    pollRows,
+    pollOptionRows,
+    pollVoteRows,
+    peoplesChoiceRows,
+    predictionRows,
+    recapRows,
+    changelogRows,
+  };
+}
 
+type CompetitionRows = Awaited<ReturnType<typeof fetchCompetitionRows>>;
+
+/**
+ * Loads every competition record for the current request and maps the rows
+ * onto the `src/types` shapes. Admins always read the database directly;
+ * public requests (given the site `origin` for the cache key) share the
+ * cached rows. Derived state (task status, deadlines) is worked out from
+ * the rows on every request, so it's never stale.
+ */
+export async function loadCompetition(
+  viewer: CompetitionViewer = { mode: "public", revealTokens: new Map() },
+  cacheOrigin?: string,
+): Promise<CompetitionData> {
+  const rows =
+    viewer.mode === "admin" || !cacheOrigin
+      ? await fetchCompetitionRows()
+      : await cachedJson<CompetitionRows>(
+          rowsCacheKey(cacheOrigin),
+          ROWS_CACHE_TTL_SECONDS,
+          fetchCompetitionRows,
+        );
+  return buildCompetition(rows, viewer);
+}
+
+async function buildCompetition(
+  {
+    playerRows,
+    teamRows,
+    memberRows,
+    taskRows,
+    taskScoreRows,
+    teamScoreRows,
+    bonusRows,
+    pollRows,
+    pollOptionRows,
+    pollVoteRows,
+    peoplesChoiceRows,
+    predictionRows,
+    recapRows,
+    changelogRows,
+  }: CompetitionRows,
+  viewer: CompetitionViewer,
+): Promise<CompetitionData> {
   const players = mapPlayers(playerRows);
   const teams = mapTeams(teamRows, memberRows);
   const reveal: TaskRevealContext =

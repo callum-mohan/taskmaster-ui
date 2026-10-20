@@ -3,6 +3,8 @@ import {
   isAccountPath,
   isAdminPath,
   isAuthPagePath,
+  isCompetitionNeutralRoute,
+  isSafeMethod,
   LOGIN_PATH,
   loginRedirectPath,
   matchesRoute,
@@ -44,6 +46,38 @@ describe("isAuthPagePath", () => {
   it.each(["/login/extra", "/logins", "/admin/login"])(
     "doesn't match %s",
     (path) => expect(isAuthPagePath(path)).toBe(false),
+  );
+});
+
+describe("isCompetitionNeutralRoute", () => {
+  it.each([
+    "/account/notifications",
+    "/account/notifications/read",
+    "/account/password",
+  ])("exempts %s from the cache purge", (route) =>
+    expect(isCompetitionNeutralRoute(route)).toBe(true),
+  );
+
+  it.each([
+    "/account",
+    "/account/polls/[id]",
+    "/account/predictions/[taskId]",
+    "/account/gallery/[taskId]",
+    "/account/submissions/[taskId]",
+    "/admin/players/[id]",
+    "/account/password/extra",
+  ])("purges after %s", (route) =>
+    expect(isCompetitionNeutralRoute(route)).toBe(false),
+  );
+});
+
+describe("isSafeMethod", () => {
+  it.each(["GET", "HEAD", "OPTIONS", "get"])("%s is safe", (method) =>
+    expect(isSafeMethod(method)).toBe(true),
+  );
+
+  it.each(["POST", "PUT", "PATCH", "DELETE"])("%s changes data", (method) =>
+    expect(isSafeMethod(method)).toBe(false),
   );
 });
 

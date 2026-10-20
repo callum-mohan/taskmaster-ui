@@ -1255,6 +1255,15 @@ export interface LiveRunStep {
   revealed: boolean;
 }
 
+/**
+ * A week whose results are held, as read straight from the database (the
+ * cached snapshot may be a few minutes behind the show).
+ */
+export interface LiveHold {
+  taskId: string;
+  revealCount: number;
+}
+
 // ── Rules ─────────────────────────────────────────────────────────────
 
 /**

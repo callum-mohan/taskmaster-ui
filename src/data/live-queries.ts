@@ -1,5 +1,6 @@
 import type {
   CompetitionData,
+  LiveHold,
   LiveResultRow,
   LiveRunStep,
   LiveShow,
@@ -24,9 +25,21 @@ export function createLiveQueries(data: CompetitionData) {
   /**
    * The week whose results are being held for a live reveal: one that has
    * started revealing, else the latest held week whose deadline has passed.
+   * `/live` passes the holds it read fresh, which win over the (possibly
+   * cached) snapshot's.
    */
-  function getLiveTask(): Task | undefined {
-    const held = tasks
+  function getLiveTask(holds?: readonly LiveHold[]): Task | undefined {
+    const current = holds
+      ? tasks.map((t) => {
+          const hold = holds.find((h) => h.taskId === t.id);
+          return {
+            ...t,
+            resultsHeld: hold !== undefined,
+            resultsRevealCount: hold?.revealCount ?? 0,
+          };
+        })
+      : tasks;
+    const held = current
       .filter((t) => t.resultsHeld && t.status === "completed")
       .sort((a, b) => b.weekNumber - a.weekNumber);
     return held.find((t) => t.resultsRevealCount > 0) ?? held[0];
@@ -35,10 +48,14 @@ export function createLiveQueries(data: CompetitionData) {
   /** Every result for the task, best first (ties share a position). */
   function rankResults(
     task: Task,
-    rows: Pick<ScoreRows, "taskScores" | "teamScores">,
+    { taskScores, teamScores }: Pick<ScoreRows, "taskScores" | "teamScores">,
   ): RankedResult[] {
     const records = buildScoreRecords(
-      { ...rows, bonusPoints: [] },
+      {
+        taskScores: taskScores.filter((row) => row.taskId === task.id),
+        teamScores: teamScores.filter((row) => row.taskId === task.id),
+        bonusPoints: [],
+      },
       { players, teams, tasks: [task] },
     );
     if (task.format === "team") {

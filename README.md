@@ -9,9 +9,10 @@ window chrome — and is built with **Astro + TypeScript + Tailwind v4**, render
 on request on **Cloudflare Workers**.
 
 > Competition data (players, teams, tasks, scores, bonus points) and the
-> editorial copy (weekly recaps, changelog) live in **Neon Postgres** and are
-> read **on every request**, so changes made in the [admin area](#-admin)
-> appear on the public site immediately.
+> editorial copy (weekly recaps, changelog) live in **Neon Postgres**. Public
+> pages read them through a short-lived edge cache that every admin or player
+> change clears, so changes made in the [admin area](#-admin) appear on the
+> public site straight away (see [Caching](#-caching)).
 
 ## 🚀 Tech stack
 
@@ -54,7 +55,7 @@ src/
 │   ├── client.ts      # createDb(url) — node-postgres client for scripts
 │   └── index.ts       # getDb() — Neon HTTP client used by the site
 ├── data/              # The data-access layer (the only code that imports db/)
-│   ├── competition.ts # loads every table per request in one batch
+│   ├── competition.ts # loads every table in one batch (edge-cached rows)
 │   ├── players.ts     # rows → Player ─┐
 │   ├── teams.ts       # rows → Team    ├─ pure mappers
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
@@ -126,8 +127,39 @@ db/schema.ts  →  data/*.ts          →   data/queries.ts   →   pages      �
 The database stores **facts only** (points, dates, membership). Finishing
 positions, task status and totals are always derived, so they can't drift.
 [`competition.ts`](src/data/competition.ts) loads every table in a single
-HTTP round trip per request; the selectors are pure, synchronous functions over
-that snapshot, which keeps the components unaware of the database.
+HTTP round trip (or from the edge cache, see below); the selectors are pure,
+synchronous functions over that snapshot, which keeps the components unaware
+of the database.
+
+### ⚡ Caching
+
+The Neon database is in `us-east-2` while the players are in the UK, and the
+Free plan has a monthly network transfer allowance, so the snapshot's raw
+rows are cached at the edge rather than read on every page view:
+
+- **What's cached:** only the raw table rows, which are the same for every
+  viewer. Reveal cookies, held results and derived state (task status,
+  deadlines, notifications) are still worked out on every request, so a
+  task still goes live on the minute.
+- **Where:** Cloudflare's Cache API (`caches.default`), per data centre, for
+  5 minutes (`ROWS_CACHE_TTL_SECONDS`). It needs no binding. The key
+  includes the deployed Worker version (`CF_VERSION_METADATA`), so a deploy
+  starts with a cold cache.
+- **Invalidation:** any `POST` by a signed-in admin or player (under
+  `/admin` or `/account`) purges the cached rows in that data centre before
+  its redirect, so the writer always sees their change. Writes that never
+  touch competition data (marking notifications read, changing a password)
+  skip it (`isCompetitionNeutralRoute` in `src/lib/routes.ts`).
+- **Staleness:** other data centres, and edits made from scripts or the Neon
+  console, show up within 5 minutes.
+- **Admins** always read the database directly; `/admin` never uses the
+  cache.
+- **`/live`** reads the show's state (holds, reveal counts and held scores)
+  fresh on every poll with one small query, so results night stays in sync
+  everywhere.
+
+The cache is a no-op on `*.workers.dev` URLs (Cloudflare's Cache API only
+works on custom domains), where every request reads the database.
 
 ## 🗄️ Database (Neon)
 
@@ -135,7 +167,7 @@ The workspace is linked to the Neon project `eayl-taskmaster` (see the
 git-ignored `.neon` file). `neon env pull` writes the connection strings to the
 git-ignored `.env.local`:
 
-- `DATABASE_URL` — **pooled**; read by the site on every request.
+- `DATABASE_URL` — **pooled**; read by the site (see [Caching](#-caching)).
 - `DATABASE_URL_UNPOOLED` — **direct**; used for migrations and seeding.
 - `NEON_AUTH_BASE_URL` — the branch's Neon Auth URL (admin and player sign-in).
 - `AWS_ENDPOINT_URL_S3`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
@@ -328,7 +360,9 @@ everything as normal.
 Once the deadline has passed, `/live` shows the held week's board. Each
 "reveal next" in the results night tab uncovers one more result, **last place
 first**, until the winner; only revealed results ever reach the page, and an
-open `/live` tab polls itself so it follows the show without a reload.
+open `/live` tab polls itself (every 4 seconds on air, every minute off air)
+so it follows the show without a reload. The show's state is read fresh on
+each poll, bypassing the [cache](#-caching).
 **Publish** ends the show: the results go out site-wide and the "results are
 in" notifications are dated from then (`tasks.results_published_at`).
 "Release hold" ends it without a show. The state lives on the task

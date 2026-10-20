@@ -5,12 +5,14 @@ import StandingsTable from "../components/StandingsTable.astro";
 import StatCard from "../components/StatCard.astro";
 import PlayerAvatar from "../components/PlayerAvatar.astro";
 import { withBase } from "../lib/url";
-import {
+import PointsChart from "../components/PointsChart.astro";
+
+const {
+  season,
   getLeaderboardWithMovement,
   getCompetitionStats,
   getPointsRaceChart,
-} from "../data/queries";
-import PointsChart from "../components/PointsChart.astro";
+} = await Astro.locals.getQueries();
 
 const leaderboard = getLeaderboardWithMovement();
 const stats = getCompetitionStats();
@@ -68,7 +70,9 @@ const leader = first;
       <p
         class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim sm:text-base"
       >
-        <span class="text-acid">//</span> Live standings across{" "}
+        <span class="text-acid">//</span>{" "}
+        {season.status === "closed" ? "Final" : "Live"}
+        {season.name} standings across{" "}
         {stats.tasksCompleted} scored{" "}
         {stats.tasksCompleted === 1 ? "task" : "tasks"}. Ranked by points, then
         wins, then average finishing position.

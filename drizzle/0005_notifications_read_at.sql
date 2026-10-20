@@ -1,0 +1,1 @@
+ALTER TABLE "player_accounts" ADD COLUMN "notifications_read_at" timestamp with time zone;

@@ -1,0 +1,449 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import SlugFromName from "./SlugFromName.astro";
+import { btnPrimary, btnGhost, inputClass, labelClass } from "./styles";
+import {
+  MAX_POLL_OPTIONS,
+  pollOptionField,
+  pollOptionRows,
+  type FieldErrors,
+  type FormValues,
+} from "../../lib/admin-forms";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  mode: "create" | "edit";
+  values: FormValues;
+  errors?: FieldErrors;
+  formError?: string;
+  /** Votes already cast, to warn before options are removed. */
+  voterCount?: number;
+  /** Task weeks the voting bonus can count in, in week order. */
+  weeks: { id: string; label: string }[];
+  /** The week "auto" resolves to for the entered opening time. */
+  autoWeekLabel?: string;
+}
+
+const {
+  mode,
+  values,
+  errors = {},
+  formError,
+  voterCount = 0,
+  weeks,
+  autoWeekLabel,
+} = Astro.props;
+const isCreate = mode === "create";
+const rows = pollOptionRows(values);
+
+const choice =
+  "flex cursor-pointer items-center gap-2 rounded-md border border-grid px-3 py-2 text-sm text-ink transition-colors hover:border-ink-faint has-[:checked]:border-acid-dim has-[:checked]:bg-acid/5";
+const control = "h-4 w-4 shrink-0 accent-[var(--color-acid)]";
+const presetBtn =
+  "rounded-md border border-dashed border-grid px-3 py-1.5 text-xs text-ink-dim transition-colors hover:border-acid-dim hover:text-acid";
+
+const kinds = [
+  { value: "single", label: "single choice", hint: "voters pick exactly one" },
+  {
+    value: "multiple",
+    label: "multiple choice",
+    hint: "voters pick between a min and max",
+  },
+];
+const visibilities = [
+  {
+    value: "after_vote",
+    label: "after voting",
+    hint: "players see results once they vote; everyone once it closes",
+  },
+  {
+    value: "always",
+    label: "always",
+    hint: "live results for everyone, even before voting",
+  },
+  {
+    value: "after_close",
+    label: "after it closes",
+    hint: "a reveal: nobody sees results until the end",
+  },
+  {
+    value: "admin_only",
+    label: "admins only",
+    hint: "results are never published",
+  },
+];
+const voterModes = [
+  { value: "anonymous", label: "anonymous", hint: "only counts are shown" },
+  {
+    value: "public",
+    label: "public",
+    hint: "names are shown next to each option",
+  },
+];
+const kind = values.kind ?? "single";
+const visibility = values.resultsVisibility ?? "after_vote";
+const voters = values.voters ?? "anonymous";
+const rowError = (i: number) => errors[pollOptionField.label(i)];
+---
+
+<form method="post" class="space-y-6" data-slug-form>
+  <!-- Enter in a field submits this (save), not the preset buttons below. -->
+  <button
+    type="submit"
+    name="intent"
+    value="save"
+    class="sr-only"
+    tabindex="-1"
+    aria-hidden="true">save</button
+  >
+  {formError && <Notice tone="error">{formError}</Notice>}
+  {
+    Object.keys(errors).length > 0 && !formError && (
+      <Notice tone="error">Fix the highlighted fields and save again.</Notice>
+    )
+  }
+
+  <AdminField
+    label="question"
+    name="question"
+    value={values.question}
+    error={errors.question}
+    required
+    placeholder="Who'll win this week?"
+    attrs={isCreate ? { "data-slug-source": "" } : {}}
+  />
+  <div class="grid gap-5 sm:grid-cols-2">
+    <AdminField
+      label="id"
+      name="id"
+      value={values.id}
+      error={errors.id}
+      readonly={!isCreate}
+      required={!isCreate}
+      placeholder="who-wins-week-05"
+      hint={isCreate
+        ? "Blank uses the question. Used in links; can't be changed later."
+        : "Used in links, so it can't be changed."}
+      attrs={isCreate ? { "data-slug-target": "" } : {}}
+    />
+    <AdminField
+      label="description"
+      name="description"
+      value={values.description}
+      error={errors.description}
+      rows={2}
+      hint="Optional context shown under the question."
+    />
+  </div>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>options</legend>
+    <p class="text-xs text-ink-faint">
+      2–{MAX_POLL_OPTIONS} options. Clear a row to remove it{
+        voterCount > 0 && " (and the votes for it)"
+      }; renaming keeps its votes.
+    </p>
+    {
+      errors.options && (
+        <p class="text-xs text-danger">
+          <span aria-hidden="true">✗ </span>
+          {errors.options}
+        </p>
+      )
+    }
+    <input type="hidden" name={pollOptionField.rows} value={rows.length} />
+    <ol class="space-y-2">
+      {
+        rows.map((row, i) => (
+          <li>
+            <div class="flex items-center gap-3">
+              <span
+                class="w-6 shrink-0 text-right text-xs tabular-nums text-ink-faint"
+                aria-hidden="true"
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <input
+                type="hidden"
+                name={pollOptionField.id(i)}
+                value={row.id}
+              />
+              <label for={`option-${i}`} class="sr-only">
+                Option {i + 1}
+              </label>
+              <input
+                id={`option-${i}`}
+                name={pollOptionField.label(i)}
+                value={row.label}
+                maxlength={120}
+                aria-invalid={rowError(i) ? "true" : undefined}
+                aria-describedby={rowError(i) ? `option-${i}-error` : undefined}
+                class={inputClass(Boolean(rowError(i)))}
+              />
+            </div>
+            {rowError(i) && (
+              <p id={`option-${i}-error`} class="mt-1 pl-9 text-xs text-danger">
+                <span aria-hidden="true">✗ </span>
+                {rowError(i)}
+              </p>
+            )}
+          </li>
+        ))
+      }
+    </ol>
+    <div class="flex flex-wrap gap-2 pl-9">
+      <button
+        type="submit"
+        name="preset"
+        value="rows"
+        formnovalidate
+        class={presetBtn}
+      >
+        + more rows
+      </button>
+      <button
+        type="submit"
+        name="preset"
+        value="players"
+        formnovalidate
+        class={presetBtn}
+      >
+        + every player
+      </button>
+      <button
+        type="submit"
+        name="preset"
+        value="teams"
+        formnovalidate
+        class={presetBtn}
+      >
+        + every team
+      </button>
+    </div>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>poll type</legend>
+    {errors.kind && <p class="text-xs text-danger">{errors.kind}</p>}
+    <div class="grid gap-2 sm:grid-cols-2">
+      {
+        kinds.map((k) => (
+          <label class={choice}>
+            <input
+              type="radio"
+              name="kind"
+              value={k.value}
+              checked={kind === k.value}
+              class={control}
+            />
+            <span>
+              {k.label}
+              <span class="block text-xs text-ink-faint">{k.hint}</span>
+            </span>
+          </label>
+        ))
+      }
+    </div>
+    <div class="grid gap-5 sm:grid-cols-2">
+      <AdminField
+        label="min picks"
+        name="minChoices"
+        type="number"
+        min={1}
+        max={MAX_POLL_OPTIONS}
+        value={values.minChoices}
+        error={errors.minChoices}
+        hint="Multiple choice only."
+      />
+      <AdminField
+        label="max picks"
+        name="maxChoices"
+        type="number"
+        min={1}
+        max={MAX_POLL_OPTIONS}
+        value={values.maxChoices}
+        error={errors.maxChoices}
+        hint="Multiple choice only. Blank = no limit."
+      />
+    </div>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>schedule</legend>
+    <div class="grid gap-5 sm:grid-cols-3">
+      <AdminField
+        label="opens"
+        name="opensAt"
+        type="datetime-local"
+        value={values.opensAt}
+        error={errors.opensAt}
+        required
+        hint="Appears on the homepage from here."
+      />
+      <AdminField
+        label="closes"
+        name="closesAt"
+        type="datetime-local"
+        value={values.closesAt}
+        error={errors.closesAt}
+        required
+        hint="Voting stops here."
+      />
+      <AdminField
+        label="keep on homepage"
+        name="showOnHomeDays"
+        type="number"
+        min={0}
+        max={365}
+        value={values.showOnHomeDays}
+        error={errors.showOnHomeDays}
+        required
+        hint="Days to keep showing it after it closes. 0 hides it on close."
+      />
+    </div>
+    <p class="text-xs text-ink-faint">
+      UK times (GMT/BST), shown on the site as entered.
+    </p>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>show results</legend>
+    {
+      errors.resultsVisibility && (
+        <p class="text-xs text-danger">{errors.resultsVisibility}</p>
+      )
+    }
+    <div class="grid gap-2 sm:grid-cols-2">
+      {
+        visibilities.map((v) => (
+          <label class={choice}>
+            <input
+              type="radio"
+              name="resultsVisibility"
+              value={v.value}
+              checked={visibility === v.value}
+              class={control}
+            />
+            <span>
+              {v.label}
+              <span class="block text-xs text-ink-faint">{v.hint}</span>
+            </span>
+          </label>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>voters</legend>
+    <div class="grid gap-2 sm:grid-cols-2">
+      {
+        voterModes.map((v) => (
+          <label class={choice}>
+            <input
+              type="radio"
+              name="voters"
+              value={v.value}
+              checked={voters === v.value}
+              class={control}
+            />
+            <span>
+              {v.label}
+              <span class="block text-xs text-ink-faint">{v.hint}</span>
+            </span>
+          </label>
+        ))
+      }
+    </div>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>voting bonus</legend>
+    <div class="grid gap-5 sm:grid-cols-2">
+      <AdminField
+        label="bonus points"
+        name="voteBonusPoints"
+        type="number"
+        min={0}
+        max={100}
+        value={values.voteBonusPoints}
+        error={errors.voteBonusPoints}
+        required
+        hint="Each voter earns this once. 0 turns it off. Withdrawn votes lose it."
+      />
+      <div class="space-y-1.5">
+        <label for="field-bonusTaskId" class={labelClass}>counts in week</label>
+        <select
+          id="field-bonusTaskId"
+          name="bonusTaskId"
+          aria-describedby="field-bonusTaskId-hint"
+          aria-invalid={errors.bonusTaskId ? "true" : undefined}
+          class={inputClass(Boolean(errors.bonusTaskId))}
+        >
+          <option value="" selected={!values.bonusTaskId}>
+            auto{autoWeekLabel ? ` (${autoWeekLabel})` : ""}
+          </option>
+          {
+            weeks.map((w) => (
+              <option value={w.id} selected={values.bonusTaskId === w.id}>
+                {w.label}
+              </option>
+            ))
+          }
+        </select>
+        <p id="field-bonusTaskId-hint" class="text-xs text-ink-faint">
+          Auto picks the week live when the poll opens. It's where the points
+          show in the bonus ledger.
+        </p>
+        {
+          errors.bonusTaskId && (
+            <p class="text-xs text-danger">{errors.bonusTaskId}</p>
+          )
+        }
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="space-y-3">
+    <legend class={labelClass}>rules</legend>
+    <div class="grid gap-2 sm:grid-cols-2">
+      <label class={choice}>
+        <input
+          type="checkbox"
+          name="allowVoteChange"
+          checked={values.allowVoteChange === "on"}
+          class={control}
+        />
+        <span>
+          players can change their vote
+          <span class="block text-xs text-ink-faint">
+            until the poll closes; otherwise the first vote is final
+          </span>
+        </span>
+      </label>
+      <label class={choice}>
+        <input
+          type="checkbox"
+          name="published"
+          checked={values.published === "on"}
+          class={control}
+        />
+        <span>
+          published
+          <span class="block text-xs text-ink-faint">
+            untick to keep it as a hidden draft
+          </span>
+        </span>
+      </label>
+    </div>
+  </fieldset>
+
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" name="intent" value="save" class={btnPrimary}>
+      {isCreate ? "create poll" : "save changes"}
+    </button>
+    <a href={withBase("/admin/site")} class={btnGhost}>cancel</a>
+  </div>
+</form>
+{isCreate && <SlugFromName />}

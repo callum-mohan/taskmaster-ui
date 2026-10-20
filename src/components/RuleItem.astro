@@ -1,0 +1,24 @@
+---
+// A terminal-style bullet (`>`) for the rules lists. Use inside a `<ul>`.
+interface Props {
+  accent?: "acid" | "cyan" | "amber" | "magenta" | "danger";
+  class?: string;
+}
+
+const { accent = "cyan", class: className = "" } = Astro.props;
+
+const markerClass: Record<NonNullable<Props["accent"]>, string> = {
+  acid: "text-acid",
+  cyan: "text-cyan",
+  amber: "text-amber",
+  magenta: "text-magenta",
+  danger: "text-danger",
+};
+---
+
+<li class:list={["flex gap-3", className]}>
+  <span class:list={["shrink-0", markerClass[accent]]} aria-hidden="true"
+    >&gt;</span
+  >
+  <span><slot /></span>
+</li>

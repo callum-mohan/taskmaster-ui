@@ -11,13 +11,31 @@
     "preview": "astro preview",
     "astro": "astro",
     "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:check": "node --env-file=.env.local scripts/db-check.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:migrate:http": "node --env-file=.env.local scripts/db-migrate-http.mjs",
+    "db:seed": "tsx --env-file=.env.local db/seed.ts",
+    "db:studio": "drizzle-kit studio",
+    "admin:create": "node scripts/create-admin.mjs",
+    "players:accounts": "node scripts/create-player-accounts.mjs",
+    "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.4",
+    "@astrojs/cloudflare": "^14.3.4",
+    "@neondatabase/auth": "^0.6.0-beta",
+    "@neondatabase/serverless": "^1.2.0",
     "@tailwindcss/vite": "^4.3.3",
     "astro": "^7.3.5",
+    "aws4fetch": "^1.0.20",
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1",
     "tailwindcss": "^4.3.3"
   },
   "allowScripts": {
@@ -25,8 +43,20 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@eslint/js": "^10.0.0",
+    "@types/pg": "^8.23.1",
+    "@vitest/coverage-v8": "^5.0.5",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^10.13.0",
+    "eslint-plugin-astro": "^3.2.1",
+    "eslint-plugin-jsx-a11y-x": "^0.2.0",
+    "globals": "^17.13.0",
     "prettier": "^3.9.9",
     "prettier-plugin-astro": "^0.14.1",
-    "typescript": "^6.0.3"
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.151.0"
   }
 }

@@ -1,0 +1,85 @@
+---
+import type { PollResults } from "../types";
+
+interface Props {
+  results: PollResults;
+  /** Option ids the viewer picked, marked "your pick". */
+  myChoices?: number[];
+  /** Mark the leading option(s) as the winner (closed polls). */
+  final?: boolean;
+  class?: string;
+}
+
+const {
+  results,
+  myChoices = [],
+  final = false,
+  class: className,
+} = Astro.props;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const tied = results.options.filter((o) => o.leading).length > 1;
+---
+
+<div class:list={["space-y-3", className]}>
+  <ul class="space-y-3">
+    {
+      results.options.map((row) => {
+        const mine = myChoices.includes(row.option.id);
+        const winner = final && row.leading;
+        return (
+          <li>
+            <div class="flex items-baseline justify-between gap-3 text-sm">
+              <span
+                class:list={[
+                  "min-w-0 break-words",
+                  winner ? "font-bold text-acid" : "text-ink",
+                ]}
+              >
+                {row.option.label}
+                {winner && (
+                  <span class="ml-2 text-[10px] font-bold tracking-widest text-acid">
+                    {tied ? "TIED" : "WINNER"}
+                  </span>
+                )}
+                {mine && (
+                  <span class="ml-2 text-[10px] font-bold tracking-widest text-cyan">
+                    YOUR PICK
+                  </span>
+                )}
+              </span>
+              <span class="shrink-0 tabular-nums text-xs text-ink-dim">
+                {plural(row.votes, "vote")} ·{" "}
+                <span class="text-ink">{row.percent}%</span>
+              </span>
+            </div>
+            <span
+              class="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-term-bg"
+              aria-hidden="true"
+            >
+              <span
+                class:list={[
+                  "block h-full rounded-full",
+                  winner ? "bg-acid" : mine ? "bg-cyan" : "bg-ink-faint",
+                ]}
+                style={`width: ${row.percent}%`}
+              />
+            </span>
+            {row.voters && row.voters.length > 0 && (
+              <p class="mt-1 text-[11px] text-ink-faint">
+                <span class="text-cyan" aria-hidden="true">
+                  &gt;{" "}
+                </span>
+                {row.voters.map((p) => p.name).join(", ")}
+              </p>
+            )}
+          </li>
+        );
+      })
+    }
+  </ul>
+  <p class="text-[11px] text-ink-faint">
+    <span class="text-acid" aria-hidden="true">$</span>{" "}
+    {plural(results.voterCount, "player")} of {results.eligibleCount} voted
+  </p>
+</div>

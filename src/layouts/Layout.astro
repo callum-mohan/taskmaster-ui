@@ -5,8 +5,18 @@ import Footer from "../components/Footer.astro";
 import CommandPalette from "../components/CommandPalette.astro";
 import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
-import { getCommandPaletteItems, getWhatsNew } from "../data/queries";
 import { withBase } from "../lib/url";
+import { isSeasonPublic } from "../data/seasons";
+
+const [
+  { getCommandPaletteItems, getWhatsNew, getNotifications },
+  viewer,
+  { seasons },
+] = await Promise.all([
+  Astro.locals.getQueries(),
+  Astro.locals.getViewer(),
+  Astro.locals.getSeasons(),
+]);
 
 interface Props {
   /** Page-specific title segment; the site name is appended automatically. */
@@ -14,6 +24,8 @@ interface Props {
   description?: string;
   /** Social share image, relative to the site root. */
   image?: string;
+  /** Keep the page out of search engines (e.g. the admin panel). */
+  noindex?: boolean;
 }
 
 const SITE_NAME = "EAYL Taskmaster";
@@ -22,6 +34,7 @@ const {
   title,
   description = "16 weeks. 25 players. One winner. The EAYL Academy Taskmaster challenge.",
   image = "/og.png",
+  noindex = false,
 } = Astro.props;
 
 // Page-specific titles read "<page> · EAYL Taskmaster"; the home page (no
@@ -32,8 +45,18 @@ const fullTitle = title ? `${title} · ${SITE_NAME}` : SITE_NAME;
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
 const socialImage = new URL(withBase(image), Astro.site);
 
-const paletteItems = getCommandPaletteItems();
+const paletteItems = getCommandPaletteItems({
+  admin: viewer?.isAdmin,
+  seasons: viewer?.isAdmin ? seasons : seasons.filter(isSeasonPublic),
+});
 const whatsNew = getWhatsNew();
+// Only players get notifications: their read marker lives on the account.
+const notifications = viewer?.playerId
+  ? getNotifications({
+      playerId: viewer.playerId,
+      readAt: viewer.notificationsReadAt,
+    })
+  : undefined;
 ---
 
 <!doctype html>
@@ -47,12 +70,12 @@ const whatsNew = getWhatsNew();
       // phosphor themes (amber/cyan/magenta) are summoned from the command
       // palette but persist here like any other.
       (function () {
-        var valid = ["dark", "light", "amber", "cyan", "magenta"];
+        const valid = ["dark", "light", "amber", "cyan", "magenta"];
         try {
-          var saved = localStorage.getItem("eayl-theme");
-          var theme = valid.indexOf(saved) >= 0 ? saved : "dark";
+          const saved = localStorage.getItem("eayl-theme");
+          const theme = valid.indexOf(saved) >= 0 ? saved : "dark";
           document.documentElement.setAttribute("data-theme", theme);
-        } catch (e) {
+        } catch {
           document.documentElement.setAttribute("data-theme", "dark");
         }
       })();
@@ -60,6 +83,7 @@ const whatsNew = getWhatsNew();
     <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
     <meta name="generator" content={Astro.generator} />
     <meta name="description" content={description} />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <meta name="theme-color" content="#080b10" />
     <link rel="canonical" href={canonicalURL} />
 
@@ -93,7 +117,7 @@ const whatsNew = getWhatsNew();
       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[70] focus:bg-acid focus:text-term-bg focus:px-3 focus:py-1 focus:font-bold"
       >Skip to content</a
     >
-    <Navbar />
+    <Navbar viewer={viewer} notifications={notifications} />
     <WhatsNewBanner info={whatsNew} />
     <main id="main" class="flex-1">
       <slot />

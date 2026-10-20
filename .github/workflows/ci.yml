@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   build:
-    name: Format, test & build
+    name: Format, lint, test & build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,9 +31,25 @@ jobs:
       - name: Check formatting
         run: npm run format:check
 
+      - name: Lint
+        run: npm run lint
+
       - name: Type-check (astro check)
         run: npm run check
 
+      - name: Unit tests (with coverage)
+        run: npm run test:coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
+
+      # Pages render on request (Cloudflare Workers), so the build needs no
+      # database access or secrets.
       - name: Build
         run: npm run build
 

@@ -1,0 +1,366 @@
+---
+import Notice from "./admin/Notice.astro";
+import SubmissionEntryCard from "./SubmissionEntryCard.astro";
+import type {
+  SubmissionBlockReason,
+  SubmissionOutcome,
+  SubmissionPanel,
+} from "../types";
+import {
+  MAX_CAPTION_LENGTH,
+  MAX_PHOTO_BYTES,
+  MAX_TEXT_LENGTH,
+  PHOTO_ACCEPT,
+} from "../lib/submission-forms";
+import { withBase } from "../lib/url";
+
+interface Props {
+  taskId: string;
+  panel: SubmissionPanel;
+  /** Outcome of the viewer's last submission action, if any. */
+  outcome?: SubmissionOutcome;
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  class?: string;
+}
+
+const { taskId, panel, outcome, formatStamp, class: className } = Astro.props;
+const { settings, owner, entries, remaining, canSubmit, canDelete, blockedBy } =
+  panel;
+
+const action = withBase(`/account/submissions/${taskId}`);
+const signInHref = withBase(
+  `/login?next=${encodeURIComponent(`/account/submissions/${taskId}`)}`,
+);
+const maxMb = Math.round(MAX_PHOTO_BYTES / (1024 * 1024));
+const isTeam = owner?.type === "team";
+
+const outcomes: Record<
+  SubmissionOutcome,
+  { tone: "success" | "error"; message: string }
+> = {
+  submitted: { tone: "success", message: "Entry received. Good luck." },
+  deleted: {
+    tone: "success",
+    message: "Entry withdrawn. The slot is free again.",
+  },
+  closed: { tone: "error", message: "Entries for this task are closed." },
+  full: { tone: "error", message: "Every entry slot is already used." },
+  kind: {
+    tone: "error",
+    message: "This task doesn't take that kind of entry.",
+  },
+  invalid: {
+    tone: "error",
+    message: "That entry was empty or too long. Try again.",
+  },
+  "too-large": {
+    tone: "error",
+    message: `Photos must be ${maxMb} MB or smaller.`,
+  },
+  "bad-type": {
+    tone: "error",
+    message:
+      "That file isn't a supported photo. Use JPEG, PNG, WebP, GIF or AVIF.",
+  },
+  heic: {
+    tone: "error",
+    message:
+      "HEIC photos can't be shown in most browsers. Export it as JPEG (on iPhone: Settings → Camera → Formats → Most Compatible) and try again.",
+  },
+  "upload-failed": {
+    tone: "error",
+    message: "The upload didn't go through. Please try again.",
+  },
+};
+const notice = outcome ? outcomes[outcome] : undefined;
+
+const blocked: Partial<Record<SubmissionBlockReason, string>> = {
+  closed: "This task doesn't take entries on the site.",
+  encrypted: "Decrypt the brief to submit an entry.",
+  "no-player":
+    "Your account isn't linked to a player profile, so you can't submit.",
+  "no-team": "This is a team task and you're not in a squad yet.",
+  full: canDelete
+    ? "All your entry slots are used. Withdraw one to submit something else."
+    : "All your entry slots are used.",
+};
+
+const kindLabel = settings.kinds.join(" or ");
+const slotsLabel = `${settings.max} ${settings.max === 1 ? "entry" : "entries"} per ${isTeam ? "squad" : "player"}`;
+
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-4 py-2 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg disabled:cursor-wait disabled:opacity-60";
+const btnDanger =
+  "rounded border border-danger/50 px-2 py-0.5 text-[10px] font-bold tracking-widest text-danger transition-colors hover:bg-danger hover:text-term-bg";
+const label =
+  "block text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase";
+const field =
+  "mt-2 w-full rounded-md border border-grid bg-term-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-acid focus:outline-none";
+---
+
+<div class:list={["space-y-4", className]}>
+  <p class="text-sm text-ink-dim">
+    <span class="text-acid">$</span> submit --{kindLabel.replace(" or ", "|")}
+    <span class="text-ink-faint">&nbsp;· {slotsLabel}</span>
+    {
+      owner && (
+        <span class="text-ink-faint">
+          &nbsp;· {remaining} of {settings.max} left
+          {isTeam && (
+            <>
+              {" "}
+              for{" "}
+              <a href={owner.href} class="text-magenta hover:underline">
+                {owner.name}
+              </a>
+            </>
+          )}
+        </span>
+      )
+    }
+  </p>
+
+  {notice && <Notice tone={notice.tone}>{notice.message}</Notice>}
+
+  {
+    blockedBy === "guest" && (
+      <p class="rounded-md border border-grid bg-term-bg/60 px-4 py-3 text-sm text-ink-dim">
+        <a href={signInHref} class="font-bold text-acid hover:underline">
+          Sign in
+        </a>{" "}
+        with your player account to submit an entry.
+      </p>
+    )
+  }
+  {
+    blockedBy && blocked[blockedBy] && (
+      <p class="rounded-md border border-grid bg-term-bg/60 px-4 py-3 text-sm text-ink-dim">
+        <span class="text-amber">!</span> {blocked[blockedBy]}
+      </p>
+    )
+  }
+
+  {
+    entries.length > 0 && (
+      <div>
+        <h3 class={label}>
+          {isTeam ? "your squad's entries" : "your entries"} ({entries.length})
+        </h3>
+        <p class="mt-1 text-[11px] text-ink-faint">
+          Only {isTeam ? "your squad" : "you"} and the Taskmaster can see these
+          until the deadline.
+        </p>
+        <ul class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {entries.map((entry) => (
+            <li class="min-w-0">
+              <SubmissionEntryCard
+                entry={entry}
+                formatStamp={formatStamp}
+                showSubmitter={isTeam}
+                class="h-full"
+              >
+                {canDelete && (
+                  <form
+                    slot="actions"
+                    method="post"
+                    action={action}
+                    class="ml-auto"
+                    data-confirm="Withdraw this entry? It can't be undone."
+                  >
+                    <input type="hidden" name="intent" value="delete" />
+                    <input type="hidden" name="submissionId" value={entry.id} />
+                    <button type="submit" class={btnDanger}>
+                      WITHDRAW
+                      <span class="sr-only">{entry.kind} entry</span>
+                    </button>
+                  </form>
+                )}
+              </SubmissionEntryCard>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  {
+    canSubmit && (
+      <div
+        class:list={[
+          "grid gap-4",
+          settings.kinds.length > 1 && "lg:grid-cols-2",
+        ]}
+      >
+        {settings.kinds.includes("photo") && (
+          <form
+            method="post"
+            action={action}
+            enctype="multipart/form-data"
+            class="rounded-lg border border-grid bg-term-bg/60 p-4"
+            data-photo-form
+            data-max-bytes={MAX_PHOTO_BYTES}
+          >
+            <input type="hidden" name="intent" value="create-photo" />
+            <label for={`photo-${taskId}`} class={label}>
+              photo (JPEG, PNG, WebP, GIF or AVIF · max {maxMb} MB)
+            </label>
+            <input
+              id={`photo-${taskId}`}
+              name="photo"
+              type="file"
+              accept={PHOTO_ACCEPT}
+              required
+              aria-describedby={`photo-status-${taskId}`}
+              class="mt-2 block w-full text-sm text-ink-dim file:mr-3 file:rounded file:border file:border-grid file:bg-term-panel file:px-3 file:py-1.5 file:text-xs file:font-bold file:tracking-widest file:text-ink hover:file:border-acid"
+            />
+            <img
+              alt="Preview of the selected file"
+              class="mt-3 hidden max-h-56 rounded border border-grid object-contain"
+              data-photo-preview
+            />
+            <label for={`caption-${taskId}`} class:list={[label, "mt-4"]}>
+              caption (optional)
+            </label>
+            <input
+              id={`caption-${taskId}`}
+              name="caption"
+              type="text"
+              maxlength={MAX_CAPTION_LENGTH}
+              class={field}
+              placeholder="say something about it"
+            />
+            <p
+              id={`photo-status-${taskId}`}
+              class="mt-3 min-h-4 text-[11px] text-ink-faint"
+              aria-live="polite"
+              data-photo-status
+            />
+            <button type="submit" class:list={[btnPrimary, "mt-2"]}>
+              [ UPLOAD PHOTO ]
+            </button>
+          </form>
+        )}
+        {settings.kinds.includes("text") && (
+          <form
+            method="post"
+            action={action}
+            class="rounded-lg border border-grid bg-term-bg/60 p-4"
+          >
+            <input type="hidden" name="intent" value="create-text" />
+            <label for={`text-${taskId}`} class={label}>
+              text entry (max {MAX_TEXT_LENGTH} characters)
+            </label>
+            <textarea
+              id={`text-${taskId}`}
+              name="text"
+              required
+              rows={6}
+              maxlength={MAX_TEXT_LENGTH}
+              class={field}
+              placeholder="> type your entry"
+            />
+            <button type="submit" class:list={[btnPrimary, "mt-3"]}>
+              [ SUBMIT TEXT ]
+            </button>
+          </form>
+        )}
+      </div>
+    )
+  }
+</div>
+
+<script>
+  import {
+    formatBytes,
+    optimizePhoto,
+    setInputFile,
+  } from "../lib/photo-optimize";
+
+  // Progressive enhancement: shrink the chosen photo to WebP in the browser,
+  // preview it, catch oversized files before uploading, show a busy state
+  // while it uploads, and confirm withdrawals. The forms work without any of
+  // this.
+  document
+    .querySelectorAll<HTMLFormElement>("form[data-photo-form]")
+    .forEach((form) => {
+      const input = form.querySelector<HTMLInputElement>('input[type="file"]');
+      const preview = form.querySelector<HTMLImageElement>(
+        "[data-photo-preview]",
+      );
+      const status = form.querySelector<HTMLElement>("[data-photo-status]");
+      const button = form.querySelector<HTMLButtonElement>(
+        'button[type="submit"]',
+      );
+      const maxBytes = Number(form.dataset.maxBytes);
+      if (!input || !preview || !status || !button) return;
+      const buttonLabel = button.textContent;
+      let previewUrl: string | undefined;
+      // Ignores a slow optimisation once a newer file has been picked.
+      let selection = 0;
+
+      preview.addEventListener("error", () => preview.classList.add("hidden"));
+
+      input.addEventListener("change", async () => {
+        const current = ++selection;
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = undefined;
+        preview.classList.add("hidden");
+        input.setCustomValidity("");
+        status.textContent = "";
+        button.disabled = false;
+        button.textContent = buttonLabel;
+        const original = input.files?.[0];
+        if (!original) return;
+
+        button.disabled = true;
+        button.textContent = "[ OPTIMISING… ]";
+        status.textContent = `Optimising ${original.name}…`;
+        const optimized = await optimizePhoto(original);
+        if (current !== selection) return;
+        const file =
+          optimized !== original && setInputFile(input, optimized)
+            ? optimized
+            : original;
+        button.disabled = false;
+        button.textContent = buttonLabel;
+
+        if (file.size > maxBytes) {
+          const mb = Math.round(maxBytes / (1024 * 1024));
+          input.setCustomValidity(`Photos must be ${mb} MB or smaller.`);
+          status.textContent = `✗ That photo is over ${mb} MB.`;
+          input.reportValidity();
+          return;
+        }
+        status.textContent =
+          file === original
+            ? `${file.name} · ${formatBytes(file.size)}`
+            : `${original.name} · ${formatBytes(original.size)} → ${formatBytes(file.size)} ${file.type === "image/webp" ? "WebP" : "JPEG"}`;
+        if (file.type.startsWith("image/")) {
+          previewUrl = URL.createObjectURL(file);
+          preview.src = previewUrl;
+          preview.classList.remove("hidden");
+        }
+      });
+
+      form.addEventListener("submit", (event) => {
+        if (button.disabled) {
+          event.preventDefault();
+          return;
+        }
+        button.disabled = true;
+        button.textContent = "[ UPLOADING… ]";
+        status.textContent = "Uploading. Keep this page open.";
+      });
+    });
+
+  document
+    .querySelectorAll<HTMLFormElement>("form[data-confirm]")
+    .forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (!window.confirm(form.dataset.confirm ?? "Are you sure?")) {
+          event.preventDefault();
+        }
+      });
+    });
+</script>

@@ -1,10 +1,6 @@
-import type { APIRoute, GetStaticPaths } from "astro";
-import { tasks, getTaskById } from "../../data/tasks";
+import type { APIRoute } from "astro";
+import { recordScope } from "../../lib/season-scope";
 import { withBase } from "../../lib/url";
-
-export const getStaticPaths = (() => {
-  return tasks.map((task) => ({ params: { id: task.id } }));
-}) satisfies GetStaticPaths;
 
 // Escape per RFC 5545 text rules (backslash, comma, semicolon, newlines).
 const escapeICS = (value: string) =>
@@ -14,9 +10,8 @@ const escapeICS = (value: string) =>
     .replace(/,/g, "\\,")
     .replace(/\r?\n/g, "\\n");
 
-// "2026-10-09T15:00:00" → "20261009T150000" (floating local time).
-const toICSLocal = (iso: string) => iso.replace(/[-:]/g, "").slice(0, 15);
-
+// UTC form ("20261009T140000Z"), so calendars place the deadline at the
+// right UK time (GMT or BST) wherever the subscriber is.
 const toICSStamp = (date: Date) =>
   date
     .toISOString()
@@ -39,8 +34,10 @@ const foldLine = (line: string) => {
   return chunks.join("\r\n");
 };
 
-export const GET: APIRoute = ({ params, site }) => {
-  const task = getTaskById(params.id!);
+export const GET: APIRoute = async ({ params, site, locals }) => {
+  const isAdmin = (await locals.getViewer())?.isAdmin ?? false;
+  const scope = await recordScope(locals, "task", params.id, { isAdmin });
+  const task = scope?.queries.getTaskById(params.id!);
   if (!task) {
     return new Response("Not found", { status: 404 });
   }
@@ -72,7 +69,7 @@ export const GET: APIRoute = ({ params, site }) => {
     "BEGIN:VEVENT",
     `UID:${task.id}-deadline@eayl-taskmaster`,
     `DTSTAMP:${toICSStamp(new Date())}`,
-    `DTSTART:${toICSLocal(task.deadline)}`,
+    `DTSTART:${toICSStamp(new Date(task.deadline))}`,
     `DURATION:PT30M`,
     `SUMMARY:${escapeICS(summary)}`,
     `DESCRIPTION:${escapeICS(description)}`,

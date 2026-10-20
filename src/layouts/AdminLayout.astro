@@ -1,0 +1,167 @@
+---
+// The admin panel's chrome: the regular site layout (navbar, footer, command
+// palette) with an admin sub-nav bar on top of the page content.
+import Layout from "./Layout.astro";
+import Notice from "../components/admin/Notice.astro";
+import SeasonStatusBadge from "../components/SeasonStatusBadge.astro";
+import {
+  ADMIN_HOME,
+  ADMIN_SEASONS,
+  ADMIN_SECTIONS,
+  isAdminSectionActive,
+} from "../lib/admin-nav";
+import {
+  adminSeasonOf,
+  CLOSED_PARAM,
+  isSeasonScopedRoute,
+  SEASON_PARAM,
+} from "../lib/admin-season";
+import { withBase, withoutBase } from "../lib/url";
+import { inputClass } from "../components/admin/styles";
+
+interface Props {
+  /** Page-specific title segment. */
+  title: string;
+}
+
+const { title } = Astro.props;
+const { pathname } = Astro.url;
+
+const tabs: { href: string; label: string; match?: string[] }[] = [
+  { href: ADMIN_HOME, label: "dashboard" },
+  ...ADMIN_SECTIONS,
+];
+
+// Screens about a season say which one, and whole-season screens (weeks
+// list, roster, new forms) can switch to another without JS.
+const seasons = await Astro.locals.getSeasons();
+const season = adminSeasonOf(
+  Astro.routePattern,
+  Astro.params,
+  Astro.url,
+  seasons,
+);
+const canSwitch =
+  isSeasonScopedRoute(Astro.routePattern) && seasons.seasons.length > 1;
+const refused = Astro.url.searchParams.has(CLOSED_PARAM);
+---
+
+<Layout title={`${title} · admin`} noindex>
+  <div class="border-b border-grid bg-term-panel/60">
+    <div class="mx-auto flex max-w-6xl items-center gap-4 px-4 py-2 sm:px-6">
+      <a
+        href={withBase(ADMIN_HOME)}
+        class="hidden shrink-0 text-xs font-bold text-ink sm:inline"
+      >
+        <span class="text-magenta">root@</span>taskmaster<span
+          class="text-ink-faint">:~/admin</span
+        >
+      </a>
+      <nav aria-label="Admin" class="-mx-1 min-w-0 flex-1 overflow-x-auto">
+        <ul class="flex gap-1 whitespace-nowrap px-1 text-xs">
+          {
+            tabs.map((tab) => {
+              const active = isAdminSectionActive(
+                withoutBase(pathname),
+                tab.href,
+                tab.match,
+              );
+              return (
+                <li>
+                  <a
+                    href={withBase(tab.href)}
+                    aria-current={active ? "page" : undefined}
+                    class:list={[
+                      "block rounded-md px-2.5 py-1.5 transition-colors",
+                      active
+                        ? "bg-acid/10 text-acid"
+                        : "text-ink-dim hover:text-ink",
+                    ]}
+                  >
+                    {tab.label}
+                  </a>
+                </li>
+              );
+            })
+          }
+        </ul>
+      </nav>
+    </div>
+  </div>
+  <div class="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+    {
+      season && (
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-grid bg-term-panel px-3 py-2 text-xs">
+          <p class="flex flex-wrap items-center gap-2 text-ink-dim">
+            <span class="font-bold uppercase tracking-[0.2em] text-ink-faint">
+              season
+            </span>
+            <span class="font-bold text-ink">{season.name}</span>
+            {season.isCurrent && (
+              <span class="text-[10px] font-bold tracking-[0.2em] text-cyan">
+                CURRENT
+              </span>
+            )}
+            <SeasonStatusBadge status={season.status} />
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            {canSwitch && (
+              <form method="get" class="flex items-center gap-2">
+                <label for="admin-season" class="sr-only">
+                  Switch season
+                </label>
+                <select
+                  id="admin-season"
+                  name={SEASON_PARAM}
+                  class:list={[inputClass(false), "w-auto py-1 text-xs"]}
+                >
+                  {seasons.seasons.map((option) => (
+                    <option
+                      value={option.id}
+                      selected={option.id === season.id}
+                    >
+                      {option.name}
+                      {option.isCurrent ? " (current)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  class="rounded-md border border-grid px-2 py-1 font-bold tracking-widest text-ink-dim transition-colors hover:border-ink-faint hover:text-ink"
+                >
+                  switch
+                </button>
+              </form>
+            )}
+            <a href={withBase(ADMIN_SEASONS)} class="text-cyan hover:underline">
+              manage seasons
+            </a>
+          </div>
+        </div>
+      )
+    }
+    {
+      season?.status === "closed" &&
+        (refused ? (
+          <Notice tone="error" class="mb-6">
+            Not saved: {season.name} is closed, so its weeks, roster and scores
+            are read-only. Reopen it under{" "}
+            <a href={withBase(ADMIN_SEASONS)} class="underline">
+              manage seasons
+            </a>{" "}
+            to make changes.
+          </Notice>
+        ) : (
+          <p class="mb-6 rounded-md border border-amber/50 bg-amber/10 px-4 py-3 text-sm text-amber">
+            <span class="font-bold">[read-only]</span> {season.name} is closed
+            and its champion crowned. Reopen it under{" "}
+            <a href={withBase(ADMIN_SEASONS)} class="underline">
+              manage seasons
+            </a>{" "}
+            to change anything.
+          </p>
+        ))
+    }
+    <slot />
+  </div>
+</Layout>

@@ -1,0 +1,131 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import SlugFromName from "./SlugFromName.astro";
+import { btnGhost, btnPrimary, labelClass } from "./styles";
+import {
+  FEATURE_CATEGORIES,
+  type FieldErrors,
+  type FormValues,
+} from "../../lib/admin-forms";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  mode: "create" | "edit";
+  values: FormValues;
+  errors?: FieldErrors;
+  formError?: string;
+}
+
+const { mode, values, errors = {}, formError } = Astro.props;
+const isCreate = mode === "create";
+const categoryHint: Record<(typeof FEATURE_CATEGORIES)[number], string> = {
+  new: "a brand-new feature",
+  improved: "a better existing feature",
+  fixed: "a bug fix",
+};
+---
+
+<form method="post" class="space-y-5" data-slug-form>
+  <input type="hidden" name="intent" value="save" />
+  {formError && <Notice tone="error">{formError}</Notice>}
+  <div class="grid gap-5 sm:grid-cols-2">
+    <AdminField
+      label="title"
+      name="title"
+      value={values.title}
+      error={errors.title}
+      required
+      attrs={{ "data-slug-source": "" }}
+    />
+    <AdminField
+      label="id"
+      name="id"
+      value={values.id}
+      error={errors.id}
+      readonly={!isCreate}
+      required
+      hint={isCreate
+        ? "Marks the entry as seen in visitors' browsers. Can't be changed later."
+        : "Can't be changed: visitors' browsers remember it."}
+      attrs={isCreate ? { "data-slug-target": "" } : {}}
+    />
+  </div>
+  <AdminField
+    label="description"
+    name="description"
+    rows={4}
+    value={values.description}
+    error={errors.description}
+    required
+    hint="One or two sentences, written for players."
+  />
+  <div class="grid gap-5 sm:grid-cols-2">
+    <div class="space-y-1.5">
+      <label for="field-date" class={labelClass}>
+        date <span class="text-acid" aria-hidden="true">*</span>
+      </label>
+      <input
+        id="field-date"
+        type="date"
+        name="date"
+        required
+        value={values.date ?? ""}
+        aria-invalid={errors.date ? "true" : undefined}
+        aria-describedby={errors.date ? "field-date-error" : undefined}
+        class:list={[
+          "w-full rounded-md border bg-term-bg px-3 py-2 text-sm text-ink transition-colors focus:border-acid",
+          errors.date ? "border-danger" : "border-grid",
+        ]}
+      />
+      {
+        errors.date && (
+          <p id="field-date-error" class="text-xs text-danger">
+            <span aria-hidden="true">✗ </span>
+            {errors.date}
+          </p>
+        )
+      }
+    </div>
+    <fieldset>
+      <legend class={labelClass}>
+        category <span class="text-acid" aria-hidden="true">*</span>
+      </legend>
+      <div class="mt-1.5 flex flex-wrap gap-2">
+        {
+          FEATURE_CATEGORIES.map((category) => (
+            <label
+              class="flex cursor-pointer items-center gap-2 rounded-md border border-grid px-3 py-2 text-sm transition-colors hover:border-ink-faint has-[:checked]:border-acid-dim has-[:checked]:bg-acid/5"
+              title={categoryHint[category]}
+            >
+              <input
+                type="radio"
+                name="category"
+                value={category}
+                required
+                checked={values.category === category}
+                class="h-4 w-4 accent-[var(--color-acid)]"
+              />
+              <span class="text-ink">{category}</span>
+            </label>
+          ))
+        }
+      </div>
+      {
+        errors.category && (
+          <p class="mt-1.5 text-xs text-danger">
+            <span aria-hidden="true">✗ </span>
+            {errors.category}
+          </p>
+        )
+      }
+    </fieldset>
+  </div>
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" class={btnPrimary}>
+      {isCreate ? "add entry" : "save changes"}
+    </button>
+    <a href={withBase("/admin/site#changelog")} class={btnGhost}>cancel</a>
+  </div>
+</form>
+{isCreate && <SlugFromName />}

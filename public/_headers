@@ -1,0 +1,20 @@
+# Cache rules for static files in `public/` (Cloudflare Workers Static
+# Assets). These names aren't content-hashed, so browsers keep them for a day
+# and revalidate in the background for a week rather than treating them as
+# immutable. Fingerprinted `/_astro/*` bundles get a year (added at build).
+# Paths are explicit so no rule overlaps `/_astro/*` (overlapping rules merge).
+
+/avatars/*
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/callum-pixel.webp
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/favicon.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/egg-cracked.svg
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800
+
+/og.png
+  Cache-Control: public, max-age=86400, stale-while-revalidate=604800

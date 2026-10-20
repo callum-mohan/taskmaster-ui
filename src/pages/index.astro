@@ -9,26 +9,70 @@ import ScoreBadge from "../components/ScoreBadge.astro";
 import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
 import WhatsNewModal from "../components/WhatsNewModal.astro";
-import { getCurrentTask } from "../data/tasks";
+import PollCard from "../components/PollCard.astro";
+import ChampionCard from "../components/ChampionCard.astro";
 import {
+  describeVoteOutcome,
+  VOTE_OUTCOMES,
+  type VoteOutcome,
+} from "../lib/account-forms";
+import type { PollViewer } from "../types";
+import { ukDateFormat } from "../lib/time";
+
+const {
+  season,
+  tasks,
+  players,
+  getCurrentTask,
   getTopPlayers,
   getRecentResults,
   getCompetitionStats,
   getRecentFeatures,
-} from "../data/queries";
+  getHomePolls,
+  getLiveTask,
+} = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
+// Between the last week and the next season: the closed season's honours.
+const champion =
+  season.status === "closed"
+    ? (await Astro.locals.getHallOfFame()).seasons.find(
+        (h) => h.season.id === season.id,
+      )
+    : undefined;
+const seasonState: Record<typeof season.status, string> = {
+  upcoming: "STARTING SOON",
+  running: "IN PROGRESS",
+  closed: "COMPLETE",
+};
+const liveTask = getLiveTask();
+const currentEncrypted = currentTask?.status === "live" && currentTask.locked;
 const topPlayers = getTopPlayers(5);
 const recentResults = getRecentResults(3);
 const stats = getCompetitionStats();
 const recentFeatures = getRecentFeatures();
 
-const dayFmt = new Intl.DateTimeFormat("en-GB", {
+const viewer = await Astro.locals.getViewer();
+const pollViewer: PollViewer = !viewer
+  ? { kind: "guest" }
+  : viewer.playerId
+    ? { kind: "player", playerId: viewer.playerId }
+    : { kind: "non-player" };
+const polls = getHomePolls(pollViewer);
+
+// The vote endpoint redirects back with `?poll=<id>&vote=<outcome>`.
+const votedPoll = Astro.url.searchParams.get("poll");
+const voteParam = Astro.url.searchParams.get("vote");
+const voteOutcome: VoteOutcome | undefined = VOTE_OUTCOMES.find(
+  (o) => o === voteParam,
+);
+
+const dayFmt = ukDateFormat({
   weekday: "short",
   day: "2-digit",
   month: "short",
 });
-const timeFmt = new Intl.DateTimeFormat("en-GB", {
+const timeFmt = ukDateFormat({
   hour: "2-digit",
   minute: "2-digit",
   hour12: false,
@@ -49,7 +93,33 @@ const btnGhost =
 ---
 
 <Layout>
-    <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    {
+      liveTask && (
+        <a
+          href={withBase("/live")}
+          class="group mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-amber/40 bg-amber/5 px-5 py-4 transition-colors hover:border-amber"
+        >
+          <span class="flex items-center gap-2 text-[11px] font-bold tracking-widest text-amber uppercase">
+            <span
+              class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+              aria-hidden="true"
+            />{" "}
+            on air
+          </span>
+          <span class="text-sm text-ink-dim">
+            Results night: {weekLabel(liveTask.weekNumber)} is being revealed
+            live.
+          </span>
+          <span
+            class="ml-auto text-xs font-bold tracking-widest text-amber uppercase group-hover:text-ink"
+            aria-hidden="true"
+          >
+            watch live &rarr;
+          </span>
+        </a>
+      )
+    }
     <!-- ============================ HERO ============================ -->
     <section class="relative">
       <div class="mb-6 max-w-xl">
@@ -63,17 +133,24 @@ const btnGhost =
             <span class="text-cyan">&gt;</span> initialising competition...
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> players loaded:
-            <span class="text-ink">25</span>
+            <span class="text-cyan">&gt;</span> season:{" "}
+            <span class="text-ink">{season.name}</span>
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> weeks scheduled:
-            <span class="text-ink">16</span>
+            <span class="text-cyan">&gt;</span> players loaded:{" "}
+            <span class="text-ink">{players.length}</span>
           </p>
           <p class="text-ink-faint">
-            <span class="text-cyan">&gt;</span> status:
-            <span class="text-amber">IN&nbsp;PROGRESS</span><span class="caret"
-            ></span>
+            <span class="text-cyan">&gt;</span> weeks scheduled:{" "}
+            <span class="text-ink">{tasks.length}</span>
+          </p>
+          <p class="text-ink-faint">
+            <span class="text-cyan">&gt;</span> status:{" "}
+            <span
+              class:list={[
+                season.status === "closed" ? "text-acid" : "text-amber",
+              ]}>{seasonState[season.status]}</span
+            ><span class="caret"></span>
           </p>
         </div>
       </div>
@@ -88,8 +165,14 @@ const btnGhost =
       <div
         class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xl font-bold sm:text-2xl"
       >
-        <span><span class="text-magenta">16</span> weeks.</span>
-        <span><span class="text-magenta">25</span> players.</span>
+        <span
+          ><span class="text-magenta">{tasks.length}</span>{" "}
+          {tasks.length === 1 ? "week" : "weeks"}.</span
+        >
+        <span
+          ><span class="text-magenta">{players.length}</span>{" "}
+          {players.length === 1 ? "player" : "players"}.</span
+        >
         <span><span class="text-magenta">One</span> winner.</span>
       </div>
 
@@ -101,7 +184,21 @@ const btnGhost =
       </p>
 
       <div class="mt-7 flex flex-wrap gap-3">
-        <a href="#current-task" class={btnPrimary}>&gt; VIEW CURRENT TASK</a>
+        {
+          currentTask ? (
+            <a href="#current-task" class={btnPrimary}>
+              &gt; VIEW CURRENT TASK
+            </a>
+          ) : champion ? (
+            <a href="#champion" class={btnPrimary}>
+              &gt; MEET THE CHAMPION
+            </a>
+          ) : (
+            <a href={withBase("/hall-of-fame")} class={btnPrimary}>
+              &gt; HALL OF FAME
+            </a>
+          )
+        }
         <a href={withBase("/leaderboard")} class={btnGhost}>LEADERBOARD</a>
         <button
           type="button"
@@ -131,22 +228,42 @@ const btnGhost =
             title={`~/tasks/${currentTask.id}.md`}
             meta={weekLabel(currentTask.weekNumber)}
           >
-            <div class="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+            <div class="grid grid-cols-1 gap-8 lg:grid-cols-[1.4fr_1fr]">
               <div>
                 <div class="flex items-center gap-3">
                   <span class="text-sm font-bold tracking-[0.3em] text-magenta">
                     {weekLabel(currentTask.weekNumber)}
                   </span>
-                  <TaskStatusBadge status={currentTask.status} />
+                  <TaskStatusBadge
+                    status={currentTask.status}
+                    locked={currentTask.locked}
+                  />
                 </div>
 
-                <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink text-glow sm:text-5xl">
-                  {currentTask.title}
-                </h3>
+                {currentEncrypted ? (
+                  <>
+                    <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink-faint sm:text-5xl">
+                      <span aria-hidden="true">▓▓▓▓▒▒░ ▓▓▒░</span>
+                      <span class="sr-only">Encrypted task</span>
+                    </h3>
+                    <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
+                      <span class="text-acid">$</span> cat brief.md &rarr;{" "}
+                      <span class="text-amber">encrypted</span>. The Taskmaster
+                      holds the key: grab the password and decrypt it on the
+                      task page.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 class="mt-3 text-3xl font-extrabold leading-tight text-ink text-glow sm:text-5xl">
+                      {currentTask.title}
+                    </h3>
 
-                <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
-                  {currentTask.description}
-                </p>
+                    <p class="mt-4 max-w-prose text-sm leading-relaxed text-ink-dim sm:text-base">
+                      {currentTask.description}
+                    </p>
+                  </>
+                )}
 
                 <dl class="mt-6 grid grid-cols-2 gap-4 text-sm">
                   <div class="rounded-md border border-grid bg-term-bg/50 p-3">
@@ -167,12 +284,22 @@ const btnGhost =
                   </div>
                 </dl>
 
-                <a
-                  href={withBase(`/tasks/${currentTask.id}`)}
-                  class={`${btnPrimary} mt-6`}
-                >
-                  [ VIEW TASK ]
-                </a>
+                <div class="mt-6 flex flex-wrap gap-3">
+                  <a
+                    href={withBase(`/tasks/${currentTask.id}`)}
+                    class={btnPrimary}
+                  >
+                    {currentEncrypted ? "[ DECRYPT TASK ]" : "[ VIEW TASK ]"}
+                  </a>
+                  {currentTask.status === "live" && (
+                    <a
+                      href={withBase(`/tasks/${currentTask.id}#predict`)}
+                      class={btnGhost}
+                    >
+                      CALL THE WINNER
+                    </a>
+                  )}
+                </div>
               </div>
 
               <div class="flex flex-col justify-center rounded-lg border border-grid bg-term-bg/40 p-5">
@@ -191,8 +318,93 @@ const btnGhost =
       )
     }
 
+    <!-- ===================== BETWEEN WEEKS / SEASONS ===================== -->
+    {
+      !currentTask && (
+        <section id="champion" class="mt-14 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            {champion ? "season --champion" : "season --status"}
+          </h2>
+          {champion ? (
+            <>
+              <ChampionCard honours={champion} />
+              <p class="mt-4 text-sm text-ink-dim">
+                <span class="text-acid">//</span> That's a wrap on {season.name}
+                . The next season is on its way: until then, relive every
+                champion in the{" "}
+                <a
+                  href={withBase("/hall-of-fame")}
+                  class="text-cyan hover:underline"
+                >
+                  Hall of Fame
+                </a>
+                .
+              </p>
+            </>
+          ) : (
+            <TerminalWindow title={`~/seasons/${season.id || "next"}.md`}>
+              <p class="text-sm text-ink-dim">
+                <span class="text-amber" aria-hidden="true">
+                  ●{" "}
+                </span>
+                {tasks.length === 0
+                  ? `${season.name} hasn't started yet: the first task is coming soon.`
+                  : `Every week of ${season.name} is done. The Taskmaster is tallying the final scores before crowning the champion.`}{" "}
+                <a
+                  href={withBase(
+                    tasks.length === 0 ? "/hall-of-fame" : "/leaderboard",
+                  )}
+                  class="text-cyan hover:underline"
+                >
+                  {tasks.length === 0
+                    ? "Past champions →"
+                    : "Final standings →"}
+                </a>
+              </p>
+            </TerminalWindow>
+          )}
+        </section>
+      )
+    }
+
+    <!-- =========================== POLLS =========================== -->
+    {
+      polls.length > 0 && (
+        <section
+          id="polls"
+          class="mt-14 scroll-mt-24"
+          aria-labelledby="polls-heading"
+        >
+          <h2
+            id="polls-heading"
+            class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            polls --open
+          </h2>
+          <div
+            class:list={[
+              "grid grid-cols-1 gap-6",
+              polls.length > 1 && "lg:grid-cols-2",
+            ]}
+          >
+            {polls.map((card) => (
+              <PollCard
+                card={card}
+                formatStamp={formatStamp}
+                notice={
+                  voteOutcome && votedPoll === card.poll.id
+                    ? describeVoteOutcome(voteOutcome, card.poll)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
     <!-- ============== LEADERBOARD + RECENT RESULTS ============== -->
-    <div class="mt-14 grid gap-8 lg:grid-cols-2">
+    <div class="mt-14 grid grid-cols-1 gap-8 lg:grid-cols-2">
       <!-- Current leaderboard -->
       <section>
         <div class="mb-4 flex items-end justify-between gap-4">

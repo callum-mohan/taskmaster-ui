@@ -1,8 +1,9 @@
 ---
 import Layout from "../layouts/Layout.astro";
 import LostGame from "../components/LostGame.astro";
-import { getLostArchive } from "../data/queries";
 import { withBase } from "../lib/url";
+
+const { getLostArchive } = await Astro.locals.getQueries();
 
 const archive = getLostArchive();
 

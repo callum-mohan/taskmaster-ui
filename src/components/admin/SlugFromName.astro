@@ -1,0 +1,30 @@
+---
+// Progressive enhancement for create forms: while the admin hasn't typed an
+// id themselves, suggest one from the name field. Without JS they just fill
+// the id in by hand.
+---
+
+<script>
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+
+  for (const form of document.querySelectorAll<HTMLFormElement>(
+    "form[data-slug-form]",
+  )) {
+    const source = form.querySelector<HTMLInputElement>("[data-slug-source]");
+    const target = form.querySelector<HTMLInputElement>("[data-slug-target]");
+    if (!source || !target) continue;
+    const prefix = target.dataset.slugPrefix ?? "";
+    let touched = target.value !== "";
+    target.addEventListener("input", () => (touched = target.value !== ""));
+    source.addEventListener("input", () => {
+      if (!touched) target.value = slugify(prefix + source.value);
+    });
+  }
+</script>

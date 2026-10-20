@@ -1,0 +1,191 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import StandingsTable from "../../components/StandingsTable.astro";
+import SeasonStatusBadge from "../../components/SeasonStatusBadge.astro";
+import ChampionCard from "../../components/ChampionCard.astro";
+import AwardCard from "../../components/AwardCard.astro";
+import TeamCard from "../../components/TeamCard.astro";
+import TaskCard from "../../components/TaskCard.astro";
+import BackLink from "../../components/BackLink.astro";
+import AdminEditLink from "../../components/AdminEditLink.astro";
+import { isSeasonPublic } from "../../data/seasons";
+import { ADMIN_SEASONS } from "../../lib/admin-nav";
+import { withBase } from "../../lib/url";
+import { ukDateFormat } from "../../lib/time";
+
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const season = (await Astro.locals.getSeasons()).getSeason(Astro.params.id!);
+// Seasons still being prepared stay private.
+if (!season || (!isAdmin && !isSeasonPublic(season))) {
+  return Astro.rewrite("/404");
+}
+
+const [
+  {
+    getLeaderboardWithMovement,
+    getTeamLeaderboard,
+    getTeamTasks,
+    getAwards,
+    getTaskSummaries,
+    getCompetitionStats,
+  },
+  hallOfFame,
+] = await Promise.all([
+  Astro.locals.getQueries(season.id),
+  Astro.locals.getHallOfFame(),
+]);
+const closed = season.status === "closed";
+const honours = hallOfFame.seasons.find((h) => h.season.id === season.id);
+const leaderboard = getLeaderboardWithMovement();
+const squads = getTeamTasks().length > 0 ? getTeamLeaderboard() : [];
+// The podium card already crowns a closed season's champion.
+const awards = getAwards().filter(
+  (award) => !(closed && award.id === "champion"),
+);
+const weeks = getTaskSummaries();
+const stats = getCompetitionStats();
+
+const dayMonthYear = ukDateFormat({
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const span =
+  season.startsAt && season.endsAt
+    ? `${dayMonthYear.format(new Date(season.startsAt))} – ${dayMonthYear.format(new Date(season.endsAt))}`
+    : undefined;
+const sectionHeading =
+  "prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase";
+---
+
+<Layout
+  title={season.name}
+  description={closed
+    ? `The final ${season.name} standings, champion and awards from the EAYL Taskmaster.`
+    : `The ${season.name} standings in the EAYL Taskmaster.`}
+>
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <BackLink href="/hall-of-fame" label="HALL OF FAME" />
+      {
+        isAdmin && (
+          <AdminEditLink
+            href={`${ADMIN_SEASONS}/${season.id}`}
+            subject={season.name}
+          />
+        )
+      }
+    </div>
+
+    <header class="mt-6">
+      <p
+        class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+      >
+        cat ~/seasons/{season.id}.md
+      </p>
+      <h1
+        class="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+      >
+        {season.name}
+      </h1>
+      <p class="mt-3 flex flex-wrap items-center gap-3 text-sm text-ink-dim">
+        <SeasonStatusBadge status={season.status} />
+        {
+          season.isCurrent && (
+            <span class="text-[10px] font-bold tracking-[0.2em] text-cyan">
+              CURRENT SEASON
+            </span>
+          )
+        }
+        {span && <span class="text-ink-faint">{span}</span>}
+        <span class="text-ink-faint">
+          {stats.totalPlayers} players · {weeks.length} weeks
+        </span>
+      </p>
+      {
+        !closed && season.isCurrent && (
+          <p class="mt-3 text-sm text-ink-dim">
+            <span class="text-acid">//</span> Still being played: these are the
+            live standings.{" "}
+            <a
+              href={withBase("/leaderboard")}
+              class="text-cyan hover:underline"
+            >
+              Full leaderboard &rarr;
+            </a>
+          </p>
+        )
+      }
+    </header>
+
+    {
+      honours && (
+        <section class="mt-10" aria-labelledby="podium-heading">
+          <h2 id="podium-heading" class={sectionHeading}>
+            season --champion
+          </h2>
+          <ChampionCard honours={honours} />
+        </section>
+      )
+    }
+
+    <section class="mt-12" aria-labelledby="standings-heading">
+      <h2 id="standings-heading" class={sectionHeading}>
+        {closed ? "standings --final" : "standings --live"}
+      </h2>
+      <TerminalWindow
+        title={`~/seasons/${season.id}/leaderboard.tsv`}
+        meta={`${leaderboard.length} players`}
+        bodyClass="p-0 sm:p-0"
+      >
+        <StandingsTable rows={leaderboard} />
+      </TerminalWindow>
+    </section>
+
+    {
+      squads.length > 0 && (
+        <section class="mt-12" aria-labelledby="squads-heading">
+          <h2 id="squads-heading" class={sectionHeading}>
+            squads --standings
+          </h2>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {squads.map((standing) => (
+              <TeamCard standing={standing} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      awards.length > 0 && (
+        <section class="mt-12" aria-labelledby="awards-heading">
+          <h2 id="awards-heading" class={sectionHeading}>
+            awards --season
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {awards.map((award) => (
+              <AwardCard award={award} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      weeks.length > 0 && (
+        <section class="mt-12" aria-labelledby="weeks-heading">
+          <h2 id="weeks-heading" class={sectionHeading}>
+            ls ~/seasons/{season.id}/weeks
+          </h2>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {weeks.map((summary) => (
+              <TaskCard summary={summary} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+  </div>
+</Layout>

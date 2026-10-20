@@ -1,0 +1,61 @@
+---
+import type { PollStatus } from "../types";
+
+interface Props {
+  status: PollStatus;
+  /** Unpublished polls show as drafts whatever their dates (admin only). */
+  draft?: boolean;
+  class?: string;
+}
+
+const { status, draft = false, class: className = "" } = Astro.props;
+
+type BadgeKey = PollStatus | "draft";
+
+const config: Record<
+  BadgeKey,
+  { label: string; classes: string; live?: boolean }
+> = {
+  open: {
+    label: "OPEN",
+    classes: "border-amber/50 bg-amber/10 text-amber",
+    live: true,
+  },
+  closed: {
+    label: "CLOSED",
+    classes: "border-acid-dim bg-acid/10 text-acid",
+  },
+  scheduled: {
+    label: "SCHEDULED",
+    classes: "border-grid bg-term-panel-2 text-ink-faint",
+  },
+  draft: {
+    label: "DRAFT",
+    classes: "border-magenta/50 bg-magenta/10 text-magenta",
+  },
+};
+
+const { label, classes, live } = config[draft ? "draft" : status];
+---
+
+<span
+  class:list={[
+    "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold tracking-[0.2em]",
+    classes,
+    className,
+  ]}
+>
+  {
+    live ? (
+      <span
+        class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+        aria-hidden="true"
+      />
+    ) : (
+      <span class="text-ink-faint" aria-hidden="true">
+        ●
+      </span>
+    )
+  }
+  {label}
+</span>

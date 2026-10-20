@@ -3,8 +3,8 @@ import Layout from "../layouts/Layout.astro";
 import TerminalWindow from "../components/TerminalWindow.astro";
 import StatCard from "../components/StatCard.astro";
 import { withBase } from "../lib/url";
-import { tasks } from "../data/tasks";
-import { getCompetitionStats } from "../data/queries";
+
+const { tasks, getCompetitionStats } = await Astro.locals.getQueries();
 
 const stats = getCompetitionStats();
 const totalWeeks = tasks.length;
@@ -175,7 +175,7 @@ const loop: { cmd: string; text: string }[] = [
       <TerminalWindow title="~/whoami" meta="root@taskmaster">
         <div class="grid gap-8 lg:grid-cols-[auto_1fr] lg:items-start">
           <img
-            src={withBase("/callum-pixel.svg")}
+            src={withBase("/callum-pixel.webp")}
             alt="Pixelated portrait of Callum Mohan at Niagara Falls"
             loading="lazy"
             decoding="async"
@@ -225,6 +225,7 @@ const loop: { cmd: string; text: string }[] = [
     <section class="mt-14 flex flex-wrap items-center gap-3">
       <a href={withBase("/tasks")} class={btnPrimary}>&gt; BROWSE THE TASKS</a>
       <a href={withBase("/leaderboard")} class={btnGhost}>VIEW LEADERBOARD</a>
+      <a href={withBase("/rules")} class={btnGhost}>READ THE RULES</a>
     </section>
   </div>
 </Layout>

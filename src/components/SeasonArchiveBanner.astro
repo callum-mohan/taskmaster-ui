@@ -1,0 +1,41 @@
+---
+// Shown on pages about a player, squad or week from a season other than the
+// current one, so visitors know they're browsing the archive.
+import type { Season } from "../types";
+import { withBase } from "../lib/url";
+
+interface Props {
+  season: Season;
+  class?: string;
+}
+
+const { season, class: className } = Astro.props;
+const label = season.status === "closed" ? "archived season" : "not yet live";
+---
+
+{
+  !season.isCurrent && (
+    <p
+      class:list={[
+        "flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-grid bg-term-panel px-3 py-2 text-xs text-ink-dim",
+        className,
+      ]}
+    >
+      <span class="font-bold uppercase tracking-[0.2em] text-amber">
+        <span aria-hidden="true">● </span>
+        {label}
+      </span>
+      <span>
+        From <span class="text-ink">{season.name}</span>.
+      </span>
+      {season.status === "closed" && (
+        <a
+          href={withBase(`/seasons/${season.id}`)}
+          class="text-cyan hover:underline"
+        >
+          see the final standings &rarr;
+        </a>
+      )}
+    </p>
+  )
+}

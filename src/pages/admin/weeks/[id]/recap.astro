@@ -1,0 +1,140 @@
+---
+import { queriesForTask } from "../../../../lib/season-scope";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../../components/TerminalWindow.astro";
+import RecapForm from "../../../../components/admin/RecapForm.astro";
+import ConfirmDelete from "../../../../components/admin/ConfirmDelete.astro";
+import Notice from "../../../../components/admin/Notice.astro";
+import WeekHeader from "../../../../components/admin/WeekHeader.astro";
+import {
+  deleteRecap,
+  describeWriteError,
+  getRecap,
+  getWeekCounts,
+  saveRecap,
+} from "../../../../data/admin";
+import {
+  parseRecapForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../../lib/admin-forms";
+import { weekHref } from "../../../../lib/admin-nav";
+import { getWeekProgress } from "../../../../data/week-progress";
+import { withBase } from "../../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const { players, teams, getTaskById, getRecapTaskIds } = await queriesForTask(
+  Astro.locals,
+  Astro.params.id,
+);
+const task = getTaskById(Astro.params.id!);
+if (!task) return Astro.rewrite("/404");
+
+const weekName = `week ${task.weekNumber}`;
+const selfUrl = withBase(weekHref(task.id, "recap"));
+const recap = await getRecap(task.id);
+let values: FormValues = {
+  headline: recap?.headline ?? "",
+  summary: recap?.summary ?? "",
+  moment: recap?.moment ?? "",
+  momentPlayerId: recap?.momentPlayerId ?? "",
+  quoteText: recap?.quoteText ?? "",
+  quoteAttribution: recap?.quoteAttribution ?? "",
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  if (form.get("intent") === "delete") {
+    await deleteRecap(task.id);
+    return Astro.redirect(`${selfUrl}?done=cleared`);
+  }
+  const parsed = parseRecapForm(form);
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await saveRecap(task.id, parsed.data);
+      return Astro.redirect(`${selfUrl}?done=saved`);
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+
+const hasPage = getRecapTaskIds().includes(task.id);
+const progress = getWeekProgress(task, (await getWeekCounts()).get(task.id), {
+  players: players.length,
+  teams: teams.length,
+});
+const done = Astro.url.searchParams.get("done");
+---
+
+<AdminLayout title={`Recap · ${weekName}`}>
+  <WeekHeader task={task} progress={progress} active="recap">
+    <Fragment slot="links">
+      {
+        hasPage && (
+          <a
+            href={withBase(`/recaps/${task.id}`)}
+            class="text-cyan hover:underline"
+            target="_blank"
+            rel="noopener"
+          >
+            view recap ↗
+          </a>
+        )
+      }
+    </Fragment>
+  </WeekHeader>
+
+  {
+    done && (
+      <Notice tone="success" class="mt-6">
+        {done === "cleared"
+          ? "Write-up cleared. The recap page falls back to copy written from the results."
+          : "Recap saved."}
+      </Notice>
+    )
+  }
+
+  <p class="mt-6 max-w-prose text-sm text-ink-dim">
+    The editorial colour on this week's episode recap: headline, summary,
+    funniest moment and quote. Everything is optional; anything left blank is
+    written from the results.{" "}
+    {
+      hasPage
+        ? "The recap page is live."
+        : "The recap page goes up once this week's results are public."
+    }
+  </p>
+  <TerminalWindow title={`~/weeks/${task.id}/recap.md`} class="mt-4">
+    <RecapForm
+      values={values}
+      players={players}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+  {
+    recap && (
+      <section aria-labelledby="danger-heading" class="mt-8">
+        <h2
+          id="danger-heading"
+          class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          danger zone
+        </h2>
+        <ConfirmDelete
+          subject={`the ${weekName} write-up`}
+          label="clear write-up"
+        />
+      </section>
+    )
+  }
+</AdminLayout>

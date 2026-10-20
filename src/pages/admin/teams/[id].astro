@@ -1,0 +1,129 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import TeamForm from "../../../components/admin/TeamForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import {
+  deleteTeam,
+  describeWriteError,
+  getTeamDeleteImpact,
+  listPlayers,
+  listTeams,
+  updateTeam,
+} from "../../../data/admin";
+import {
+  parseTeamForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+import { withSeason } from "../../../lib/admin-season";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const id = Astro.params.id!;
+const season = (await Astro.locals.getSeasons()).seasonOfTeam(id);
+if (!season) return Astro.rewrite("/404");
+// Only the squad's own season's players can join it.
+const [playerRows, teamRows] = await Promise.all([
+  listPlayers(season.id),
+  listTeams(season.id),
+]);
+const team = teamRows.find((t) => t.id === id);
+if (!team) return Astro.rewrite("/404");
+const rosterHref = (query = "") =>
+  withBase(withSeason(`/admin/roster${query}#squads`, season));
+
+let values: FormValues = {
+  id: team.id,
+  name: team.name,
+  tagline: team.tagline ?? "",
+  sortOrder: String(team.sortOrder),
+  memberIds: team.memberIds.join(","),
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  if (form.get("intent") === "delete") {
+    await deleteTeam(id);
+    const query = new URLSearchParams({ done: "deleted", name: team.name });
+    return Astro.redirect(rosterHref(`?${query}`));
+  }
+  form.set("id", id);
+  const parsed = parseTeamForm(form);
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      // Keep existing members in their stored order (the checkboxes are in
+      // roster order) and append newly picked players after them.
+      const picked = new Set(parsed.data.memberIds);
+      const memberIds = [
+        ...team.memberIds.filter((m) => picked.has(m)),
+        ...parsed.data.memberIds.filter((m) => !team.memberIds.includes(m)),
+      ];
+      await updateTeam(team, { ...parsed.data, memberIds });
+      const query = new URLSearchParams({
+        done: "saved",
+        name: parsed.data.name,
+      });
+      return Astro.redirect(rosterHref(`?${query}`));
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+
+const options = playerRows.map((p) => {
+  const current = teamRows.find((t) => t.memberIds.includes(p.id));
+  return {
+    id: p.id,
+    name: p.name,
+    otherTeam: current && current.id !== id ? current.name : undefined,
+  };
+});
+const impact = await getTeamDeleteImpact(id);
+---
+
+<AdminLayout title={`Edit ${team.name}`}>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <a href={rosterHref()} class={btnGhost}>&larr; ROSTER</a>
+    <a
+      href={withBase(`/teams/${team.id}`)}
+      class="text-xs text-cyan hover:underline"
+      target="_blank"
+      rel="noopener">view public page ↗</a
+    >
+  </div>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> vim ~/teams/{team.id}.md
+  </h1>
+  <TerminalWindow title={`~/teams/${team.id}.md`} class="mt-6">
+    <TeamForm
+      mode="edit"
+      values={values}
+      options={options}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+  <section aria-labelledby="danger-heading" class="mt-8">
+    <h2
+      id="danger-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      danger zone
+    </h2>
+    <ConfirmDelete
+      subject={`team "${team.name}"`}
+      impact={impact}
+      label="delete team"
+    />
+  </section>
+</AdminLayout>

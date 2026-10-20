@@ -1,0 +1,127 @@
+---
+// A closed season's honours for the Hall of Fame: champion up top, the rest
+// of the podium beneath, and the winning squad.
+import type { HallOfFameSeason } from "../types";
+import PlayerAvatar from "./PlayerAvatar.astro";
+import TerminalWindow from "./TerminalWindow.astro";
+import { withBase } from "../lib/url";
+import { ukDateFormat } from "../lib/time";
+
+interface Props {
+  honours: HallOfFameSeason;
+  class?: string;
+}
+
+const { honours, class: className } = Astro.props;
+const { season, podium, winningSquad, playerCount, weekCount } = honours;
+const [champion, ...placed] = podium;
+const places = ["RUNNER-UP", "THIRD"];
+const monthYear = ukDateFormat({ month: "short", year: "numeric" });
+const span =
+  season.startsAt && season.endsAt
+    ? `${monthYear.format(new Date(season.startsAt))} – ${monthYear.format(new Date(season.endsAt))}`
+    : undefined;
+---
+
+<TerminalWindow
+  title={`~/hall-of-fame/${season.id}.md`}
+  meta={`${weekCount} weeks · ${playerCount} players`}
+  class={className}
+>
+  <div class="flex flex-wrap items-baseline justify-between gap-2">
+    <h3 class="text-lg font-extrabold tracking-tight text-ink">
+      {season.name}
+    </h3>
+    {span && <p class="text-[11px] text-ink-faint">{span}</p>}
+  </div>
+
+  {
+    champion ? (
+      <a
+        href={withBase(`/players/${champion.player.id}`)}
+        class="group mt-4 flex items-center gap-4 rounded-xl border border-amber/50 bg-amber/5 p-4 ring-1 ring-amber/20 transition-colors hover:border-amber"
+      >
+        <span class="text-3xl" aria-hidden="true">
+          🏆
+        </span>
+        <PlayerAvatar player={champion.player} class="h-14 w-14 rounded" />
+        <span class="min-w-0 flex-1">
+          <span class="block text-[10px] font-bold tracking-[0.3em] text-amber">
+            CHAMPION
+          </span>
+          <span class="block truncate text-xl font-extrabold text-ink group-hover:text-acid">
+            {champion.player.name}
+          </span>
+          <span class="text-[11px] text-ink-faint">
+            {champion.wins} {champion.wins === 1 ? "win" : "wins"}
+          </span>
+        </span>
+        <span class="text-right">
+          <span class="block text-2xl font-extrabold tabular-nums text-acid">
+            {champion.points}
+          </span>
+          <span class="text-[10px] tracking-widest text-ink-faint">PTS</span>
+        </span>
+      </a>
+    ) : (
+      <p class="mt-4 text-sm text-ink-dim">No scores were recorded.</p>
+    )
+  }
+
+  {
+    placed.length > 0 && (
+      <ol class="mt-3 grid gap-3 sm:grid-cols-2">
+        {placed.map((row, index) => (
+          <li>
+            <a
+              href={withBase(`/players/${row.player.id}`)}
+              class="group flex items-center gap-3 rounded-md border border-grid px-3 py-2 transition-colors hover:border-ink-faint"
+            >
+              <PlayerAvatar player={row.player} class="h-8 w-8 rounded" />
+              <span class="min-w-0 flex-1">
+                <span class="block text-[10px] tracking-[0.2em] text-ink-faint">
+                  {places[index]}
+                </span>
+                <span class="block truncate font-semibold text-ink group-hover:text-acid">
+                  {row.player.name}
+                </span>
+              </span>
+              <span class="tabular-nums text-sm font-bold text-ink-dim">
+                {row.points}
+              </span>
+            </a>
+          </li>
+        ))}
+      </ol>
+    )
+  }
+
+  <div
+    class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-grid pt-3 text-xs"
+  >
+    {
+      winningSquad ? (
+        <p class="text-ink-dim">
+          <span class="text-ink-faint">winning squad:</span>{" "}
+          <a
+            href={withBase(`/teams/${winningSquad.team.id}`)}
+            class="font-bold text-cyan hover:underline"
+          >
+            {winningSquad.team.name}
+          </a>{" "}
+          <span class="tabular-nums text-ink-faint">
+            ({winningSquad.points} pts)
+          </span>
+        </p>
+      ) : (
+        <span />
+      )
+    }
+    <a
+      href={withBase(`/seasons/${season.id}`)}
+      class="font-bold tracking-widest text-acid hover:underline"
+    >
+      final standings &rarr;
+    </a>
+  </div>
+</TerminalWindow>

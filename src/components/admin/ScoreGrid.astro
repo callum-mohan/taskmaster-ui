@@ -1,0 +1,102 @@
+---
+import { inputClass, tableCell, tableHead } from "./styles";
+import {
+  scoreField,
+  type FieldErrors,
+  type FormValues,
+} from "../../lib/admin-forms";
+
+interface GridRow {
+  id: string;
+  name: string;
+  /** Secondary line, e.g. a squad's members. */
+  detail?: string;
+}
+
+interface Props {
+  rows: GridRow[];
+  values: FormValues;
+  errors?: FieldErrors;
+  /** Column heading for the row names. */
+  entity: "player" | "team";
+}
+
+const { rows, values, errors = {}, entity } = Astro.props;
+---
+
+<div class="overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead>
+      <tr>
+        <th scope="col" class={tableHead}>{entity}</th>
+        <th scope="col" class:list={[tableHead, "w-32"]}>points</th>
+        <th scope="col" class={tableHead}>note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((row) => {
+          const pointsKey = scoreField.points(row.id);
+          const commentKey = scoreField.comment(row.id);
+          const pointsError = errors[pointsKey];
+          const commentError = errors[commentKey];
+          return (
+            <tr>
+              <th scope="row" class:list={[tableCell, "text-left font-normal"]}>
+                <span class="text-ink">{row.name}</span>
+                {row.detail && (
+                  <span class="block text-xs text-ink-faint">{row.detail}</span>
+                )}
+              </th>
+              <td class={tableCell}>
+                <input
+                  type="number"
+                  step="1"
+                  inputmode="numeric"
+                  name={pointsKey}
+                  value={values[pointsKey] ?? ""}
+                  aria-label={`Points for ${row.name}`}
+                  aria-invalid={pointsError ? "true" : undefined}
+                  aria-describedby={
+                    pointsError ? `${pointsKey}-error` : undefined
+                  }
+                  class:list={[
+                    inputClass(Boolean(pointsError)),
+                    "tabular-nums",
+                  ]}
+                />
+                {pointsError && (
+                  <p id={`${pointsKey}-error`} class="mt-1 text-xs text-danger">
+                    {pointsError}
+                  </p>
+                )}
+              </td>
+              <td class={tableCell}>
+                <input
+                  type="text"
+                  name={commentKey}
+                  value={values[commentKey] ?? ""}
+                  aria-label={`Note for ${row.name}`}
+                  aria-invalid={commentError ? "true" : undefined}
+                  aria-describedby={
+                    commentError ? `${commentKey}-error` : undefined
+                  }
+                  placeholder="optional"
+                  class:list={[inputClass(Boolean(commentError)), "min-w-48"]}
+                />
+                {commentError && (
+                  <p
+                    id={`${commentKey}-error`}
+                    class="mt-1 text-xs text-danger"
+                  >
+                    {commentError}
+                  </p>
+                )}
+              </td>
+            </tr>
+          );
+        })
+      }
+    </tbody>
+  </table>
+</div>

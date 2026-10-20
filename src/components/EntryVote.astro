@@ -1,0 +1,76 @@
+---
+import type { GalleryEntrySocial } from "../types";
+import { withBase } from "../lib/url";
+
+interface Props {
+  taskId: string;
+  entryId: number;
+  social: GalleryEntrySocial;
+  class?: string;
+}
+
+const { taskId, entryId, social, class: className } = Astro.props;
+const { canVote, votedFor, votes, winner } = social;
+const action = withBase(`/account/gallery/${taskId}`);
+const btn =
+  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-bold tracking-widest uppercase transition-colors";
+---
+
+<div class:list={["flex flex-wrap items-center gap-2", className]}>
+  {
+    winner && (
+      <span class="inline-flex items-center gap-1.5 rounded-md border border-amber/50 bg-amber/10 px-2.5 py-1 text-[11px] font-bold tracking-widest text-amber uppercase">
+        <span aria-hidden="true">🏆</span> people's choice
+      </span>
+    )
+  }
+  {
+    votes !== undefined && (
+      <span class="text-[11px] text-ink-faint tabular-nums">
+        {votes} {votes === 1 ? "vote" : "votes"}
+      </span>
+    )
+  }
+  {
+    votedFor &&
+      (canVote || votes === undefined ? (
+        <form method="post" action={action}>
+          <input type="hidden" name="intent" value="unvote" />
+          <input type="hidden" name="submissionId" value={entryId} />
+          <button
+            type="submit"
+            class:list={[
+              btn,
+              "border-magenta/60 bg-magenta/10 text-magenta hover:border-ink-faint hover:bg-transparent hover:text-ink-dim",
+            ]}
+            title="Withdraw your vote"
+          >
+            <span aria-hidden="true">★</span> your vote
+            <span class="sr-only">(withdraw)</span>
+          </button>
+        </form>
+      ) : (
+        <span class="text-[11px] font-bold tracking-widest text-magenta uppercase">
+          <span aria-hidden="true">★</span> your vote
+        </span>
+      ))
+  }
+  {
+    canVote && !votedFor && (
+      <form method="post" action={action}>
+        <input type="hidden" name="intent" value="vote" />
+        <input type="hidden" name="submissionId" value={entryId} />
+        <button
+          type="submit"
+          class:list={[
+            btn,
+            "border-grid text-ink-dim hover:border-magenta hover:text-magenta",
+          ]}
+        >
+          <span aria-hidden="true">☆</span> vote
+          <span class="sr-only">for this entry as People's Choice</span>
+        </button>
+      </form>
+    )
+  }
+</div>

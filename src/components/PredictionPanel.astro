@@ -1,0 +1,223 @@
+---
+import Notice from "./admin/Notice.astro";
+import PlayerAvatar from "./PlayerAvatar.astro";
+import type {
+  PredictionOutcome,
+  PredictionPanel,
+  PredictionStatus,
+} from "../types";
+import { withBase } from "../lib/url";
+
+interface Props {
+  taskId: string;
+  panel: PredictionPanel;
+  /** Team tasks back a squad rather than a player. */
+  isTeam: boolean;
+  /** Outcome of the viewer's last prediction action, if any. */
+  outcome?: PredictionOutcome;
+  class?: string;
+}
+
+const { taskId, panel, isTeam, outcome, class: className } = Astro.props;
+const {
+  status,
+  bonusPoints,
+  canPredict,
+  viewer,
+  options,
+  myPick,
+  myPickCorrect,
+  count,
+  tally,
+} = panel;
+
+const action = withBase(`/account/predictions/${taskId}`);
+const signInHref = withBase(
+  `/login?next=${encodeURIComponent(`/account/predictions/${taskId}`)}`,
+);
+const subject = isTeam ? "squad" : "player";
+const pointsLabel = `${bonusPoints} bonus point${bonusPoints === 1 ? "" : "s"}`;
+
+const outcomes: Record<
+  PredictionOutcome,
+  { tone: "success" | "error"; message: string }
+> = {
+  saved: { tone: "success", message: "Call locked in. Good luck." },
+  changed: { tone: "success", message: "Call changed." },
+  withdrawn: { tone: "success", message: "Call withdrawn." },
+  closed: {
+    tone: "error",
+    message: "Calls are closed: the deadline has passed.",
+  },
+  invalid: {
+    tone: "error",
+    message: `Pick another ${subject} (not yourself${isTeam ? " or your own squad" : ""}).`,
+  },
+};
+const notice = outcome ? outcomes[outcome] : undefined;
+
+const statusLine: Record<Exclude<PredictionStatus, "upcoming">, string> = {
+  open: `${count} ${count === 1 ? "call" : "calls"} made · picks stay secret until the deadline`,
+  locked: `${count} ${count === 1 ? "call" : "calls"} locked · waiting on the results`,
+  settled: `${count} ${count === 1 ? "call" : "calls"} · results are in`,
+};
+
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-4 py-2 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg";
+const btnGhost =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-grid px-3 py-2 text-xs font-bold tracking-widest text-ink-dim transition-colors hover:border-ink-faint hover:text-ink";
+---
+
+<div class:list={["space-y-4", className]}>
+  <p class="text-sm text-ink-dim">
+    <span class="text-acid">$</span> predict --winner
+    <span class="text-ink-faint">
+      &nbsp;· a correct call earns {pointsLabel}</span
+    >
+  </p>
+  {
+    status !== "upcoming" && (
+      <p class="text-[11px] text-ink-faint">
+        <span class="text-cyan">&gt;</span> {statusLine[status]}
+      </p>
+    )
+  }
+
+  {notice && <Notice tone={notice.tone}>{notice.message}</Notice>}
+
+  {
+    myPick && (
+      <p
+        class:list={[
+          "rounded-md border px-4 py-3 text-sm",
+          myPickCorrect === true
+            ? "border-acid-dim bg-acid/10 text-acid"
+            : myPickCorrect === false
+              ? "border-grid bg-term-bg/60 text-ink-dim"
+              : "border-magenta/40 bg-magenta/5 text-ink",
+        ]}
+      >
+        <span class="text-ink-faint">your call:</span>{" "}
+        <a href={myPick.href} class="font-bold hover:underline">
+          {myPick.name}
+        </a>
+        {myPickCorrect === true && (
+          <span class="font-bold"> ✓ called it (+{pointsLabel})</span>
+        )}
+        {myPickCorrect === false && <span> ✗ not this week</span>}
+      </p>
+    )
+  }
+
+  {
+    canPredict && (
+      <div class="flex flex-wrap items-end gap-3">
+        <form
+          method="post"
+          action={action}
+          class="flex flex-wrap items-end gap-3"
+        >
+          <input type="hidden" name="intent" value="predict" />
+          <label class="flex min-w-[14rem] flex-1 flex-col gap-2">
+            <span class="text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase">
+              {isTeam ? "winning squad" : "winner"}
+            </span>
+            <select
+              name="pick"
+              required
+              class="w-full rounded-md border border-grid bg-term-bg px-3 py-2 text-sm text-ink focus:border-acid focus:outline-none"
+            >
+              <option value="" selected={!myPick}>
+                — pick a {subject} —
+              </option>
+              {options.map((option) => (
+                <option value={option.id} selected={myPick?.id === option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit" class={btnPrimary}>
+            {myPick ? "change call" : "lock it in"}
+          </button>
+        </form>
+        {myPick && (
+          <form method="post" action={action}>
+            <input type="hidden" name="intent" value="withdraw" />
+            <button type="submit" class={btnGhost}>
+              withdraw
+            </button>
+          </form>
+        )}
+      </div>
+    )
+  }
+
+  {
+    status === "open" && viewer === "guest" && (
+      <p class="rounded-md border border-grid bg-term-bg/60 px-4 py-3 text-sm text-ink-dim">
+        <a href={signInHref} class="font-bold text-acid hover:underline">
+          Sign in
+        </a>{" "}
+        with your player account to call the winner.
+      </p>
+    )
+  }
+  {
+    status === "open" && viewer === "non-player" && (
+      <p class="rounded-md border border-grid bg-term-bg/60 px-4 py-3 text-sm text-ink-dim">
+        <span class="text-amber">!</span> Your account isn't linked to a player
+        profile, so you can't make a call.
+      </p>
+    )
+  }
+
+  {
+    tally.length > 0 && (
+      <ul class="space-y-2" aria-label="Who backed whom">
+        {tally.map((row) => (
+          <li
+            class:list={[
+              "rounded-md border px-4 py-3",
+              row.correct
+                ? "border-acid-dim bg-acid/5"
+                : "border-grid bg-term-panel",
+            ]}
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <a
+                href={row.choice.href}
+                class="text-sm font-extrabold text-ink hover:text-acid"
+              >
+                {row.choice.name}
+                {row.correct && <span class="text-acid"> ✓ winner</span>}
+              </a>
+              <span class="text-[11px] font-bold tracking-widest text-ink-faint uppercase tabular-nums">
+                {row.backers.length}{" "}
+                {row.backers.length === 1 ? "backer" : "backers"}
+              </span>
+            </div>
+            <ul class="mt-2 flex flex-wrap gap-2" aria-label="Backers">
+              {row.backers.map((backer) => (
+                <li>
+                  <a
+                    href={withBase(`/players/${backer.id}`)}
+                    class="inline-flex items-center gap-1.5 rounded border border-grid-soft px-1.5 py-0.5 text-[11px] text-ink-dim hover:text-ink"
+                  >
+                    <PlayerAvatar player={backer} class="h-4 w-4 rounded-sm" />
+                    {backer.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+  {
+    status !== "open" && tally.length === 0 && (
+      <p class="text-sm text-ink-faint">Nobody made a call this week.</p>
+    )
+  }
+</div>

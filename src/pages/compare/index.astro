@@ -1,8 +1,9 @@
 ---
 import Layout from "../../layouts/Layout.astro";
 import ComparisonView from "../../components/ComparisonView.astro";
-import { players } from "../../data/players";
-import { getTopPlayers, getPlayerComparison } from "../../data/queries";
+
+const { players, getTopPlayers, getPlayerComparison } =
+  await Astro.locals.getQueries();
 
 // Default view compares the top two players on the leaderboard.
 const [first, second] = getTopPlayers(2);

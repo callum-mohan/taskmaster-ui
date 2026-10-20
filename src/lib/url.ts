@@ -9,3 +9,10 @@ export function withBase(path: string): string {
   const normalized = path.startsWith("/") ? path : `/${path}`;
   return `${base}${normalized}`;
 }
+
+/** The inverse of `withBase`: a request path relative to the site's `base`. */
+export function withoutBase(pathname: string): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  if (!base || !pathname.startsWith(base)) return pathname;
+  return pathname.slice(base.length) || "/";
+}

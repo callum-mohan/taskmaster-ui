@@ -8,7 +8,7 @@ import { withBase } from "../lib/url";
 const eggSrc = withBase("/favicon.svg");
 ---
 
-<!-- Carries build-time config (the favicon URL) into the client script. -->
+<!-- Carries server-rendered config (the favicon URL) into the client script. -->
 <div id="egg-config" data-egg-src={eggSrc} hidden></div>
 
 <!-- Terminal-style toast notifications for easter-egg triggers. -->

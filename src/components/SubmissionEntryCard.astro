@@ -1,0 +1,84 @@
+---
+import type { SubmissionEntry } from "../types";
+
+interface Props {
+  entry: SubmissionEntry;
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  /** Name the player who submitted it (useful for squad entries). */
+  showSubmitter?: boolean;
+  /** Flag entries an admin hid from the public gallery. */
+  showHidden?: boolean;
+  class?: string;
+}
+
+const {
+  entry,
+  formatStamp,
+  showSubmitter = false,
+  showHidden = false,
+  class: className = "",
+} = Astro.props;
+
+const alt = entry.text
+  ? `Photo by ${entry.submitterName}: ${entry.text}`
+  : `Photo entry by ${entry.submitterName}`;
+---
+
+<article
+  class:list={[
+    "flex min-w-0 flex-col overflow-hidden rounded-lg border bg-term-bg/60",
+    showHidden && entry.hidden ? "border-danger/40" : "border-grid",
+    className,
+  ]}
+>
+  {
+    entry.kind === "photo" && entry.mediaUrl ? (
+      <img
+        src={entry.mediaUrl}
+        alt={alt}
+        loading="lazy"
+        decoding="async"
+        width="800"
+        height="600"
+        class="aspect-[4/3] w-full bg-term-bg object-cover"
+      />
+    ) : (
+      <div class="flex-1 border-l-2 border-cyan px-4 py-3">
+        <p class="whitespace-pre-line break-words text-sm leading-relaxed text-ink">
+          {entry.text}
+        </p>
+      </div>
+    )
+  }
+  <div
+    class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-grid-soft px-3 py-2 text-[11px] text-ink-faint"
+  >
+    <span class="font-bold tracking-widest text-cyan uppercase">
+      {entry.kind}
+    </span>
+    {
+      showSubmitter && (
+        <span>
+          by <span class="text-ink-dim">{entry.submitterName}</span>
+        </span>
+      )
+    }
+    <time datetime={entry.createdAt}>{formatStamp(entry.createdAt)}</time>
+    {
+      showHidden && entry.hidden && (
+        <span class="font-bold tracking-widest text-danger uppercase">
+          hidden
+        </span>
+      )
+    }
+    <slot name="actions" />
+  </div>
+  {
+    entry.kind === "photo" && entry.text && (
+      <p class="whitespace-pre-line break-words border-t border-grid-soft px-3 py-2 text-sm text-ink-dim">
+        {entry.text}
+      </p>
+    )
+  }
+</article>

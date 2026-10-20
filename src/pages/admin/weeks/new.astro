@@ -1,0 +1,93 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import TaskForm from "../../../components/admin/TaskForm.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createTask, describeWriteError } from "../../../data/admin";
+import {
+  parseTaskForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { ADMIN_WEEKS, weekHref } from "../../../lib/admin-nav";
+import { withBase } from "../../../lib/url";
+import {
+  defaultWeekId,
+  selectedSeason,
+  withSeason,
+} from "../../../lib/admin-season";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const seasons = await Astro.locals.getSeasons();
+const season = selectedSeason(Astro.url, seasons);
+const { tasks } = await Astro.locals.getQueries(season?.id);
+const nextWeek = Math.max(0, ...tasks.map((t) => t.weekNumber)) + 1;
+
+let values: FormValues = {
+  weekNumber: String(nextWeek),
+  format: "individual",
+  briefMode: "prose",
+  maxSubmissions: "1",
+  submissionKinds: "photo,text",
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  // Default the id to the site's `week-NN` convention, prefixed with the
+  // season after the first one (ids are site-wide URLs).
+  const week = Number(form.get("weekNumber"));
+  if (
+    season &&
+    !String(form.get("id") ?? "").trim() &&
+    Number.isInteger(week) &&
+    week > 0
+  ) {
+    form.set("id", defaultWeekId(season, week, seasons.seasons));
+  }
+  const parsed = parseTaskForm(form);
+  values = parsed.values;
+  if (!season) {
+    formError = "Create a season first.";
+  } else if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      await createTask(season.id, parsed.data);
+      return Astro.redirect(
+        withBase(`${weekHref(parsed.data.id)}?done=created`),
+      );
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+---
+
+<AdminLayout title="New week">
+  <a href={withBase(withSeason(ADMIN_WEEKS, season))} class={btnGhost}
+    >&larr; ALL WEEKS</a
+  >
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch ~/weeks/new.brief
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Start with the brief. Once it's saved the week gets its own workspace for
+    judging entries, results night and the recap.
+  </p>
+  <TerminalWindow title="~/weeks/new.brief" class="mt-6">
+    <TaskForm
+      mode="create"
+      defaultIdPattern={season
+        ? defaultWeekId(season, 1, seasons.seasons).replace("01", "NN")
+        : undefined}
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+</AdminLayout>

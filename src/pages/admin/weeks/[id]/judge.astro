@@ -1,0 +1,627 @@
+---
+// A week's judging, all in one place: the entries gallery with a points box
+// per player (or squad) when the task takes entries, a plain score grid when
+// it doesn't, then bonuses and the change log. Both layouts post the same
+// score sheet.
+import { queriesForTask } from "../../../../lib/season-scope";
+import AdminLayout from "../../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../../components/TerminalWindow.astro";
+import Notice from "../../../../components/admin/Notice.astro";
+import WeekHeader from "../../../../components/admin/WeekHeader.astro";
+import ScoreGrid from "../../../../components/admin/ScoreGrid.astro";
+import ScoreHistory from "../../../../components/admin/ScoreHistory.astro";
+import BonusForm from "../../../../components/admin/BonusForm.astro";
+import ConfirmDelete from "../../../../components/admin/ConfirmDelete.astro";
+import SubmissionReviewCard from "../../../../components/admin/SubmissionReviewCard.astro";
+import AddEntryForms from "../../../../components/admin/AddEntryForms.astro";
+import { btnPrimary, btnGhost } from "../../../../components/admin/styles";
+import {
+  addBonus,
+  addSubmissionForPlayer,
+  deleteBonus,
+  deleteSubmission,
+  describeWriteError,
+  getScoreAuditLog,
+  getTaskScoreSheet,
+  getWeekCounts,
+  saveTaskScores,
+  saveTeamScores,
+  setSubmissionHidden,
+  updateBonus,
+} from "../../../../data/admin";
+import { loadTaskSubmissions } from "../../../../data/submissions";
+import { getWeekProgress } from "../../../../data/week-progress";
+import {
+  parseAddEntryForm,
+  parseBonusForm,
+  parseRowId,
+  parseTaskScoresForm,
+  parseTeamScoresForm,
+  scoreField,
+  type FieldErrors,
+  type FormValues,
+} from "../../../../lib/admin-forms";
+import {
+  MAX_PHOTO_BYTES,
+  MAX_SUBMISSION_REQUEST_BYTES,
+  isAddEntryIntent,
+  parseSubmissionId,
+  type AddEntryIntent,
+} from "../../../../lib/submission-forms";
+import { weekHref } from "../../../../lib/admin-nav";
+import { StorageError } from "../../../../lib/storage";
+import { ukDateFormat } from "../../../../lib/time";
+import { withBase } from "../../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
+
+const {
+  players,
+  teams,
+  getTaskById,
+  getPlayerById,
+  getPollBonusesForTask,
+  getSubmissionGallery,
+  getSubmissionOwnerRef,
+  canAddEntriesForPlayers,
+  getSubmitterOptions,
+} = await queriesForTask(Astro.locals, Astro.params.id);
+const task = getTaskById(Astro.params.id!);
+if (!task) return Astro.rewrite("/404");
+
+const isTeam = task.format === "team";
+const unit = isTeam ? "squad" : "player";
+const weekLabel = `WEEK ${String(task.weekNumber).padStart(2, "0")}`;
+const selfUrl = withBase(weekHref(task.id, "judge"));
+const liveUrl = withBase(weekHref(task.id, "live"));
+const scoreFormId = "score-form";
+const canAddEntries = canAddEntriesForPlayers(task);
+const submitters = canAddEntries ? getSubmitterOptions(task) : [];
+
+let gridValues: FormValues | undefined;
+let gridErrors: FieldErrors = {};
+let newBonusValues: FormValues = {};
+let newBonusErrors: FieldErrors = {};
+let bonusEdit:
+  { rowId: number; values: FormValues; errors: FieldErrors } | undefined;
+let addEntryFailed:
+  | { intent: AddEntryIntent; values: FormValues; errors: FieldErrors }
+  | undefined;
+let formError: string | undefined;
+
+// Refuse oversized uploads before reading the body.
+const tooLarge =
+  Number(Astro.request.headers.get("content-length")) >
+  MAX_SUBMISSION_REQUEST_BYTES;
+
+if (Astro.request.method === "POST" && tooLarge) {
+  formError = `Nothing was saved: photos must be ${Math.round(MAX_PHOTO_BYTES / (1024 * 1024))} MB or smaller.`;
+} else if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  try {
+    if (intent === "save-scores") {
+      // Every player (or squad) has inputs on this page, so a blank cell
+      // really means "not scored".
+      if (isTeam) {
+        const parsed = parseTeamScoresForm(
+          form,
+          teams.map((t) => t.id),
+        );
+        if (parsed.ok) {
+          await saveTeamScores(task.id, parsed.data, admin);
+          return Astro.redirect(`${selfUrl}?done=scores`);
+        }
+        ({ values: gridValues, errors: gridErrors } = parsed);
+      } else {
+        const parsed = parseTaskScoresForm(
+          form,
+          players.map((p) => p.id),
+        );
+        if (parsed.ok) {
+          await saveTaskScores(task.id, parsed.data, admin);
+          return Astro.redirect(`${selfUrl}?done=scores`);
+        }
+        ({ values: gridValues, errors: gridErrors } = parsed);
+      }
+    } else if (intent === "add-bonus") {
+      const parsed = parseBonusForm(form);
+      if (parsed.ok) {
+        await addBonus(task.id, parsed.data, admin);
+        return Astro.redirect(`${selfUrl}?done=bonus-added#bonuses`);
+      }
+      newBonusValues = parsed.values;
+      newBonusErrors = parsed.errors;
+    } else if (intent === "update-bonus" || intent === "delete-bonus") {
+      const rowId = parseRowId(form);
+      if (rowId === undefined) {
+        formError = "That bonus no longer exists.";
+      } else if (intent === "delete-bonus") {
+        await deleteBonus(task.id, rowId, admin);
+        return Astro.redirect(`${selfUrl}?done=bonus-deleted#bonuses`);
+      } else {
+        const parsed = parseBonusForm(form);
+        if (parsed.ok) {
+          await updateBonus(task.id, rowId, parsed.data, admin);
+          return Astro.redirect(`${selfUrl}?done=bonus-saved#bonuses`);
+        }
+        bonusEdit = { rowId, values: parsed.values, errors: parsed.errors };
+      }
+    } else if (
+      intent === "hide-entry" ||
+      intent === "show-entry" ||
+      intent === "delete-entry"
+    ) {
+      const id = parseSubmissionId(form);
+      if (id === undefined) {
+        formError = "That entry no longer exists.";
+      } else if (intent === "delete-entry") {
+        await deleteSubmission(task.id, id);
+        return Astro.redirect(`${selfUrl}?done=entry-deleted`);
+      } else {
+        await setSubmissionHidden(task.id, id, intent === "hide-entry");
+        return Astro.redirect(
+          `${selfUrl}?done=${intent === "hide-entry" ? "entry-hidden" : "entry-shown"}#entry-${id}`,
+        );
+      }
+    } else if (isAddEntryIntent(intent)) {
+      if (!canAddEntries) {
+        formError = "Entries can only be added once the task is completed.";
+      } else {
+        const playerIds = new Set(
+          submitters.flatMap((g) => g.players.map((p) => p.id)),
+        );
+        const parsed = await parseAddEntryForm(form, intent, playerIds);
+        const owner =
+          parsed.ok && getSubmissionOwnerRef(task, parsed.data.playerId);
+        if (parsed.ok && owner) {
+          try {
+            const id = await addSubmissionForPlayer(
+              task.id,
+              owner,
+              parsed.data,
+            );
+            return Astro.redirect(`${selfUrl}?done=entry-added#entry-${id}`);
+          } catch (error) {
+            if (!(error instanceof StorageError)) throw error;
+            console.error("Admin entry upload failed", error);
+            addEntryFailed = {
+              intent,
+              values: parsed.values,
+              errors: { photo: "The upload didn't go through. Try again." },
+            };
+          }
+        } else {
+          addEntryFailed = {
+            intent,
+            values: parsed.values,
+            errors: parsed.ok ? { playerId: "Pick a player." } : parsed.errors,
+          };
+        }
+      }
+    }
+  } catch (error) {
+    formError = describeWriteError(error);
+    if (!formError) throw error;
+  }
+}
+
+const [submissions, sheet, history, counts] = await Promise.all([
+  loadTaskSubmissions(task.id),
+  getTaskScoreSheet(task.id),
+  getScoreAuditLog(task.id),
+  getWeekCounts(),
+]);
+const progress = getWeekProgress(task, counts.get(task.id), {
+  players: players.length,
+  teams: teams.length,
+});
+
+// Saved values pre-fill the inputs unless a rejected submission is being shown.
+gridValues ??= Object.fromEntries(
+  isTeam
+    ? sheet.team.flatMap((row) => [
+        [scoreField.points(row.teamId), String(row.points)],
+        [scoreField.comment(row.teamId), row.comment ?? ""],
+      ])
+    : sheet.individual.flatMap((row) => [
+        [scoreField.points(row.playerId), String(row.points)],
+        [scoreField.comment(row.playerId), row.comment ?? ""],
+      ]),
+);
+
+// Judge from the gallery whenever there are (or can be) entries to look at;
+// otherwise a plain grid is quicker.
+const useGallery = task.submissions.max > 0 || submissions.length > 0;
+
+// Owners with entries first (that's what's being judged), then everyone
+// else, so every player or squad still has score inputs on the page.
+const allGroups = useGallery
+  ? getSubmissionGallery(task, submissions, {
+      includeEmpty: true,
+      includeHidden: true,
+    })
+  : [];
+const entered = allGroups.filter((g) => g.entries.length > 0);
+const notEntered = allGroups.filter((g) => g.entries.length === 0);
+const scorable = (type: "player" | "team") =>
+  type === (isTeam ? "team" : "player");
+const withEntries = entered.filter((g) => scorable(g.owner.type)).length;
+const hiddenEntries = submissions.filter((s) => s.hidden).length;
+const teamDetail = (teamId: string) =>
+  teams
+    .find((t) => t.id === teamId)
+    ?.memberIds.map((id) => getPlayerById(id)?.name ?? id)
+    .join(", ");
+
+const gridRows = isTeam
+  ? teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      detail: team.memberIds
+        .map((id) => getPlayerById(id)?.name ?? id)
+        .join(", "),
+    }))
+  : players.map((p) => ({ id: p.id, name: p.name }));
+
+// Scores for the other format can exist if a task's format was changed.
+const otherFormatCount = isTeam ? sheet.individual.length : sheet.team.length;
+const pollBonuses = getPollBonusesForTask(task.id);
+const playerName = (id: string) => getPlayerById(id)?.name ?? id;
+const subjectNames: Record<string, string> = Object.fromEntries([
+  ...players.map((p) => [p.id, p.name]),
+  ...teams.map((t) => [t.id, t.name]),
+]);
+
+const dayFmt = ukDateFormat({ day: "2-digit", month: "short" });
+const timeFmt = ukDateFormat({
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const formatStamp = (iso: string) => {
+  const d = new Date(iso);
+  return `${dayFmt.format(d)} ${timeFmt.format(d)}`;
+};
+
+const done = Astro.url.searchParams.get("done");
+const doneMessage: Record<string, string> = {
+  scores: task.resultsHeld
+    ? "Scores saved. They stay off the public site until you publish them in the results night tab."
+    : "Scores saved. The leaderboard is already updated.",
+  "bonus-added": "Bonus added.",
+  "bonus-saved": "Bonus saved.",
+  "bonus-deleted": "Bonus deleted.",
+  "entry-hidden": "Entry hidden from the public gallery.",
+  "entry-shown": "Entry visible again.",
+  "entry-deleted": "Entry deleted.",
+  "entry-added": "Entry added. It's already in the public gallery.",
+};
+const settings = task.submissions;
+---
+
+<AdminLayout title={`Judge · ${weekLabel}`}>
+  <WeekHeader task={task} progress={progress} active="judge" />
+
+  <p class="mt-6 max-w-prose text-sm text-ink-dim">
+    {
+      useGallery
+        ? `Look through each ${unit}'s entries, give them points, and save once at the bottom. Hide or delete anything that shouldn't be public.`
+        : `Give every ${unit} their points and save. A blank cell means not scored yet.`
+    }{" "}
+    Positions are worked out from the points.
+    {isTeam && " Every squad member is credited with their squad's points."}
+  </p>
+  {
+    task.status !== "completed" && (
+      <p class="mt-2 max-w-prose text-xs text-amber">
+        <span aria-hidden="true">! </span>
+        {task.status === "upcoming"
+          ? "This week hasn't been released yet."
+          : useGallery
+            ? "This week is still live: entries can change until the deadline."
+            : "This week is still live until the deadline."}{" "}
+        You can still score early.
+      </p>
+    )
+  }
+
+  <div
+    class:list={[
+      "mt-6 flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-sm",
+      task.resultsHeld ? "border-amber/50 bg-amber/5" : "border-grid",
+    ]}
+  >
+    {
+      task.resultsHeld ? (
+        <>
+          <span class="font-bold text-amber">[held]</span>
+          <span class="text-ink-dim">
+            Results are hidden from the public site for results night.
+          </span>
+          <a
+            href={liveUrl}
+            class="ml-auto text-xs font-bold tracking-widest text-amber hover:underline"
+          >
+            run the reveal &rarr;
+          </a>
+        </>
+      ) : (
+        <>
+          <span class="text-ink-dim">
+            Saving puts results on the site straight away. Want a live reveal?
+            Hold them first.
+          </span>
+          <form method="post" action={liveUrl} class="ml-auto">
+            <input type="hidden" name="intent" value="hold" />
+            <button type="submit" class={btnGhost}>
+              hold for results night
+            </button>
+          </form>
+        </>
+      )
+    }
+  </div>
+
+  {
+    done && doneMessage[done] && (
+      <Notice tone="success" class="mt-6">
+        {doneMessage[done]}
+      </Notice>
+    )
+  }
+  {
+    formError && (
+      <Notice tone="error" class="mt-6">
+        {formError}
+      </Notice>
+    )
+  }
+  {
+    Object.keys(gridErrors).length > 0 && (
+      <Notice tone="error" class="mt-6">
+        Nothing was saved. Fix the highlighted points and try again.
+      </Notice>
+    )
+  }
+  {
+    addEntryFailed && (
+      <Notice tone="error" class="mt-6">
+        Entry not added. Fix the highlighted fields and try again.
+      </Notice>
+    )
+  }
+
+  <section id="points" aria-labelledby="points-heading" class="mt-6">
+    <TerminalWindow
+      title={`~/weeks/${task.id}/judge`}
+      meta={useGallery
+        ? `${submissions.length} ${submissions.length === 1 ? "entry" : "entries"} · ${progress.scored} / ${progress.roster} scored${hiddenEntries ? ` · ${hiddenEntries} hidden` : ""}`
+        : `${progress.scored} / ${progress.roster} scored`}
+    >
+      <h2 id="points-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> points --week {task.weekNumber}
+      </h2>
+      <p class="mt-1 mb-5 text-xs text-ink-faint">
+        {
+          useGallery
+            ? `Takes ${settings.max > 0 ? `${settings.max} ${settings.max === 1 ? "entry" : "entries"} per ${unit} (${settings.kinds.join(" or ")})` : "no on-site entries"}. Entries go public when the deadline passes; hidden ones stay private.`
+            : "This task takes no on-site entries. Change that in the brief tab."
+        }
+      </p>
+      {
+        otherFormatCount > 0 && (
+          <Notice tone="error" class="mb-4">
+            {otherFormatCount} {isTeam ? "individual" : "team"} score
+            {otherFormatCount === 1 ? " is" : "s are"} stored for this week from
+            before its format changed. They're ignored while it's a{" "}
+            {isTeam ? "team" : "individual"} task.
+          </Notice>
+        )
+      }
+      {
+        useGallery ? (
+          <>
+            {/* The points inputs in every card belong to this form via `form=`. */}
+            <form id={scoreFormId} method="post">
+              <input type="hidden" name="intent" value="save-scores" />
+            </form>
+            <h3 class="mb-3 text-[11px] font-bold tracking-[0.2em] text-ink-faint uppercase">
+              entered ({withEntries})
+            </h3>
+            <div class="space-y-4">
+              {entered.map((group) => (
+                <SubmissionReviewCard
+                  group={group}
+                  detail={
+                    group.owner.type === "team"
+                      ? teamDetail(group.owner.id)
+                      : undefined
+                  }
+                  scoreFormId={
+                    scorable(group.owner.type) ? scoreFormId : undefined
+                  }
+                  values={gridValues}
+                  errors={gridErrors}
+                  formatStamp={formatStamp}
+                />
+              ))}
+            </div>
+            {entered.length === 0 && (
+              <p class="text-sm text-ink-dim">
+                <span class="text-acid">$</span> no entries yet
+              </p>
+            )}
+            {notEntered.length > 0 && (
+              <>
+                <h3 class="mt-8 mb-3 text-[11px] font-bold tracking-[0.2em] text-ink-faint uppercase">
+                  no entries ({notEntered.length})
+                </h3>
+                <div class="space-y-2">
+                  {notEntered.map((group) => (
+                    <SubmissionReviewCard
+                      group={group}
+                      detail={
+                        group.owner.type === "team"
+                          ? teamDetail(group.owner.id)
+                          : undefined
+                      }
+                      scoreFormId={scoreFormId}
+                      values={gridValues}
+                      errors={gridErrors}
+                      formatStamp={formatStamp}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+            <div class="sticky bottom-0 -mx-4 mt-6 flex flex-wrap items-center gap-3 border-t border-grid bg-term-panel/95 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+              <button type="submit" form={scoreFormId} class={btnPrimary}>
+                save scores
+              </button>
+              <span class="text-xs text-ink-faint">
+                Saves every {unit} in one go.
+              </span>
+            </div>
+          </>
+        ) : (
+          <form method="post">
+            <input type="hidden" name="intent" value="save-scores" />
+            <ScoreGrid
+              rows={gridRows}
+              values={gridValues}
+              errors={gridErrors}
+              entity={isTeam ? "team" : "player"}
+            />
+            <div class="mt-5 flex flex-wrap items-center gap-3">
+              <button type="submit" class={btnPrimary}>
+                save scores
+              </button>
+              <span class="text-xs text-ink-faint">
+                Saves every {unit} in one go.
+              </span>
+            </div>
+          </form>
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  {
+    canAddEntries ? (
+      <TerminalWindow title={`~/weeks/${task.id}/entries/add`} class="mt-8">
+        <AddEntryForms
+          submitters={submitters}
+          isTeam={isTeam}
+          failed={addEntryFailed}
+        />
+      </TerminalWindow>
+    ) : (
+      <p class="mt-6 text-xs text-ink-faint">
+        <span class="text-acid">$</span> Once the task is completed you can add
+        entries here for players who sent them in another way.
+      </p>
+    )
+  }
+
+  <section id="bonuses" aria-labelledby="bonus-heading" class="mt-8">
+    <TerminalWindow
+      title={`~/weeks/${task.id}/bonuses`}
+      meta={`${sheet.bonuses.length} ${sheet.bonuses.length === 1 ? "entry" : "entries"}`}
+    >
+      <h2 id="bonus-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> bonus --week {task.weekNumber}
+      </h2>
+      <p class="mt-1 mb-5 text-sm text-ink-dim">
+        One-off bonuses (positive) or deductions (negative) for a player. They
+        count toward the overall total but never change this week's positions.
+      </p>
+      <ul class="space-y-3">
+        {
+          sheet.bonuses.map((bonus) => {
+            const editing =
+              bonusEdit?.rowId === bonus.id ? bonusEdit : undefined;
+            return (
+              <li class="flex flex-col gap-2 rounded-md border border-grid p-3 lg:flex-row lg:items-start">
+                <div class="flex-1">
+                  <BonusForm
+                    players={players}
+                    rowId={bonus.id}
+                    values={
+                      editing?.values ?? {
+                        playerId: bonus.playerId,
+                        points: String(bonus.points),
+                        reason: bonus.reason,
+                      }
+                    }
+                    errors={editing?.errors}
+                  />
+                </div>
+                <ConfirmDelete
+                  subject={`${bonus.points > 0 ? "+" : ""}${bonus.points} for ${playerName(bonus.playerId)}`}
+                  intent="delete-bonus"
+                  fields={{ rowId: bonus.id }}
+                />
+              </li>
+            );
+          })
+        }
+      </ul>
+      {
+        pollBonuses.length > 0 && (
+          <div class="mt-5 rounded-md border border-grid p-3">
+            <h3 class="mb-2 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+              poll voting bonuses
+            </h3>
+            <ul class="space-y-1 text-sm">
+              {pollBonuses.map(({ poll, voterCount }) => (
+                <li class="text-ink-dim">
+                  <span class="text-acid">+{poll.voteBonusPoints}</span> ×{" "}
+                  {voterCount} {voterCount === 1 ? "voter" : "voters"} ·{" "}
+                  <a
+                    href={withBase(`/admin/polls/${poll.id}`)}
+                    class="text-cyan hover:underline"
+                  >
+                    {poll.question}
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p class="mt-2 text-xs text-ink-faint">
+              Earned automatically by voting; manage them on the poll.
+            </p>
+          </div>
+        )
+      }
+      <div class="mt-5 rounded-md border border-dashed border-grid p-3">
+        <h3
+          class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          add bonus / deduction
+        </h3>
+        <BonusForm
+          players={players}
+          values={newBonusValues}
+          errors={newBonusErrors}
+        />
+      </div>
+    </TerminalWindow>
+  </section>
+
+  <section id="history" aria-labelledby="history-heading" class="mt-8">
+    <TerminalWindow
+      title={`~/weeks/${task.id}/scores.log`}
+      meta={`${history.length} ${history.length === 1 ? "change" : "changes"}`}
+    >
+      <h2 id="history-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> tail scores.log
+      </h2>
+      <p class="mt-1 mb-5 text-sm text-ink-dim">
+        Who changed this week's scores and bonuses, newest first.
+      </p>
+      <ScoreHistory entries={history} names={subjectNames} />
+    </TerminalWindow>
+  </section>
+</AdminLayout>

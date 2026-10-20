@@ -1,6 +1,9 @@
 # build output
 dist/
 
+# test coverage reports
+coverage/
+
 # generated types
 .astro/
 
@@ -22,3 +25,9 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+.neon
+.env.local
+
+# Cloudflare Workers local state and secrets
+.wrangler/
+.dev.vars*

@@ -1,0 +1,107 @@
+---
+import Notice from "./admin/Notice.astro";
+import type {
+  GalleryOutcome,
+  PeoplesChoiceStatus,
+  PeoplesChoiceSummary,
+} from "../types";
+
+interface Props {
+  summary: PeoplesChoiceSummary;
+  /** Names of the winning entries' owners, once voting has closed. */
+  winnerNames: string[];
+  /** The viewer is a signed-in player. */
+  isPlayer: boolean;
+  /** Outcome of the viewer's last reaction or vote, if any. */
+  outcome?: GalleryOutcome;
+  /** Formats an ISO timestamp for display (the page owns date formatting). */
+  formatStamp: (iso: string) => string;
+  class?: string;
+}
+
+const {
+  summary,
+  winnerNames,
+  isPlayer,
+  outcome,
+  formatStamp,
+  class: className,
+} = Astro.props;
+const { status, closesAt, bonusPoints, voterCount, myVote } = summary;
+const pointsLabel = `+${bonusPoints} bonus point${bonusPoints === 1 ? "" : "s"}`;
+const voters = `${voterCount} ${voterCount === 1 ? "player has" : "players have"} voted`;
+
+const outcomes: Record<
+  GalleryOutcome,
+  { tone: "success" | "error"; message: string } | undefined
+> = {
+  reacted: undefined,
+  unreacted: undefined,
+  voted: {
+    tone: "success",
+    message: "Vote cast. Tallies go up when voting closes.",
+  },
+  "vote-changed": { tone: "success", message: "Vote moved." },
+  "vote-withdrawn": { tone: "success", message: "Vote withdrawn." },
+  "vote-closed": {
+    tone: "error",
+    message: "People's Choice voting is closed.",
+  },
+  "own-entry": {
+    tone: "error",
+    message: "You can't vote for your own (or your squad's) entry.",
+  },
+  invalid: { tone: "error", message: "That entry isn't available." },
+};
+const notice = outcome ? outcomes[outcome] : undefined;
+
+const accent: Record<PeoplesChoiceStatus, string> = {
+  "not-open": "border-grid",
+  open: "border-magenta/40 bg-magenta/5",
+  closed: "border-amber/40 bg-amber/5",
+};
+---
+
+<div class:list={["space-y-3", className]}>
+  {notice && <Notice tone={notice.tone}>{notice.message}</Notice>}
+  <div
+    class:list={[
+      "flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border px-4 py-3 text-sm",
+      accent[status],
+    ]}
+  >
+    <span class="text-[11px] font-bold tracking-widest text-magenta uppercase">
+      <span aria-hidden="true">★</span> people's choice
+    </span>
+    {
+      status === "open" && (
+        <span class="text-ink-dim">
+          {isPlayer
+            ? myVote
+              ? "Your vote is in. You can move it until voting closes."
+              : "Vote for your favourite entry (not your own)."
+            : "Players vote for their favourite entry."}{" "}
+          The winner gets {pointsLabel}.{" "}
+          <span class="text-ink-faint">
+            Closes {formatStamp(closesAt)} · {voters}.
+          </span>
+        </span>
+      )
+    }
+    {
+      status === "closed" &&
+        (winnerNames.length > 0 ? (
+          <span class="text-ink">
+            <span aria-hidden="true">🏆 </span>
+            {winnerNames.join(" & ")}
+            <span class="text-ink-dim">
+              {" "}
+              took it ({pointsLabel}) · {voters}.
+            </span>
+          </span>
+        ) : (
+          <span class="text-ink-dim">Nobody voted this week.</span>
+        ))
+    }
+  </div>
+</div>

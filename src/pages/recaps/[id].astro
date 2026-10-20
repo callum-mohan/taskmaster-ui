@@ -1,5 +1,4 @@
 ---
-import type { GetStaticPaths } from "astro";
 import Layout from "../../layouts/Layout.astro";
 import { withBase } from "../../lib/url";
 import TerminalWindow from "../../components/TerminalWindow.astro";
@@ -10,18 +9,27 @@ import ScoreBadge from "../../components/ScoreBadge.astro";
 import TaskPager from "../../components/TaskPager.astro";
 import ShareButton from "../../components/ShareButton.astro";
 import BackLink from "../../components/BackLink.astro";
-import { getRecapTaskIds, getWeekRecap } from "../../data/queries";
+import AdminEditLink from "../../components/AdminEditLink.astro";
+import { weekHref } from "../../lib/admin-nav";
+import { recordScope } from "../../lib/season-scope";
+import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
 
-export const getStaticPaths = (() => {
-  return getRecapTaskIds().map((id) => ({ params: { id } }));
-}) satisfies GetStaticPaths;
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const scope = await recordScope(Astro.locals, "task", Astro.params.id, {
+  isAdmin,
+});
+if (!scope) return Astro.rewrite("/404");
+const { season } = scope;
+
+const { getWeekRecap, getRecapTaskIds } = scope.queries;
 
 const { id } = Astro.params;
-const recap = getWeekRecap(id!);
+// Only completed, scored weeks have a recap; anything else (including a live
+// week that already has scores entered) is a 404.
+const recap = getRecapTaskIds().includes(id!) ? getWeekRecap(id!) : undefined;
 
-// Unknown or unscored week → 404 rather than a broken page.
 if (!recap) {
-  return Astro.redirect("/404");
+  return Astro.rewrite("/404");
 }
 
 const {
@@ -80,15 +88,26 @@ const medal = (position: number) =>
 
 <Layout title={pageTitle} description={pageDescription}>
   <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    <SeasonArchiveBanner season={season} class="mb-6" />
     <!-- Back link + share -->
     <div class="flex flex-wrap items-center justify-between gap-3">
       <BackLink href="/recaps" label="ALL RECAPS" />
-      <ShareButton
-        url={new URL(Astro.url.pathname, Astro.site).href}
-        shareTitle={`${weekLabel} recap · EAYL Taskmaster`}
-        shareText={headline}
-        label="SHARE RECAP"
-      />
+      <div class="flex flex-wrap items-center gap-3">
+        {
+          isAdmin && (
+            <AdminEditLink
+              href={weekHref(task.id, "recap")}
+              subject={`the week ${task.weekNumber} recap`}
+            />
+          )
+        }
+        <ShareButton
+          url={new URL(Astro.url.pathname, Astro.site).href}
+          shareTitle={`${weekLabel} recap · EAYL Taskmaster`}
+          shareText={headline}
+          label="SHARE RECAP"
+        />
+      </div>
     </div>
 
     <!-- Header -->

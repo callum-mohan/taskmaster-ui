@@ -1,0 +1,150 @@
+---
+import type { BonusEntry } from "../types";
+import { withBase } from "../lib/url";
+import PlayerAvatar from "./PlayerAvatar.astro";
+
+interface Props {
+  entries: BonusEntry[];
+  /**
+   * What the first column links to: the task week (on a player profile) or
+   * the player (on a task page).
+   */
+  subject: "week" | "player";
+  /** Accessible table caption. */
+  caption: string;
+  /** Shown instead of the table when there are no entries. */
+  emptyMessage?: string;
+  class?: string;
+}
+
+const {
+  entries,
+  subject,
+  caption,
+  emptyMessage = "No bonuses or deductions yet.",
+  class: className,
+} = Astro.props;
+
+type Kind = "bonus" | "deduction";
+
+const kindConfig: Record<
+  Kind,
+  { sign: string; label: string; text: string; pill: string }
+> = {
+  bonus: {
+    sign: "+",
+    label: "BONUS",
+    text: "text-acid",
+    pill: "border-acid-dim bg-acid/10 text-acid",
+  },
+  deduction: {
+    sign: "−",
+    label: "DEDUCTION",
+    text: "text-danger",
+    pill: "border-danger/40 bg-danger/10 text-danger",
+  },
+};
+
+const kindOf = (points: number): Kind => (points < 0 ? "deduction" : "bonus");
+
+const weekLabel = (n: number) => `WEEK ${String(n).padStart(2, "0")}`;
+
+const thClass =
+  "px-3 py-2.5 text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase";
+---
+
+{
+  entries.length > 0 ? (
+    <div class:list={["overflow-x-auto", className]}>
+      <table class="w-full border-collapse text-sm">
+        <caption class="sr-only">{caption}</caption>
+        <thead>
+          <tr class="border-b border-grid">
+            <th scope="col" class:list={[thClass, "text-left"]}>
+              {subject === "week" ? "Week" : "Player"}
+            </th>
+            <th scope="col" class:list={[thClass, "text-left"]}>
+              Reason
+            </th>
+            <th scope="col" class:list={[thClass, "text-right"]}>
+              Pts
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const kind = kindConfig[kindOf(entry.points)];
+            return (
+              <tr class="group border-b border-grid-soft transition-colors last:border-b-0 hover:bg-term-panel-2/60">
+                <td class="px-3 py-3 align-top whitespace-nowrap">
+                  {subject === "week" ? (
+                    <a
+                      href={withBase(`/tasks/${entry.task.id}`)}
+                      class="flex flex-col gap-0.5"
+                    >
+                      <span class="text-[11px] font-bold tracking-[0.2em] text-magenta">
+                        {weekLabel(entry.task.weekNumber)}
+                      </span>
+                      <span class="text-xs font-semibold text-ink-dim group-hover:text-acid">
+                        {entry.task.title}
+                      </span>
+                    </a>
+                  ) : (
+                    <a
+                      href={withBase(`/players/${entry.player.id}`)}
+                      class="inline-flex items-center gap-3"
+                    >
+                      <PlayerAvatar
+                        player={entry.player}
+                        class="h-8 w-8 rounded"
+                      />
+                      <span class="font-semibold text-ink group-hover:text-acid">
+                        {entry.player.name}
+                      </span>
+                    </a>
+                  )}
+                </td>
+                <td class="px-3 py-3 align-top text-ink-dim">
+                  <span class="text-ink-faint" aria-hidden="true">
+                    {" "}
+                  </span>
+                  {entry.reason}
+                </td>
+                <td class="px-3 py-3 text-right align-top whitespace-nowrap">
+                  <span class="inline-flex items-center gap-2">
+                    <span
+                      class:list={[
+                        "hidden rounded border px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] sm:inline-block",
+                        kind.pill,
+                      ]}
+                    >
+                      {kind.label}
+                    </span>
+                    <span
+                      class:list={[
+                        "text-base font-extrabold tabular-nums",
+                        kind.text,
+                      ]}
+                    >
+                      <span class="sr-only sm:hidden">{kind.label} </span>
+                      {kind.sign}
+                      {Math.abs(entry.points)}
+                    </span>
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  ) : (
+    <div class:list={["px-4 py-8 text-center sm:px-6", className]}>
+      <p class="text-sm text-ink-dim">
+        <span class="text-acid">$</span> grep bonus ledger.tsv &rarr;{" "}
+        <span class="text-ink-faint">no matches</span>
+      </p>
+      <p class="mt-1 text-[11px] text-ink-faint">{emptyMessage}</p>
+    </div>
+  )
+}

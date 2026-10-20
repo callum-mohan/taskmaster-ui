@@ -1,0 +1,508 @@
+---
+// The admin's how-to: the area map, the weekly runbook, how to read the
+// progress markers, the season lifecycle, and reference notes for the
+// roster and site pages.
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import { weekStepState } from "../../components/admin/styles";
+import {
+  ADMIN_GUIDE,
+  ADMIN_HOME,
+  ADMIN_ROSTER,
+  ADMIN_SEASONS,
+  ADMIN_SITE,
+  ADMIN_WEEKS,
+} from "../../lib/admin-nav";
+import { withBase } from "../../lib/url";
+import type { WeekStepState } from "../../types";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const contents = [
+  { id: "map", label: "the admin at a glance" },
+  { id: "weekly", label: "running a week" },
+  { id: "markers", label: "reading the progress markers" },
+  { id: "seasons", label: "seasons and the Hall of Fame" },
+  { id: "roster", label: "players, accounts and squads" },
+  { id: "site", label: "polls and the changelog" },
+  { id: "good-to-know", label: "good to know" },
+];
+
+const areas = [
+  {
+    href: ADMIN_HOME,
+    label: "dashboard",
+    what: "What needs doing now: the live week, any finished week that still needs judging or publishing, and the next week to be released. Each has a button for its next step. It also tells you when a season is ready to close or the next one is ready to launch.",
+  },
+  {
+    href: ADMIN_SEASONS,
+    label: "seasons",
+    what: "One per cohort. Create the next season, make it current, and close a finished one to crown its champion. Reached from the weeks area or the season bar on any season's screen.",
+  },
+  {
+    href: ADMIN_WEEKS,
+    label: "weeks",
+    what: "Every task, one row per week. Open a week to get its tabs: brief → judge → results night → recap. Everything about that week happens there.",
+  },
+  {
+    href: ADMIN_ROSTER,
+    label: "roster",
+    what: "Players (with their sign-in accounts) and squads, for one season at a time.",
+  },
+  {
+    href: ADMIN_SITE,
+    label: "site",
+    what: "Homepage polls and the what's new changelog.",
+  },
+  {
+    href: ADMIN_GUIDE,
+    label: "guide",
+    what: "This page.",
+  },
+];
+
+interface RunbookStep {
+  id: string;
+  when: string;
+  title: string;
+  tab: string;
+  points: string[];
+}
+
+const runbook: RunbookStep[] = [
+  {
+    id: "step-brief",
+    when: "before release",
+    title: "Set up the week",
+    tab: "weeks → + new week, then the brief tab",
+    points: [
+      "Fill in the week number, title, a one-line description and the brief (prose, or one bullet per line).",
+      "Set the release and deadline times (UK time). Status (upcoming → live → completed) follows these dates, so there's nothing to switch on or off.",
+      "Pick the format. Individual: every player is scored on their own. Team: squads are scored and every member gets their squad's points.",
+      "Set entries allowed (per player, or per squad) and the kinds (photo, text) if players should send entries in on the site. 0 keeps on-site entries closed.",
+      "Optionally add a reveal password. The title and brief stay scrambled until a visitor types it in on the task page. The brief tab also has reveal to everyone and re-lock buttons.",
+      "The id (e.g. week-04) becomes the page URL and can't be changed after the week is created.",
+    ],
+  },
+  {
+    id: "step-live",
+    when: "while it's live",
+    title: "Let it run",
+    tab: "nothing to do",
+    points: [
+      "Players send in entries from the task page. Until the deadline only they (and admins) can see them; you can look in the judge tab at any time.",
+      "Fixing a typo in the brief? Edit it in the brief tab. It's live as soon as you save.",
+    ],
+  },
+  {
+    id: "step-hold",
+    when: "before you score",
+    title: "Decide: live reveal or not?",
+    tab: "judge → hold for results night",
+    points: [
+      "Want to reveal the results live, last place first? Hold the results before you enter any points, so nothing leaks onto the leaderboard early.",
+      "No show this week? Skip this: results go public the moment you save scores.",
+    ],
+  },
+  {
+    id: "step-judge",
+    when: "after the deadline",
+    title: "Judge the entries",
+    tab: "judge",
+    points: [
+      "When a task takes entries you get a gallery: one card per player (or squad) with their entries and a points + note box. Otherwise it's a simple grid.",
+      "Fill in the points, then press save scores once at the bottom. A blank box means not scored. Positions are worked out from the points automatically.",
+      "Hide an entry (eye icon) to keep it out of the public gallery, or delete it for good.",
+      "Someone sent an entry over WhatsApp? Use add an entry for a player (once the task is completed). It goes straight into the gallery and ignores the entry limit.",
+      "Bonuses and deductions go in the bonus section: a player, some points (negative for a deduction) and a reason. They count toward the overall total but never change the week's positions.",
+      "The change log at the bottom shows who changed which score or bonus, and when.",
+    ],
+  },
+  {
+    id: "step-reveal",
+    when: "results night (optional)",
+    title: "Run the reveal",
+    tab: "results night",
+    points: [
+      "Put /live on the big screen. It only goes on air once the deadline has passed, and only one held week can be on air at a time.",
+      "Press reveal next to uncover one result at a time, last place first. Back one and restart are there if you slip. The running order below shows who's next.",
+      "Press publish results when you're done. The leaderboard, task page, recap and players' \"results are in\" notifications all update then.",
+      "Release hold (no show) makes the results public without a reveal.",
+    ],
+  },
+  {
+    id: "step-recap",
+    when: "afterwards (optional)",
+    title: "Write the recap",
+    tab: "recap",
+    points: [
+      "Add a headline, summary, funniest moment and a quote for the episode recap page.",
+      "Everything is optional: anything left blank is written from the results. The recap page appears once the week's results are public.",
+    ],
+  },
+];
+
+const markers: { state: WeekStepState; meaning: string }[] = [
+  {
+    state: "active",
+    meaning:
+      "Needs doing now. The dashboard's button takes you to the first of these.",
+  },
+  {
+    state: "done",
+    meaning: "Done: released, fully scored, published or written.",
+  },
+  {
+    state: "waiting",
+    meaning: "Can't happen yet (e.g. judging before the week is released).",
+  },
+  {
+    state: "optional",
+    meaning:
+      "Nothing required, but you can (results night, a recap write-up, editing an upcoming brief).",
+  },
+];
+
+const accountStatuses = [
+  {
+    label: "NO EMAIL",
+    meaning: "No sign-in email set, so the player can't log in.",
+  },
+  {
+    label: "INVITED",
+    meaning: "Email set, but no account has been created yet.",
+  },
+  {
+    label: "TEMP PASSWORD",
+    meaning: "Account created; they haven't chosen their own password yet.",
+  },
+  { label: "ACTIVE", meaning: "Has an account with their own password." },
+];
+
+const goodToKnow = [
+  "Everything you save is live on the public site straight away. There's no publish step (except results night).",
+  "Deleting anything asks you to confirm and lists what goes with it (scores, entries, votes and so on).",
+  "Some bonuses are automatic and can't be edited here: poll voting bonuses, +1 for the People's Choice winner, and +1 for a correct winner prediction. They're worked out from the votes and results, so they can't go stale.",
+  "Ids (players, squads, weeks, seasons) are part of public URLs, so they can't be changed after creation, and must be unique across every season. Leave a new week's id blank to get a safe default.",
+  "A sign-in email can only belong to one player across all seasons, so a returning player needs a different email for their new season's player.",
+  "When you're signed in as an admin, public player, squad, task and recap pages have an edit link that brings you straight to the right admin screen.",
+  "Press ⌘K (Ctrl+K) anywhere to jump to an admin area.",
+];
+
+const h2 = "text-lg font-extrabold tracking-tight text-ink";
+const lead = "mt-1 max-w-prose text-sm text-ink-dim";
+const link = "text-cyan hover:underline";
+---
+
+<AdminLayout title="Guide">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+    <span class="text-acid">$</span> man taskmaster-admin
+  </h1>
+  <p class="mt-2 max-w-prose text-sm text-ink-dim">
+    How to run the competition from the admin. Most weeks you'll only touch the{
+      " "
+    }
+    <a href={withBase(ADMIN_WEEKS)} class={link}>weeks</a> area: set up a task, judge
+    it after the deadline, and you're done.
+  </p>
+
+  <nav aria-labelledby="contents-heading" class="mt-6">
+    <TerminalWindow title="~/guide/contents">
+      <h2
+        id="contents-heading"
+        class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+      >
+        contents
+      </h2>
+      <ol class="mt-3 grid gap-1 text-sm sm:grid-cols-2">
+        {
+          contents.map((item, index) => (
+            <li>
+              <a href={`#${item.id}`} class="text-ink-dim hover:text-acid">
+                <span class="text-ink-faint">{index + 1}.</span> {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+    </TerminalWindow>
+  </nav>
+
+  <section id="map" aria-labelledby="map-heading" class="mt-12 scroll-mt-24">
+    <h2 id="map-heading" class={h2}>
+      <span class="text-acid">#</span> the admin at a glance
+    </h2>
+    <p class={lead}>Five areas, in the bar at the top of every admin page.</p>
+    <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+      {
+        areas.map((area) => (
+          <div class="rounded-md border border-grid bg-term-panel px-4 py-3">
+            <dt>
+              <a
+                href={withBase(area.href)}
+                class="text-sm font-bold text-acid hover:underline"
+              >
+                &gt; {area.label}
+              </a>
+            </dt>
+            <dd class="mt-1 text-xs text-ink-dim">{area.what}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </section>
+
+  <section
+    id="weekly"
+    aria-labelledby="weekly-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="weekly-heading" class={h2}>
+      <span class="text-acid">#</span> running a week
+    </h2>
+    <p class={lead}>
+      Every week follows the same path. Each step happens in a tab of the week
+      (open it from <a href={withBase(ADMIN_WEEKS)} class={link}>weeks</a> or the{
+        " "
+      }
+      <a href={withBase(ADMIN_HOME)} class={link}>dashboard</a>).
+    </p>
+    <ol class="mt-6 space-y-4">
+      {
+        runbook.map((step, index) => (
+          <li id={step.id} class="scroll-mt-24">
+            <TerminalWindow
+              title={`~/guide/step-${index + 1}`}
+              meta={step.when}
+            >
+              <h3 class="text-base font-bold text-ink">
+                <span class="text-magenta">{index + 1}.</span> {step.title}
+              </h3>
+              <p class="mt-1 text-xs text-ink-faint">
+                <span class="text-acid">$</span> {step.tab}
+              </p>
+              <ul class="mt-3 space-y-2 text-sm text-ink-dim">
+                {step.points.map((point) => (
+                  <li class="flex gap-2">
+                    <span class="text-cyan" aria-hidden="true">
+                      &gt;
+                    </span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </TerminalWindow>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section
+    id="markers"
+    aria-labelledby="markers-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="markers-heading" class={h2}>
+      <span class="text-acid">#</span> reading the progress markers
+    </h2>
+    <p class={lead}>
+      The weeks list, the dashboard and each week's tabs show where every step
+      stands.
+    </p>
+    <dl class="mt-4 space-y-2">
+      {
+        markers.map(({ state, meaning }) => {
+          const config = weekStepState[state];
+          return (
+            <div class="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
+              <dt class="sm:w-44 sm:shrink-0">
+                <span
+                  class:list={[
+                    "inline-flex items-baseline gap-1.5 rounded border px-2 py-1 text-[11px] font-bold",
+                    config.class,
+                  ]}
+                >
+                  <span aria-hidden="true">{config.icon}</span>
+                  {config.label}
+                </span>
+              </dt>
+              <dd class="text-sm text-ink-dim">{meaning}</dd>
+            </div>
+          );
+        })
+      }
+    </dl>
+  </section>
+
+  <section
+    id="seasons"
+    aria-labelledby="seasons-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="seasons-heading" class={h2}>
+      <span class="text-acid">#</span> seasons and the Hall of Fame
+    </h2>
+    <p class={lead}>
+      Each cohort plays its own season, with its own players, squads and weeks
+      (week numbers restart at 1). The <span class="text-ink">current</span> season
+      is the one the public site shows. Manage them in{" "}
+      <a href={withBase(ADMIN_SEASONS)} class={link}>seasons</a>.
+    </p>
+    <ol class="mt-4 max-w-prose space-y-2 text-sm text-ink-dim">
+      <li>
+        <span class="font-bold text-acid">1.</span> When the last week's results are
+        published, open the season and press <span class="text-ink"
+          >close &amp; crown champion</span
+        >. Its podium, winning squad and awards go up in the public Hall of
+        Fame, and the season becomes read-only (reopen it to fix anything).
+      </li>
+      <li>
+        <span class="font-bold text-acid">2.</span> Press <span class="text-ink"
+          >+ new season</span
+        > when you're ready to plan the next one. It starts empty and private.
+      </li>
+      <li>
+        <span class="font-bold text-acid">3.</span> Pick the new season in the season
+        switcher on the weeks and roster screens, then add its players, squads and
+        weeks as usual. The public site doesn't see any of it yet.
+      </li>
+      <li>
+        <span class="font-bold text-acid">4.</span> Open the new season and press
+        <span class="text-ink">make current</span> to launch it. The old season's
+        player, squad, task and recap pages stay online as an archive.
+      </li>
+    </ol>
+  </section>
+
+  <section
+    id="roster"
+    aria-labelledby="roster-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="roster-heading" class={h2}>
+      <span class="text-acid">#</span> players, accounts and squads
+    </h2>
+    <p class={lead}>
+      All in <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a>, one
+      season at a time (use the season switcher to work on another).
+    </p>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <TerminalWindow title="~/guide/players">
+        <h3 class="text-sm font-bold text-ink">Adding a player</h3>
+        <ul class="mt-2 space-y-2 text-sm text-ink-dim">
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Press <span
+              class="text-ink">+ new player</span
+            >. Fill in their sign-in email to create their account at the same
+            time.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> You'll see a temporary
+            password <span class="text-ink">once</span>. Send it to the player
+            privately. They sign in at /login and must choose their own
+            password.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Forgotten password?
+            Open the player and use <span class="text-ink">reset password</span> to
+            get a new temporary one.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Players can edit
+            their own bio and avatar once signed in. Everything else (name, squad,
+            scores) is admin-only.
+          </li>
+        </ul>
+      </TerminalWindow>
+      <TerminalWindow title="~/guide/accounts">
+        <h3 class="text-sm font-bold text-ink">Account status</h3>
+        <dl class="mt-2 space-y-2 text-sm">
+          {
+            accountStatuses.map((status) => (
+              <div>
+                <dt class="text-[11px] font-bold tracking-[0.2em] text-ink">
+                  {status.label}
+                </dt>
+                <dd class="text-ink-dim">{status.meaning}</dd>
+              </div>
+            ))
+          }
+        </dl>
+      </TerminalWindow>
+    </div>
+    <p class="mt-4 max-w-prose text-sm text-ink-dim">
+      <span class="text-ink">Squads</span> are only used by team tasks. Create one
+      with <span class="text-ink">+ new squad</span> and tick its members; a player
+      can be in one squad. The roster page shows anyone who isn't in a squad yet.
+    </p>
+  </section>
+
+  <section id="site" aria-labelledby="site-heading" class="mt-12 scroll-mt-24">
+    <h2 id="site-heading" class={h2}>
+      <span class="text-acid">#</span> polls and the changelog
+    </h2>
+    <p class={lead}>
+      Both in <a href={withBase(ADMIN_SITE)} class={link}>site</a>.
+    </p>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <TerminalWindow title="~/guide/polls">
+        <ul class="space-y-2 text-sm text-ink-dim">
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> A published poll
+            shows on the homepage between its open and close times; untick published
+            to keep it as a draft. Open now and close now buttons are on the poll.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Signed-in players
+            vote. Each voter earns the voting bonus (default 1 point, 0 turns it off)
+            in the week that's live when the poll opens, or a week you pick. It shows
+            (read-only) in that week's judge tab.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Use
+            <span class="text-ink">+ every player</span> or
+            <span class="text-ink">+ every team</span> to fill in the options quickly.
+            Duplicate copies a poll without its votes.
+          </li>
+        </ul>
+      </TerminalWindow>
+      <TerminalWindow title="~/guide/changelog">
+        <ul class="space-y-2 text-sm text-ink-dim">
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> The homepage "what's
+            new" list, newest first. Use it to tell players about new features or
+            fixes.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Visitors see a
+            dot on the what's new button until they've opened the newest entry.
+          </li>
+        </ul>
+      </TerminalWindow>
+    </div>
+  </section>
+
+  <section
+    id="good-to-know"
+    aria-labelledby="good-to-know-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="good-to-know-heading" class={h2}>
+      <span class="text-acid">#</span> good to know
+    </h2>
+    <ul class="mt-4 max-w-prose space-y-2 text-sm text-ink-dim">
+      {
+        goodToKnow.map((tip) => (
+          <li class="flex gap-2">
+            <span class="text-acid" aria-hidden="true">
+              $
+            </span>
+            <span>{tip}</span>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</AdminLayout>

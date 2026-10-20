@@ -35,14 +35,27 @@ const accentBorder: Record<Award["accent"], string> = {
     <span class="text-acid">$</span>
     {" "}{award.command}
   </p>
-  <h3
-    class:list={[
-      "mt-2 text-sm font-extrabold tracking-wide uppercase",
-      accentText[award.accent],
-    ]}
-  >
-    {award.title}
-  </h3>
+  <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+    <h3
+      class:list={[
+        "text-sm font-extrabold tracking-wide uppercase",
+        accentText[award.accent],
+      ]}
+    >
+      {award.title}
+    </h3>
+    {
+      award.active && (
+        <span class="inline-flex items-center gap-1.5 rounded border border-amber/50 bg-amber/10 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-amber">
+          <span
+            class="live-dot h-1.5 w-1.5 rounded-full bg-amber"
+            aria-hidden="true"
+          />
+          STILL GOING
+        </span>
+      )
+    }
+  </div>
 
   <p
     class:list={[

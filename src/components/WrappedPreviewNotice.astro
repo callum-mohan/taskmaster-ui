@@ -1,0 +1,34 @@
+---
+// Shown to admins previewing a season's wrapped before the season is
+// closed (only then does it go public).
+import { withBase } from "../lib/url";
+import { ADMIN_SEASONS } from "../lib/admin-nav";
+
+interface Props {
+  seasonId: string;
+  class?: string;
+}
+
+const { seasonId, class: className } = Astro.props;
+---
+
+<p
+  class:list={[
+    "flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber/50 bg-amber/5 px-3 py-2 text-xs text-ink-dim",
+    className,
+  ]}
+>
+  <span class="font-bold tracking-[0.2em] text-amber uppercase">
+    <span aria-hidden="true">● </span>admin preview
+  </span>
+  <span>
+    Only admins can see this. It goes live for everyone when the season is
+    closed, and the numbers may still change until then.
+  </span>
+  <a
+    href={withBase(`${ADMIN_SEASONS}/${seasonId}`)}
+    class="text-cyan hover:underline"
+  >
+    manage season &rarr;
+  </a>
+</p>

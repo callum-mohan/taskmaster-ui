@@ -9,10 +9,12 @@ import { ukDateFormat } from "../lib/time";
 
 interface Props {
   honours: HallOfFameSeason;
+  /** Link to the season's wrapped, shown beside the final standings link. */
+  wrappedHref?: string;
   class?: string;
 }
 
-const { honours, class: className } = Astro.props;
+const { honours, wrappedHref, class: className } = Astro.props;
 const { season, podium, winningSquad, playerCount, weekCount } = honours;
 const [champion, ...placed] = podium;
 const places = ["RUNNER-UP", "THIRD"];
@@ -117,11 +119,23 @@ const span =
         <span />
       )
     }
-    <a
-      href={withBase(`/seasons/${season.id}`)}
-      class="font-bold tracking-widest text-acid hover:underline"
-    >
-      final standings &rarr;
-    </a>
+    <span class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {
+        wrappedHref && (
+          <a
+            href={wrappedHref}
+            class="font-bold tracking-widest text-magenta hover:underline"
+          >
+            wrapped &rarr;
+          </a>
+        )
+      }
+      <a
+        href={withBase(`/seasons/${season.id}`)}
+        class="font-bold tracking-widest text-acid hover:underline"
+      >
+        final standings &rarr;
+      </a>
+    </span>
   </div>
 </TerminalWindow>

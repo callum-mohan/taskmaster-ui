@@ -4,11 +4,12 @@ import StatCard from "../components/StatCard.astro";
 import AwardCard from "../components/AwardCard.astro";
 import { withBase } from "../lib/url";
 
-const { season, getCompetitionStats, getAwards } =
+const { season, getCompetitionStats, getAwards, getStreakAwards } =
   await Astro.locals.getQueries();
 
 const stats = getCompetitionStats();
 const awards = getAwards();
+const streakAwards = getStreakAwards();
 
 const btnPrimary =
   "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-5 py-2.5 text-sm font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg focus-visible:outline-none";
@@ -16,7 +17,7 @@ const btnPrimary =
 
 <Layout
   title="Stats"
-  description="Competition stats and the EAYL Taskmaster Hall of Fame awards."
+  description="Competition stats, streaks, comebacks and the EAYL Taskmaster Hall of Fame awards."
 >
   <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
     <!-- Header -->
@@ -104,6 +105,38 @@ const btnPrimary =
             <p class="text-sm text-ink-dim">
               <span class="text-acid">&gt;</span> no awards yet — they unlock
               once the first results are in.
+            </p>
+          </div>
+        )
+      }
+    </section>
+
+    <!-- Streaks & comebacks -->
+    <section class="mt-14" aria-labelledby="streaks-heading">
+      <div class="mb-4 flex items-end justify-between gap-4">
+        <h2
+          id="streaks-heading"
+          class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+        >
+          streaks --and-comebacks
+        </h2>
+        <span class="text-[11px] text-ink-faint">
+          runs, rockets &amp; recoveries
+        </span>
+      </div>
+
+      {
+        streakAwards.length > 0 ? (
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+            {streakAwards.map((award) => (
+              <AwardCard award={award} />
+            ))}
+          </div>
+        ) : (
+          <div class="rounded-lg border border-grid bg-term-panel p-10 text-center">
+            <p class="text-sm text-ink-dim">
+              <span class="text-acid">&gt;</span> no streaks yet. They need two
+              scored weeks in a row.
             </p>
           </div>
         )

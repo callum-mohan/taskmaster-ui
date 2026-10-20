@@ -8,6 +8,7 @@ import BackLink from "../../components/BackLink.astro";
 import AdminEditLink from "../../components/AdminEditLink.astro";
 import PointsChart from "../../components/PointsChart.astro";
 import AchievementBadge from "../../components/AchievementBadge.astro";
+import AwardCard from "../../components/AwardCard.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import BonusPointsLedger from "../../components/BonusPointsLedger.astro";
 import Pagination from "../../components/Pagination.astro";
@@ -19,6 +20,7 @@ import {
 } from "../../lib/pagination";
 import { withBase } from "../../lib/url";
 import { recordScope } from "../../lib/season-scope";
+import { isWrappedLive } from "../../data/seasons";
 import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
 
 const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
@@ -36,6 +38,7 @@ const {
   getPlayerAchievements,
   getPlayerProgressionChart,
   getPlayerBonusSummary,
+  getPlayerStreakStats,
 } = scope.queries;
 
 const { id } = Astro.params;
@@ -58,6 +61,10 @@ const compareOptions = getPlayerCompareOptions(player.id);
 const achievements = getPlayerAchievements(player.id);
 const progressionChart = getPlayerProgressionChart(player.id);
 const bonusSummary = getPlayerBonusSummary(player.id);
+const streakStats = getPlayerStreakStats(player.id);
+const wrappedHref = isWrappedLive(season)
+  ? withBase(`/seasons/${season.id}/wrapped/${player.id}`)
+  : undefined;
 
 // The task log and bonus ledger page independently on their own params.
 const pageOf = (param: string) => parsePage(Astro.url.searchParams.get(param));
@@ -110,6 +117,16 @@ const positionClasses = (position: number) => {
               href={`/admin/players/${player.id}`}
               subject={`${player.name}'s profile`}
             />
+          )
+        }
+        {
+          wrappedHref && (
+            <a
+              href={wrappedHref}
+              class="inline-flex items-center gap-2 rounded-md border border-magenta/60 bg-magenta/10 px-3 py-1.5 text-[11px] font-bold tracking-widest text-magenta transition-colors hover:bg-magenta hover:text-term-bg"
+            >
+              SEASON WRAPPED <span aria-hidden="true">&rarr;</span>
+            </a>
           )
         }
         <ShareButton
@@ -242,6 +259,25 @@ const positionClasses = (position: number) => {
               </li>
             ))}
           </ul>
+        </section>
+      )
+    }
+
+    <!-- Streaks & comebacks -->
+    {
+      streakStats.length > 0 && (
+        <section class="mt-8" aria-labelledby="streaks-heading">
+          <h2
+            id="streaks-heading"
+            class="prompt mb-3 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            streaks --player {player.id}
+          </h2>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {streakStats.map((stat) => (
+              <AwardCard award={stat} />
+            ))}
+          </div>
         </section>
       )
     }

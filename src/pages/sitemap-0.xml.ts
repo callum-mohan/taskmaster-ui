@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { withBase } from "../lib/url";
-import { isSeasonPublic } from "../data/seasons";
+import { isSeasonPublic, isWrappedLive } from "../data/seasons";
 
 const STATIC_PATHS = [
   "/",
@@ -29,8 +29,15 @@ export const GET: APIRoute = async ({ site, url, locals }) => {
     seasons.filter(isSeasonPublic).map(async (season) => {
       const { players, tasks, teams, getRecapTaskIds } =
         await locals.getQueries(season.id);
+      const wrapped = isWrappedLive(season)
+        ? [
+            `/seasons/${season.id}/wrapped`,
+            ...players.map((p) => `/seasons/${season.id}/wrapped/${p.id}`),
+          ]
+        : [];
       return [
         `/seasons/${season.id}`,
+        ...wrapped,
         ...tasks.map((t) => `/tasks/${t.id}`),
         ...players.map((p) => `/players/${p.id}`),
         ...teams.map((t) => `/teams/${t.id}`),

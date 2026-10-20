@@ -117,6 +117,20 @@ const sectionHeading =
           </p>
         )
       }
+      {
+        !closed && isAdmin && (
+          <p class="mt-3 text-xs text-ink-faint">
+            <span class="text-amber">●</span> admin: the season wrapped goes
+            live when this season is closed.{" "}
+            <a
+              href={withBase(`/seasons/${season.id}/wrapped`)}
+              class="text-cyan hover:underline"
+            >
+              preview it &rarr;
+            </a>
+          </p>
+        )
+      }
     </header>
 
     {
@@ -125,7 +139,10 @@ const sectionHeading =
           <h2 id="podium-heading" class={sectionHeading}>
             season --champion
           </h2>
-          <ChampionCard honours={honours} />
+          <ChampionCard
+            honours={honours}
+            wrappedHref={withBase(`/seasons/${season.id}/wrapped`)}
+          />
         </section>
       )
     }

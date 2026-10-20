@@ -1,0 +1,399 @@
+---
+import Layout from "../../../../layouts/Layout.astro";
+import TerminalWindow from "../../../../components/TerminalWindow.astro";
+import StatCard from "../../../../components/StatCard.astro";
+import AwardCard from "../../../../components/AwardCard.astro";
+import PlayerAvatar from "../../../../components/PlayerAvatar.astro";
+import PointsChart from "../../../../components/PointsChart.astro";
+import BackLink from "../../../../components/BackLink.astro";
+import ShareButton from "../../../../components/ShareButton.astro";
+import WrappedPreviewNotice from "../../../../components/WrappedPreviewNotice.astro";
+import { isWrappedLive } from "../../../../data/seasons";
+import { withBase } from "../../../../lib/url";
+import type { PlayerTaskResult } from "../../../../types";
+
+const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
+const season = (await Astro.locals.getSeasons()).getSeason(Astro.params.id!);
+// Public once the season is closed; admins can preview it before then.
+if (!season || (!isAdmin && !isWrappedLive(season))) {
+  return Astro.rewrite("/404");
+}
+const live = isWrappedLive(season);
+
+const { getPlayerWrapped } = await Astro.locals.getQueries(season.id);
+const wrapped = getPlayerWrapped(Astro.params.player!);
+// Only players on this season's roster have a wrapped.
+if (!wrapped) return Astro.rewrite("/404");
+
+const {
+  standing,
+  persona,
+  bestWeek,
+  toughestWeek,
+  highlights,
+  awardsWon,
+  bonus,
+  squad,
+  chasing,
+  holdingOff,
+  chart,
+} = wrapped;
+const { player } = standing;
+const played = standing.tasksCompleted > 0;
+
+const plural = (n: number, one: string, many = `${one}s`) =>
+  `${n} ${n === 1 ? one : many}`;
+const ordinal = (n: number) => {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+};
+const weekLabel = (n: number) => `WEEK ${String(n).padStart(2, "0")}`;
+const signed = (n: number) =>
+  n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : "0";
+
+const rivals = wrapped.playerCount - 1;
+const description = played
+  ? `${player.name}'s ${season.name}, wrapped: "${persona.title}". Finished #${standing.rank} of ${wrapped.playerCount} with ${standing.points} pts and ${plural(standing.wins, "win")}.`
+  : `${player.name}'s ${season.name}, wrapped.`;
+
+const weekCards: {
+  label: string;
+  command: string;
+  result: PlayerTaskResult;
+}[] = [
+  ...(bestWeek
+    ? [{ label: "best week", command: "max week.points", result: bestWeek }]
+    : []),
+  ...(toughestWeek
+    ? [
+        {
+          label: "toughest week",
+          command: "max week.position",
+          result: toughestWeek,
+        },
+      ]
+    : []),
+];
+
+const sectionHeading =
+  "prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase";
+const btnPrimary =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-5 py-2.5 text-sm font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg";
+const btnGhost =
+  "inline-flex items-center justify-center gap-2 rounded-md border border-grid px-4 py-2 text-xs font-bold tracking-widest text-ink-dim transition-colors hover:border-ink-faint hover:text-ink";
+---
+
+<Layout
+  title={`${player.name} · ${season.name} Wrapped`}
+  description={description}
+  noindex={!live}
+>
+  <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+    {!live && <WrappedPreviewNotice seasonId={season.id} class="mb-6" />}
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <BackLink
+        href={`/seasons/${season.id}/wrapped#players`}
+        label="SEASON WRAPPED"
+      />
+      <ShareButton
+        url={new URL(Astro.url.pathname, Astro.site).href}
+        shareTitle={`${player.name} · ${season.name} Wrapped`}
+        shareText={description}
+        label="SHARE WRAPPED"
+      />
+    </div>
+
+    <!-- Hero -->
+    <header class="mt-6">
+      <p
+        class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+      >
+        ./wrapped --player {player.id}
+      </p>
+      <div class="mt-4 flex items-center gap-4 sm:gap-5">
+        <PlayerAvatar
+          player={player}
+          class="h-16 w-16 rounded-lg sm:h-20 sm:w-20"
+        />
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold tracking-[0.3em] text-ink-faint">
+            {season.name.toUpperCase()} · WRAPPED
+          </p>
+          <h1
+            class="truncate text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+          >
+            {player.name}
+          </h1>
+        </div>
+      </div>
+
+      <TerminalWindow title={`~/wrapped/${player.id}/persona.txt`} class="mt-6">
+        <p class="text-[10px] font-bold tracking-[0.3em] text-ink-faint">
+          THE SEASON IN ONE LINE
+        </p>
+        <p
+          class="mt-2 text-3xl font-extrabold tracking-tight text-magenta text-glow-magenta sm:text-5xl"
+        >
+          {persona.title}
+        </p>
+        <p class="caret mt-3 text-sm text-ink-dim sm:text-base">
+          {persona.blurb}
+        </p>
+      </TerminalWindow>
+    </header>
+
+    <!-- Headline numbers -->
+    <section class="mt-10" aria-labelledby="numbers-heading">
+      <h2 id="numbers-heading" class={sectionHeading}>season --summary</h2>
+      <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard
+          value={`#${standing.rank}`}
+          label={`Final rank of ${wrapped.playerCount}`}
+          command="rank --final"
+          accent="acid"
+        />
+        <StatCard
+          value={standing.points}
+          label="Points"
+          command="sum points"
+          accent="magenta"
+        />
+        <StatCard
+          value={standing.wins}
+          label={standing.wins === 1 ? "Weekly win" : "Weekly wins"}
+          command="count wins"
+          accent="cyan"
+        />
+        <StatCard
+          value={wrapped.podiums}
+          label={wrapped.podiums === 1 ? "Podium finish" : "Podium finishes"}
+          command="count top-3"
+          accent="amber"
+        />
+      </div>
+      {
+        played && (
+          <p class="mt-3 text-[11px] text-ink-faint">
+            <span class="text-acid">&gt;</span> finished ahead of{" "}
+            <span class="font-bold tabular-nums text-ink">
+              {wrapped.beaten}
+            </span>{" "}
+            of {plural(rivals, "rival")} · scored in{" "}
+            <span class="font-bold tabular-nums text-ink">
+              {standing.tasksCompleted}
+            </span>{" "}
+            of {plural(wrapped.weeksScored, "week")} · averaged a{" "}
+            <span class="font-bold tabular-nums text-ink">
+              {standing.averagePosition.toFixed(1)}
+            </span>{" "}
+            finish
+          </p>
+        )
+      }
+    </section>
+
+    <!-- Best & toughest weeks -->
+    {
+      weekCards.length > 0 && (
+        <section class="mt-12" aria-labelledby="weeks-heading">
+          <h2 id="weeks-heading" class={sectionHeading}>
+            weeks --highs-and-lows
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-2">
+            {weekCards.map(({ label, command, result }) => (
+              <a
+                href={withBase(`/tasks/${result.task.id}`)}
+                class="group flex h-full flex-col rounded-lg border border-grid bg-term-panel p-4 transition-colors hover:border-ink-faint sm:p-5"
+              >
+                <p class="text-[11px] text-ink-faint">
+                  <span class="text-acid">$</span> {command}
+                </p>
+                <p class="mt-2 text-sm font-extrabold tracking-wide text-ink-dim uppercase">
+                  {label}
+                </p>
+                <p class="mt-3 text-[11px] font-bold tracking-[0.2em] text-magenta">
+                  {weekLabel(result.task.weekNumber)}
+                </p>
+                <p class="mt-1 font-semibold text-ink group-hover:text-acid">
+                  {result.task.title}
+                </p>
+                <p class="mt-3 flex items-baseline gap-3">
+                  <span class="text-2xl font-extrabold tabular-nums text-acid">
+                    {result.points} pts
+                  </span>
+                  <span class="text-xs text-ink-dim">
+                    finished {ordinal(result.position)}
+                  </span>
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <!-- Streaks, climbs & comebacks -->
+    {
+      highlights.length > 0 && (
+        <section class="mt-12" aria-labelledby="highlights-heading">
+          <h2 id="highlights-heading" class={sectionHeading}>
+            streaks --and-comebacks
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {highlights.map((stat) => (
+              <AwardCard award={stat} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <!-- Awards won -->
+    {
+      awardsWon.length > 0 && (
+        <section class="mt-12" aria-labelledby="awards-heading">
+          <h2 id="awards-heading" class={sectionHeading}>
+            awards --won
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {awardsWon.map((award) => (
+              <AwardCard award={award} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <!-- Rivals, squad & bonuses -->
+    {
+      (chasing || holdingOff || squad || bonus.entries.length > 0) && (
+        <section class="mt-12" aria-labelledby="rivals-heading">
+          <h2 id="rivals-heading" class={sectionHeading}>
+            diff --final-standings
+          </h2>
+          <TerminalWindow title={`~/wrapped/${player.id}/rivals.diff`}>
+            <ul class="space-y-2 text-sm text-ink-dim">
+              {chasing && (
+                <li>
+                  <span class="text-cyan">&gt;</span>{" "}
+                  {chasing.gap > 0 ? (
+                    <>
+                      Finished{" "}
+                      <span class="font-bold tabular-nums text-ink">
+                        {plural(chasing.gap, "point")}
+                      </span>{" "}
+                      behind
+                    </>
+                  ) : (
+                    "Level on points with"
+                  )}{" "}
+                  <a
+                    href={withBase(`/players/${chasing.player.id}`)}
+                    class="font-semibold text-ink hover:text-acid"
+                  >
+                    {chasing.player.name}
+                  </a>{" "}
+                  (#{chasing.rank}).{" "}
+                  <a
+                    href={withBase(
+                      `/compare/${player.id}/${chasing.player.id}`,
+                    )}
+                    class="text-cyan hover:underline"
+                  >
+                    head-to-head &rarr;
+                  </a>
+                </li>
+              )}
+              {holdingOff && (
+                <li>
+                  <span class="text-acid">+</span>{" "}
+                  {holdingOff.gap > 0 ? (
+                    <>
+                      Held off{" "}
+                      <a
+                        href={withBase(`/players/${holdingOff.player.id}`)}
+                        class="font-semibold text-ink hover:text-acid"
+                      >
+                        {holdingOff.player.name}
+                      </a>{" "}
+                      (#{holdingOff.rank}) by{" "}
+                      <span class="font-bold tabular-nums text-ink">
+                        {plural(holdingOff.gap, "point")}
+                      </span>
+                      .
+                    </>
+                  ) : (
+                    <>
+                      Edged{" "}
+                      <a
+                        href={withBase(`/players/${holdingOff.player.id}`)}
+                        class="font-semibold text-ink hover:text-acid"
+                      >
+                        {holdingOff.player.name}
+                      </a>{" "}
+                      (#{holdingOff.rank}) on the tie-break.
+                    </>
+                  )}
+                </li>
+              )}
+              {squad && (
+                <li>
+                  <span class="text-magenta">#</span> Squad{" "}
+                  <a
+                    href={withBase(`/teams/${squad.team.id}`)}
+                    class="font-semibold text-cyan hover:underline"
+                  >
+                    {squad.team.name}
+                  </a>{" "}
+                  finished #{squad.rank} with{" "}
+                  <span class="tabular-nums">{squad.points}</span> pts.
+                </li>
+              )}
+              {bonus.entries.length > 0 && (
+                <li>
+                  <span class="text-amber">±</span> Bonuses and deductions came
+                  to{" "}
+                  <span class="font-bold tabular-nums text-ink">
+                    {signed(bonus.net)}
+                  </span>{" "}
+                  pts across {plural(bonus.entries.length, "adjustment")}.
+                </li>
+              )}
+            </ul>
+          </TerminalWindow>
+        </section>
+      )
+    }
+
+    <!-- Points over the season -->
+    {
+      chart && (
+        <section class="mt-12" aria-labelledby="chart-heading">
+          <h2 id="chart-heading" class={sectionHeading}>
+            points --over-time
+          </h2>
+          <TerminalWindow
+            title={`~/wrapped/${player.id}/points.chart`}
+            meta={`${standing.points} pts`}
+          >
+            <PointsChart
+              data={chart}
+              ariaLabel={`${player.name}'s cumulative points over ${season.name}, week by week.`}
+            />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
+    <section class="mt-14 flex flex-wrap items-center gap-3">
+      <a href={withBase(`/seasons/${season.id}/wrapped`)} class={btnPrimary}>
+        SEASON WRAPPED
+      </a>
+      <a href={withBase(`/players/${player.id}`)} class={btnGhost}>
+        FULL PROFILE
+      </a>
+    </section>
+  </div>
+</Layout>

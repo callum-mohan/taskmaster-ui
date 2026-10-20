@@ -1,5 +1,11 @@
 import type { AllTimeRecord, HallOfFame, HallOfFameSeason } from "../types";
 import type { Queries } from "./queries";
+import {
+  climbDetail,
+  comebackDetail,
+  MIN_STREAK,
+  weekSpan,
+} from "./streak-queries";
 
 /** The selectors bound to one closed season's snapshot. */
 export type ClosedSeason = Pick<
@@ -11,6 +17,7 @@ export type ClosedSeason = Pick<
   | "getLeaderboard"
   | "getTeamLeaderboard"
   | "getAwards"
+  | "getAllPlayerStreaks"
 >;
 
 const PODIUM_SIZE = 3;
@@ -131,6 +138,66 @@ function allTimeRecords(closed: ClosedSeason[]): AllTimeRecord[] {
       value: `${topWeek.score.points} pts`,
       detail: `Week ${topWeek.task.weekNumber}: ${topWeek.task.title}`,
       accent: "cyan",
+    });
+  }
+
+  const streaks = closed.flatMap((data) =>
+    data
+      .getAllPlayerStreaks()
+      .map((streak) => ({ season: data.season, streak })),
+  );
+
+  for (const [kind, id, title, command, accent] of [
+    ["win", "win-streak", "Longest win streak", "max streak.wins", "magenta"],
+    [
+      "podium",
+      "podium-streak",
+      "Longest podium run",
+      "max streak.podium",
+      "cyan",
+    ],
+  ] as const) {
+    const top = best(streaks, (s) => s.streak.longest[kind]?.length ?? 0);
+    const run = top?.streak.longest[kind];
+    if (top && run && run.length >= MIN_STREAK) {
+      records.push({
+        id,
+        title,
+        command,
+        player: top.streak.player,
+        season: top.season,
+        value: `${run.length} in a row`,
+        detail: weekSpan(run),
+        accent,
+      });
+    }
+  }
+
+  const climb = best(streaks, (s) => s.streak.biggestClimb?.places ?? 0);
+  if (climb?.streak.biggestClimb) {
+    records.push({
+      id: "week-climb",
+      title: "Biggest one-week climb",
+      command: "max climb.week",
+      player: climb.streak.player,
+      season: climb.season,
+      value: `+${climb.streak.biggestClimb.places} places`,
+      detail: climbDetail(climb.streak.biggestClimb),
+      accent: "amber",
+    });
+  }
+
+  const comeback = best(streaks, (s) => s.streak.comeback?.places ?? 0);
+  if (comeback?.streak.comeback) {
+    records.push({
+      id: "comeback",
+      title: "Greatest comeback",
+      command: "max comeback",
+      player: comeback.streak.player,
+      season: comeback.season,
+      value: `+${comeback.streak.comeback.places} places`,
+      detail: comebackDetail(comeback.streak.comeback, true),
+      accent: "acid",
     });
   }
 

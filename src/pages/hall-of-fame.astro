@@ -86,7 +86,12 @@ const sectionHeading =
             <div class="space-y-10">
               {seasons.map((honours) => (
                 <div>
-                  <ChampionCard honours={honours} />
+                  <ChampionCard
+                    honours={honours}
+                    wrappedHref={withBase(
+                      `/seasons/${honours.season.id}/wrapped`,
+                    )}
+                  />
                   {honours.awards.length > 0 && (
                     <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {honours.awards.map((award) => (

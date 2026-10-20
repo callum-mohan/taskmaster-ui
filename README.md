@@ -60,6 +60,8 @@ src/
 │   ├── seasons.ts     # rows → Season (status derived), season lookups, rowsForSeason
 │   ├── season-close.ts # what still stops a season being closed
 │   ├── hall-of-fame-queries.ts # closed seasons' podiums, squads, awards + all-time records
+│   ├── streak-queries.ts # win / podium / scoring streaks, one-week climbs, comebacks
+│   ├── wrapped-queries.ts # the season wrapped + each player's wrapped (personas, highs, rivals)
 │   ├── players.ts     # rows → Player ─┐
 │   ├── teams.ts       # rows → Team    ├─ pure mappers
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
@@ -106,9 +108,9 @@ src/
 │   ├── live.astro             # /live — results night, revealed bottom first
 │   ├── rules.astro            # /rules — how to play, scoring, bonuses, the prize
 │   ├── compare/               # /compare head-to-head (+ /compare/[a]/[b])
-│   ├── stats.astro            # the current season's stats & awards
+│   ├── stats.astro            # the current season's stats, streaks, comebacks & awards
 │   ├── hall-of-fame.astro     # every closed season's champions + all-time records
-│   ├── seasons/               # /seasons/[id] — a season's final standings (/seasons → hall of fame)
+│   ├── seasons/               # /seasons/[id] — a season's final standings (/seasons → hall of fame), plus /seasons/[id]/wrapped and /seasons/[id]/wrapped/[player]
 │   └── 404.astro
 ├── styles/
 │   └── global.css     # design tokens (@theme) + terminal helper classes
@@ -235,11 +237,29 @@ they're public URLs: blank week ids in later seasons default to
   writes to its weeks, roster and scores until it's reopened.
 - **Public archive:** `/hall-of-fame` lists every closed season's champion,
   podium, winning squad and awards, plus all-time records (highest season
-  total, biggest winning margin, most weekly wins, best single week).
+  total, biggest winning margin, most weekly wins, best single week, longest
+  win streak and podium run, biggest one-week climb, greatest comeback).
   `/seasons/<id>` shows a season's standings, squads, awards and weeks.
   Player, squad, task and recap URLs from past seasons keep working, with an
   "archived season" banner. Seasons being prepared (not current, not closed)
   are hidden from the public.
+- **Wrapped:** closing a season also publishes its wrapped.
+  `/seasons/<id>/wrapped` reviews the whole season: the numbers, the
+  champion, the title race (weeks at #1, lead changes, wire-to-wire), streaks,
+  comebacks and awards. `/seasons/<id>/wrapped/<player>` gives every player
+  their own: a playful persona, final rank, best and toughest weeks, streaks,
+  awards won, the rivals either side of them, and their points chart. Until
+  the season is closed both 404 for the public (`isWrappedLive`), and admins
+  see a preview (linked from the season page). It's all derived from the
+  standings, so nothing extra is stored.
+- **Streaks & comebacks** (`streak-queries.ts`) are counted over a season's
+  scored weeks: a week a player wasn't scored on breaks a streak. Win, podium
+  (top 3) and scoring (points > 0) streaks need two weeks in a row to count. A
+  climb is the most places gained over one week's results, and a comeback runs
+  from a player's lowest rank after any week to their rank now. They feed the
+  `/stats` page, player profiles, the wrapped and the Hall of Fame records.
+  Streaks that include the latest week of a running season are flagged
+  "still going".
 - Polls and the changelog are site-wide. A poll's voting bonus only counts
   for players in the season of the week it lands in.
 - Player sign-in emails are unique across all seasons, so a returning player

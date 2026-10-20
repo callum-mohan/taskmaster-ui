@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildHallOfFame, type ClosedSeason } from "./hall-of-fame-queries";
-import type { Award, LeaderboardRow, Score, TeamStanding } from "../types";
+import type {
+  Award,
+  LeaderboardRow,
+  PlayerStreaks,
+  Score,
+  TeamStanding,
+} from "../types";
 import { player, season, task, team } from "../test/fixtures";
 
 const row = (
@@ -33,12 +39,14 @@ function closed(
     squads = [],
     awards = [],
     scores = [],
+    streaks = [],
     tasks = [task({ id: `${id}-w1`, seasonId: id })],
   }: {
     leaderboard?: LeaderboardRow[];
     squads?: TeamStanding[];
     awards?: Award[];
     scores?: Score[];
+    streaks?: PlayerStreaks[];
     tasks?: ReturnType<typeof task>[];
   },
 ): ClosedSeason {
@@ -50,6 +58,7 @@ function closed(
     getLeaderboard: () => leaderboard,
     getTeamLeaderboard: () => squads,
     getAwards: () => awards,
+    getAllPlayerStreaks: () => streaks,
   };
 }
 
@@ -153,5 +162,76 @@ describe("buildHallOfFame", () => {
     ]);
     expect(fame.records.map((r) => r.id)).not.toContain("title-margin");
     expect(fame.seasons[0].winningSquad).toBeUndefined();
+  });
+
+  it("keeps streak, climb and comeback records with whoever set them first", () => {
+    const streaks = (
+      id: string,
+      wins: number,
+      climb: number,
+      comeback: number,
+    ): PlayerStreaks => ({
+      player: player(id),
+      longest: {
+        win: {
+          kind: "win",
+          length: wins,
+          fromWeek: 2,
+          toWeek: 1 + wins,
+          active: false,
+        },
+      },
+      biggestClimb: {
+        task: task({ weekNumber: 4 }),
+        fromRank: 1 + climb,
+        toRank: 1,
+        places: climb,
+      },
+      comeback: {
+        lowRank: 1 + comeback,
+        lowWeek: 3,
+        rank: 1,
+        places: comeback,
+      },
+      weeksAtTop: 0,
+    });
+    const fame = buildHallOfFame([
+      closed("s1", { streaks: [streaks("ann", 3, 5, 2)] }),
+      closed("s2", { streaks: [streaks("bob", 3, 6, 9)] }),
+    ]);
+    const records = Object.fromEntries(
+      fame.records.map((r) => [
+        r.id,
+        [r.player.id, r.season.id, r.value, r.detail],
+      ]),
+    );
+    expect(records).toEqual({
+      "win-streak": ["ann", "s1", "3 in a row", "Weeks 02–04"],
+      "week-climb": ["bob", "s2", "+6 places", "#7 → #1 · Week 04"],
+      comeback: ["bob", "s2", "+9 places", "#10 after week 03 → #1 final"],
+    });
+  });
+
+  it("skips a one-week streak", () => {
+    const fame = buildHallOfFame([
+      closed("s1", {
+        streaks: [
+          {
+            player: player("ann"),
+            longest: {
+              podium: {
+                kind: "podium",
+                length: 1,
+                fromWeek: 1,
+                toWeek: 1,
+                active: false,
+              },
+            },
+            weeksAtTop: 0,
+          },
+        ],
+      }),
+    ]);
+    expect(fame.records).toEqual([]);
   });
 });

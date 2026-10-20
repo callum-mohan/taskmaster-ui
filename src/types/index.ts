@@ -753,6 +753,136 @@ export interface Award {
   /** Supporting context, e.g. the task it relates to. */
   detail?: string;
   accent: "acid" | "magenta" | "amber" | "cyan";
+  /** Still in progress (e.g. a streak that's still going). */
+  active?: boolean;
+}
+
+// ─── Streaks & comebacks ─────────────────────────────────────────────────
+// Derived in `streak-queries.ts` from each scored week's results and the
+// overall standings straight after it.
+
+/** What a streak counts: weekly wins, top-3 finishes, or weeks with points. */
+export type StreakKind = "win" | "podium" | "scoring";
+
+/** A run of consecutive scored weeks that all met a streak's condition. */
+export interface StreakRun {
+  kind: StreakKind;
+  length: number;
+  fromWeek: number;
+  toWeek: number;
+  /**
+   * Still going: the run includes the latest scored week of a season that
+   * isn't over yet.
+   */
+  active: boolean;
+}
+
+/** Places gained in the overall standings over one week's results. */
+export interface RankClimb {
+  task: Task;
+  fromRank: number;
+  toRank: number;
+  places: number;
+}
+
+/** A recovery from a player's lowest overall rank to where they stand now. */
+export interface Comeback {
+  /** Their worst rank after any scored week (the latest such week). */
+  lowRank: number;
+  lowWeek: number;
+  /** Their rank now (the final rank once the season is closed). */
+  rank: number;
+  places: number;
+}
+
+/** One player's streaks, best climb and comeback across a season. */
+export interface PlayerStreaks {
+  player: Player;
+  /** The longest run of each kind (earliest on a tie), when there was one. */
+  longest: Partial<Record<StreakKind, StreakRun>>;
+  biggestClimb?: RankClimb;
+  comeback?: Comeback;
+  /** Best rank held after any scored week (the earliest such week). */
+  peak?: { rank: number; weekNumber: number };
+  /** Scored weeks after which they were top of the table (ties included). */
+  weeksAtTop: number;
+}
+
+// ─── Season "wrapped" ────────────────────────────────────────────────────
+// The end-of-season summary, public once a season is closed. Derived in
+// `wrapped-queries.ts` from the season's snapshot.
+
+/** A player and how many scored weeks they spent top of the table. */
+export interface TitleRaceLeader {
+  player: Player;
+  weeks: number;
+}
+
+/** The whole season, wrapped up. */
+export interface SeasonWrapped {
+  season: Season;
+  /** Final standings (every player, ranked). */
+  standings: LeaderboardRow[];
+  /** The top three who played, champion first. */
+  podium: LeaderboardRow[];
+  /** The champion's points lead over the runner-up. */
+  margin?: number;
+  winningSquad?: TeamStanding;
+  stats: CompetitionStats;
+  /** Weeks that were scored. */
+  weeksScored: number;
+  /** Net bonus points handed out across the season. */
+  bonusPoints: number;
+  /** Times a new outright leader took over after a week's results. */
+  leadChanges: number;
+  /** Everyone who topped the table after a week, most weeks first. */
+  leaders: TitleRaceLeader[];
+  /** The champion led after every scored week. */
+  wireToWire: boolean;
+  /** The season's streak and comeback leaders. */
+  streaks: Award[];
+  /** The season's superlatives (the champion is crowned separately). */
+  awards: Award[];
+}
+
+/** A short, playful label for how a player's season went. */
+export interface WrappedPersona {
+  title: string;
+  blurb: string;
+}
+
+/** A neighbour on the final standings, and the points between you. */
+export interface WrappedNeighbour {
+  player: Player;
+  rank: number;
+  gap: number;
+}
+
+/** One player's season, wrapped up. */
+export interface PlayerWrapped {
+  season: Season;
+  standing: LeaderboardRow;
+  persona: WrappedPersona;
+  playerCount: number;
+  weeksScored: number;
+  /** Players who finished below them. */
+  beaten: number;
+  podiums: number;
+  /** Their highest-scoring week (best finish, then earliest, on a tie). */
+  bestWeek?: PlayerTaskResult;
+  /** Their lowest finish, when it differs from their best week. */
+  toughestWeek?: PlayerTaskResult;
+  /** Peak rank, streaks, best climb and comeback as cards. */
+  highlights: Award[];
+  /** Season awards and streak titles they won (unnamed: they're theirs). */
+  awardsWon: Award[];
+  bonus: PlayerBonusSummary;
+  squad?: TeamStanding;
+  /** The player directly above on the final standings. */
+  chasing?: WrappedNeighbour;
+  /** The player directly below on the final standings. */
+  holdingOff?: WrappedNeighbour;
+  chart?: PointsChartData;
 }
 
 // ─── Weekly "episode" recap ──────────────────────────────────────────────

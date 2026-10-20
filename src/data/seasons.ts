@@ -107,6 +107,14 @@ export function isSeasonPublic(season: Season): boolean {
 }
 
 /**
+ * Whether a season's "wrapped" is live for the public: once it's closed and
+ * its champion crowned. Admins can preview it before then.
+ */
+export function isWrappedLive(season: Season): boolean {
+  return season.status === "closed";
+}
+
+/**
  * Narrows every row to one season: its roster, squads and weeks, and the
  * scores, bonuses, votes, predictions and recaps for those weeks. Polls and
  * the changelog are site-wide; a poll's vote bonus only counts when it lands

@@ -45,6 +45,9 @@ import { createGalleryQueries } from "./gallery-queries";
 import { createPredictionQueries } from "./prediction-queries";
 import { createLiveQueries } from "./live-queries";
 import { createRulesQueries } from "./rules-queries";
+import { createStreakQueries } from "./streak-queries";
+import { createWrappedQueries } from "./wrapped-queries";
+import { isWrappedLive } from "./seasons";
 import { withBase } from "../lib/url";
 import { ADMIN_HOME, ADMIN_SECTIONS } from "../lib/admin-nav";
 
@@ -1190,6 +1193,17 @@ export function createQueries(data: CompetitionData) {
         hint: s.status === "closed" ? "final standings" : "season",
         keywords: `season cohort archive past ${s.id}`,
       }));
+    // Every closed season's wrapped, including the current one's.
+    const wrappedItems: CommandPaletteItem[] = seasons
+      .filter(isWrappedLive)
+      .map((s) => ({
+        id: `wrapped-${s.id}`,
+        label: `${s.name} Wrapped`,
+        group: "page" as const,
+        href: withBase(`/seasons/${s.id}/wrapped`),
+        hint: "the season in review",
+        keywords: `wrapped review recap summary year end streaks ${s.id}`,
+      }));
 
     const taskItems: CommandPaletteItem[] = [...tasks]
       .sort((a, b) => a.weekNumber - b.weekNumber)
@@ -1263,6 +1277,7 @@ export function createQueries(data: CompetitionData) {
     return [
       ...PALETTE_PAGES,
       ...seasonItems,
+      ...wrappedItems,
       ...taskItems,
       ...teamItems,
       ...playerItems,
@@ -1606,6 +1621,22 @@ export function createQueries(data: CompetitionData) {
       }));
   }
 
+  const streakQueries = createStreakQueries(data, {
+    getLeaderboard,
+    standingsUpToWeek,
+  });
+  const wrappedQueries = createWrappedQueries(data, {
+    getLeaderboard,
+    getTeamLeaderboard,
+    getTeamForPlayer,
+    getAwards,
+    getCompetitionStats,
+    getPlayerResults,
+    getPlayerBonusSummary,
+    getPlayerProgressionChart,
+    ...streakQueries,
+  });
+
   return {
     season: data.season,
     players,
@@ -1661,5 +1692,7 @@ export function createQueries(data: CompetitionData) {
     ...createPredictionQueries(data),
     ...createLiveQueries(data),
     ...createRulesQueries(data),
+    ...streakQueries,
+    ...wrappedQueries,
   };
 }

@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import pongHtml from "../../pong.html?raw";
 
-export const prerender = true;
+export const prerender = false;
 
 export const GET: APIRoute = () =>
   new Response(pongHtml, {

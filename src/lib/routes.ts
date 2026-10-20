@@ -22,6 +22,20 @@ export const isAuthPagePath = (path: string) =>
   /^\/(?:login|logout)\/?$/i.test(normalise(path));
 
 /**
+ * Account writes that never touch the competition data (the notifications
+ * read marker, the password), so they needn't purge its cache. Test it
+ * against the matched route only: it's an exemption, not a guard.
+ */
+export const isCompetitionNeutralRoute = (route: string) =>
+  /^\/account\/(?:notifications(?:\/read)?|password)\/?$/i.test(
+    normalise(route),
+  );
+
+/** GET, HEAD and OPTIONS requests never change anything. */
+export const isSafeMethod = (method: string) =>
+  ["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase());
+
+/**
  * Tests both the route Astro matched and the raw URL, so variants like
  * `//admin/players` can't slip past a guard.
  */

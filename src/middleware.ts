@@ -1,7 +1,4 @@
 import { defineMiddleware, sequence } from "astro:middleware";
-<<<<<<< Updated upstream
-import { loadCompetition, type CompetitionViewer } from "./data/competition";
-=======
 import {
   buildCompetition,
   buildSeasonDirectory,
@@ -10,7 +7,6 @@ import {
   type CompetitionRows,
   type CompetitionViewer,
 } from "./data/competition";
->>>>>>> Stashed changes
 import { createQueries, type Queries } from "./data/queries";
 import { buildHallOfFame } from "./data/hall-of-fame-queries";
 import { getSessionPlayer } from "./data/accounts";
@@ -20,6 +16,8 @@ import {
   isAccountPath,
   isAdminPath,
   isAuthPagePath,
+  isCompetitionNeutralRoute,
+  isSafeMethod,
   LEGACY_ADMIN_LOGIN_PATH,
   LOGIN_PATH,
   loginRedirectPath,
@@ -64,12 +62,6 @@ const app = defineMiddleware(async (context, next) => {
 
   // Load the competition data lazily and at most once per request, so routes
   // that never ask for it (e.g. the sitemap index) skip the query. Guarded
-<<<<<<< Updated upstream
-  // admin routes (only reached by admins, see below) see real task content;
-  // everywhere else password-protected tasks are redacted unless the
-  // visitor unlocked them.
-  let queries: Promise<Queries> | undefined;
-=======
   // admin routes (only reached by admins, see below) see real task content
   // read straight from the database; everywhere else password-protected
   // tasks are redacted unless the visitor unlocked them, and the raw rows
@@ -78,17 +70,12 @@ const app = defineMiddleware(async (context, next) => {
   let directory: Promise<SeasonDirectory> | undefined;
   let hallOfFame: Promise<HallOfFame> | undefined;
   const queriesBySeason = new Map<string, Promise<Queries>>();
->>>>>>> Stashed changes
   const isGuardedAdmin =
     matchesRoute(context, isAdminPath) &&
     context.routePattern !== LEGACY_ADMIN_LOGIN_PATH;
   const viewer: CompetitionViewer = isGuardedAdmin
     ? { mode: "admin" }
     : { mode: "public", revealTokens: readRevealCookies(context.request) };
-<<<<<<< Updated upstream
-  context.locals.getQueries = () =>
-    (queries ??= loadCompetition(viewer).then(createQueries));
-=======
   const loadRows = () =>
     (rows ??= loadCompetitionRows(viewer, context.url.origin));
   const getSeasons = () =>
@@ -123,7 +110,6 @@ const app = defineMiddleware(async (context, next) => {
         ),
       ),
     ));
->>>>>>> Stashed changes
 
   // The signed-in user and their player link, each looked up at most once
   // per request and only when something asks (guards, the navbar).
@@ -213,6 +199,16 @@ const app = defineMiddleware(async (context, next) => {
   }
 
   const response = await next();
+  // A signed-in admin or player just changed something: drop the cached
+  // rows (in this data centre) before the redirect, so their next page view
+  // shows it. Anonymous posts never purge, so they can't force reloads.
+  if (
+    (context.locals.admin || context.locals.player) &&
+    !isSafeMethod(context.request.method) &&
+    !isCompetitionNeutralRoute(route)
+  ) {
+    await invalidateCompetitionCache(context.url.origin);
+  }
   // Sign-in and account pages are per-user and must never be cached or indexed.
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");

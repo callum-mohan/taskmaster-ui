@@ -11,6 +11,8 @@ declare module "cloudflare:workers" {
     TASK_REVEAL_LIMITER?: RateLimiter;
     /** Throttles sign-in attempts per IP (optional locally). */
     LOGIN_LIMITER?: RateLimiter;
+    /** The deployed Worker version (keys the competition rows cache). */
+    CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string };
   };
 }
 

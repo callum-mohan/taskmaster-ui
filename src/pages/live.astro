@@ -3,21 +3,21 @@ import Layout from "../layouts/Layout.astro";
 import TerminalWindow from "../components/TerminalWindow.astro";
 import PlayerAvatar from "../components/PlayerAvatar.astro";
 import ScoreBadge from "../components/ScoreBadge.astro";
-import { loadTaskResultRows } from "../data/live";
+import { loadLiveRows } from "../data/live";
 import { withBase } from "../lib/url";
 
 // Results night. While an admin holds a week's results, this page reveals
 // them one at a time, last place first, as the admin steps through them in
 // the week's results night tab (`/admin/weeks/<task>/live`). Only revealed
 // results reach the HTML; the page polls itself so an open tab follows the
-// show without a reload.
+// show without a reload. The show's state is read fresh on every request
+// (the rest of the snapshot may come from the cache), so each poll costs
+// one small query.
 
-const { getLiveTask, getLiveShow, getRecapSummaries } =
-  await Astro.locals.getQueries();
-const task = getLiveTask();
-const show = task
-  ? getLiveShow(task, await loadTaskResultRows(task.id))
-  : undefined;
+const [{ getLiveTask, getLiveShow, getRecapSummaries }, live] =
+  await Promise.all([Astro.locals.getQueries(), loadLiveRows()]);
+const task = getLiveTask(live.holds);
+const show = task ? getLiveShow(task, live) : undefined;
 const latestRecap = show ? undefined : getRecapSummaries()[0];
 
 // Every viewer must see the latest reveal, never a cached copy.
@@ -243,8 +243,9 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
 
 <script>
   // Follow the show: re-fetch this page and swap the board in whenever its
-  // version changes. Quicker while a show is on, and paused in background
-  // tabs. Without JS, reloading the page shows the latest reveal.
+  // version changes. Quick while a show is on; off air it only needs to
+  // notice a show starting. Paused in background tabs. Without JS,
+  // reloading the page shows the latest reveal.
   const board = document.querySelector<HTMLElement>("[data-live-board]");
   const announcer = document.querySelector<HTMLElement>(
     "[data-live-announcer]",
@@ -283,7 +284,7 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
         await refresh();
         schedule();
       },
-      onAir ? 4000 : 15000,
+      onAir ? 4000 : 60000,
     );
   }
 

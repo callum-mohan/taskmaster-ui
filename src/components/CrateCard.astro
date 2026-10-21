@@ -31,7 +31,7 @@ const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
 <article
   id={`crate-${crate.id}`}
   class:list={[
-    "flex flex-col gap-4 rounded-xl border bg-term-panel/60 p-5",
+    "flex min-w-0 flex-col gap-4 rounded-xl border bg-term-panel/60 p-4 sm:p-5",
     premium
       ? "border-amber/50 shadow-[0_0_40px_-20px_var(--color-amber)]"
       : "border-grid",

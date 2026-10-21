@@ -3,6 +3,7 @@
 import NotificationBell from "./NotificationBell.astro";
 import NotificationPanel from "./NotificationPanel.astro";
 import CoinBalanceChip from "./CoinBalanceChip.astro";
+import CoinAmount from "./CoinAmount.astro";
 import { withBase } from "../lib/url";
 import type { NotificationFeed, Viewer } from "../types";
 
@@ -27,30 +28,34 @@ interface NavGroup {
   children: NavItem[];
 }
 
-// The primary nav collapses into three command-style dropdowns. Home stays
-// reachable via the brand/logo link rather than its own nav item.
-const navGroups: NavGroup[] = [
+// The most-visited pages sit directly on the bar; everything else is grouped
+// by intent under one "more" menu. Home stays reachable via the brand link,
+// and every page is also in the ⌘K command palette.
+const primaryLinks: NavItem[] = [
+  { href: "/tasks", label: "tasks" },
+  { href: "/leaderboard", label: "leaderboard" },
+  { href: "/shop", label: "shop" },
+];
+
+const moreGroups: NavGroup[] = [
   {
-    label: "challenge",
+    label: "compete",
     children: [
-      { href: "/tasks", label: "tasks" },
-      { href: "/recaps", label: "recaps" },
       { href: "/live", label: "live" },
+      { href: "/recaps", label: "recaps" },
       { href: "/rules", label: "rules" },
-      { href: "/shop", label: "shop" },
     ],
   },
   {
     label: "rankings",
     children: [
-      { href: "/leaderboard", label: "leaderboard" },
       { href: "/teams", label: "teams" },
       { href: "/stats", label: "stats" },
       { href: "/hall-of-fame", label: "hall of fame" },
     ],
   },
   {
-    label: "players",
+    label: "people",
     children: [
       { href: "/players", label: "players" },
       { href: "/compare", label: "compare" },
@@ -67,12 +72,13 @@ const isActive = (href: string) => {
     ? path.replace(/\/$/, "") === full.replace(/\/$/, "")
     : path.startsWith(full);
 };
-const isGroupActive = (group: NavGroup) =>
-  group.children.some((child) => isActive(child.href));
+const isMoreActive = moreGroups.some((group) =>
+  group.children.some((child) => isActive(child.href)),
+);
 // Account links: players get their profile, admins the admin area, and
 // anyone signed in a logout button (a POST form, so it can't be triggered by
-// a stray link). On desktop they sit in one "account" dropdown so the bar
-// never overflows; the mobile menu lists them flat.
+// a stray link). On desktop they sit in one "account" dropdown; the mobile
+// menu lists them flat.
 const accountLinks: NavItem[] = viewer
   ? [
       ...(viewer.playerId ? [{ href: "/account", label: "profile" }] : []),
@@ -80,17 +86,30 @@ const accountLinks: NavItem[] = viewer
     ]
   : [{ href: "/login", label: "login" }];
 const isAccountActive = accountLinks.some((link) => isActive(link.href));
+
+const barLink =
+  "group inline-flex shrink-0 items-center whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors";
+// Toggle visibility with max-* variants: a base `hidden` loses to this
+// `inline-flex`, but variant utilities always win.
+const utilityBox =
+  "inline-flex h-[34px] shrink-0 items-center rounded border text-xs transition-colors";
+const menuLink =
+  "group/item flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm tracking-wide transition-colors";
 ---
 
 <header
   class="sticky top-0 z-50 border-b border-grid bg-term-bg/85 backdrop-blur supports-[backdrop-filter]:bg-term-bg/70"
 >
   <nav
-    class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6"
+    class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:px-6"
     aria-label="Primary"
   >
-    <!-- Brand / terminal traffic lights -->
-    <a href={withBase("/")} class="group mr-auto flex items-center gap-3">
+    <!-- Brand / terminal traffic lights. The tagline steps aside between the
+         desktop breakpoint and xl so the full link bar fits. -->
+    <a
+      href={withBase("/")}
+      class="group mr-auto flex min-w-0 items-center gap-3"
+    >
       <span class="hidden items-center gap-1.5 sm:flex" aria-hidden="true">
         <span class="h-3 w-3 rounded-full bg-dot-red" data-tl="red"></span>
         <span class="h-3 w-3 rounded-full bg-dot-amber" data-tl="amber"></span>
@@ -98,29 +117,29 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
       </span>
       <span class="flex flex-col leading-none">
         <span
-          class="text-base font-extrabold tracking-[0.18em] text-ink sm:text-lg"
+          class="whitespace-nowrap text-sm font-extrabold tracking-[0.12em] text-ink min-[360px]:text-base min-[360px]:tracking-[0.18em] sm:text-lg"
         >
           EAYL&nbsp;<span class="text-acid text-glow">TASKMASTER</span>
         </span>
-        <span class="mt-1 text-[10px] tracking-[0.25em] text-ink-faint">
+        <span
+          class="mt-1 text-[10px] tracking-[0.25em] text-ink-faint max-sm:hidden min-[1100px]:max-xl:hidden"
+        >
           THE ULTIMATE ACADEMY CHALLENGE
         </span>
       </span>
     </a>
 
-    <!-- Desktop links -->
-    <ul class="hidden items-center gap-1 min-[1100px]:flex">
+    <!-- Desktop page links -->
+    <ul class="hidden items-center gap-0.5 min-[1100px]:flex">
       {
-        navGroups.map((group) => (
-          <li class="relative" data-nav-dropdown>
-            <button
-              type="button"
-              data-nav-dropdown-trigger
-              aria-haspopup="true"
-              aria-expanded="false"
+        primaryLinks.map((link) => (
+          <li>
+            <a
+              href={withBase(link.href)}
+              aria-current={isActive(link.href) ? "page" : undefined}
               class:list={[
-                "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
-                isGroupActive(group)
+                barLink,
+                isActive(link.href)
                   ? "text-acid"
                   : "text-ink-dim hover:text-ink",
               ]}
@@ -128,81 +147,200 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
               <span
                 class:list={[
                   "mr-1",
-                  isGroupActive(group)
+                  isActive(link.href)
                     ? "text-acid"
                     : "text-ink-faint group-hover:text-acid",
                 ]}
               >
                 ./
               </span>
-              {group.label}
-              <span
-                class="ml-0.5 text-[10px] text-ink-faint transition-transform group-aria-expanded:rotate-180"
-                aria-hidden="true"
-              >
-                ▾
-              </span>
-            </button>
-            <ul
-              data-nav-dropdown-menu
-              class="absolute left-0 top-full z-50 mt-1 hidden min-w-[11rem] rounded-md border border-grid bg-term-panel p-1 shadow-lg shadow-acid/5"
-            >
-              {group.children.map((child) => (
-                <li>
-                  <a
-                    href={withBase(child.href)}
-                    aria-current={isActive(child.href) ? "page" : undefined}
-                    class:list={[
-                      "group/item flex items-center gap-2 rounded px-3 py-2 text-sm tracking-wide transition-colors",
-                      isActive(child.href)
-                        ? "text-acid"
-                        : "text-ink-dim hover:bg-term-panel-2 hover:text-ink",
-                    ]}
-                  >
-                    <span
-                      class:list={[
-                        isActive(child.href)
-                          ? "text-acid"
-                          : "text-ink-faint group-hover/item:text-acid",
-                      ]}
-                    >
-                      ./
-                    </span>
-                    {child.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
+              {link.label}
+            </a>
           </li>
         ))
       }
+      <li class="relative" data-nav-dropdown>
+        <button
+          type="button"
+          data-nav-dropdown-trigger
+          aria-haspopup="true"
+          aria-expanded="false"
+          class:list={[
+            barLink,
+            "gap-1",
+            isMoreActive ? "text-acid" : "text-ink-dim hover:text-ink",
+          ]}
+        >
+          <span
+            class:list={[
+              "mr-1",
+              isMoreActive
+                ? "text-acid"
+                : "text-ink-faint group-hover:text-acid",
+            ]}
+          >
+            ./
+          </span>
+          more
+          <span
+            class="ml-0.5 text-[10px] text-ink-faint transition-transform group-aria-expanded:rotate-180"
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </button>
+        <div
+          data-nav-dropdown-menu
+          class="absolute right-0 top-full z-50 mt-1 hidden w-56 rounded-md border border-grid bg-term-panel p-1 shadow-lg shadow-acid/5"
+        >
+          {
+            moreGroups.map((group) => (
+              <div class="border-b border-grid-soft py-1 last:border-b-0">
+                <p class="px-3 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+                  {group.label}
+                </p>
+                <ul>
+                  {group.children.map((child) => (
+                    <li>
+                      <a
+                        href={withBase(child.href)}
+                        aria-current={isActive(child.href) ? "page" : undefined}
+                        class:list={[
+                          menuLink,
+                          isActive(child.href)
+                            ? "text-acid"
+                            : "text-ink-dim hover:bg-term-panel-2 hover:text-ink",
+                        ]}
+                      >
+                        <span
+                          class:list={[
+                            isActive(child.href)
+                              ? "text-acid"
+                              : "text-ink-faint group-hover/item:text-acid",
+                          ]}
+                        >
+                          ./
+                        </span>
+                        {child.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          }
+        </div>
+      </li>
+    </ul>
+
+    <span
+      class="mx-1 hidden h-5 w-px bg-grid min-[1100px]:block"
+      aria-hidden="true"></span>
+
+    <!-- Utilities: search · coins · notifications · theme · account -->
+    <div class="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        data-command-palette-trigger
+        aria-label="Search"
+        aria-keyshortcuts="Meta+K Control+K"
+        title="Search (⌘K)"
+        class:list={[
+          utilityBox,
+          "gap-1.5 border-grid px-2 text-ink-dim hover:border-ink-faint hover:text-ink max-[1100px]:hidden",
+        ]}
+      >
+        <span class="text-acid" aria-hidden="true">$</span>
+        <kbd
+          class="rounded border border-grid bg-term-bg px-1.5 py-0.5 text-[10px] tracking-widest text-ink-faint"
+          aria-hidden="true">⌘K</kbd
+        >
+      </button>
+
+      {
+        coinBalance !== undefined && (
+          <CoinBalanceChip balance={coinBalance} class="max-sm:hidden" />
+        )
+      }
+
+      {
+        notifications && (
+          <NotificationBell unreadCount={notifications.unreadCount} />
+        )
+      }
+
+      <button
+        type="button"
+        data-theme-toggle
+        aria-label="Toggle light / dark theme"
+        title="Toggle light / dark theme"
+        class:list={[
+          utilityBox,
+          "w-[34px] justify-center border-grid text-ink-dim hover:border-ink-faint hover:text-acid max-sm:hidden",
+        ]}
+      >
+        <svg
+          class="theme-icon-moon h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg
+          class="theme-icon-sun h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="4"></circle>
+          <path
+            d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+          ></path>
+        </svg>
+      </button>
+
       {
         viewer ? (
-          <li class="relative" data-nav-dropdown>
+          <div class="relative hidden min-[1100px]:block" data-nav-dropdown>
             <button
               type="button"
               data-nav-dropdown-trigger
               aria-haspopup="true"
               aria-expanded="false"
               title={`Signed in as ${viewer.name}`}
+              aria-label={`Account menu, signed in as ${viewer.name}`}
               class:list={[
-                "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
-                isAccountActive ? "text-acid" : "text-ink-dim hover:text-ink",
+                utilityBox,
+                "group gap-0.5 px-2",
+                isAccountActive
+                  ? "border-acid/60 text-acid"
+                  : "border-grid text-ink-dim hover:border-ink-faint hover:text-acid",
               ]}
             >
-              <span
-                class:list={[
-                  "mr-1",
-                  isAccountActive
-                    ? "text-acid"
-                    : "text-ink-faint group-hover:text-acid",
-                ]}
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
               >
-                ./
-              </span>
-              account
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
               <span
-                class="ml-0.5 text-[10px] text-ink-faint transition-transform group-aria-expanded:rotate-180"
+                class="text-[10px] text-ink-faint transition-transform group-aria-expanded:rotate-180"
                 aria-hidden="true"
               >
                 ▾
@@ -221,7 +359,7 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
                     href={withBase(child.href)}
                     aria-current={isActive(child.href) ? "page" : undefined}
                     class:list={[
-                      "group/item flex items-center gap-2 rounded px-3 py-2 text-sm tracking-wide transition-colors",
+                      menuLink,
                       isActive(child.href)
                         ? "text-acid"
                         : "text-ink-dim hover:bg-term-panel-2 hover:text-ink",
@@ -244,7 +382,10 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
                 <form method="post" action={withBase("/logout")}>
                   <button
                     type="submit"
-                    class="group/item flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm tracking-wide text-ink-dim transition-colors hover:bg-term-panel-2 hover:text-ink"
+                    class:list={[
+                      menuLink,
+                      "text-ink-dim hover:bg-term-panel-2 hover:text-ink",
+                    ]}
                   >
                     <span class="text-ink-faint group-hover/item:text-acid">
                       ./
@@ -254,164 +395,89 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
                 </form>
               </li>
             </ul>
-          </li>
+          </div>
         ) : (
-          <li>
-            <a
-              href={withBase("/login")}
-              aria-current={isActive("/login") ? "page" : undefined}
-              class:list={[
-                "group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded px-2 py-2 text-sm tracking-wide transition-colors",
-                isActive("/login")
-                  ? "text-acid"
-                  : "text-ink-dim hover:text-ink",
-              ]}
-            >
-              <span
-                class:list={[
-                  "mr-1",
-                  isActive("/login")
-                    ? "text-acid"
-                    : "text-ink-faint group-hover:text-acid",
-                ]}
-              >
-                ./
-              </span>
-              login
-            </a>
-          </li>
+          <a
+            href={withBase("/login")}
+            aria-current={isActive("/login") ? "page" : undefined}
+            class:list={[
+              utilityBox,
+              "gap-1 px-2.5 max-[1100px]:hidden",
+              isActive("/login")
+                ? "border-acid text-acid"
+                : "border-acid/50 text-acid hover:bg-acid hover:text-term-bg",
+            ]}
+          >
+            <span aria-hidden="true">~/</span>
+            login
+          </a>
         )
       }
-      <li>
-        <button
-          type="button"
-          data-command-palette-trigger
-          aria-keyshortcuts="Meta+K Control+K"
-          class="ml-1 inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded border border-grid px-2.5 py-1.5 text-xs text-ink-dim transition-colors hover:border-ink-faint hover:text-ink"
-        >
-          <span class="text-acid" aria-hidden="true">$</span>
-          <span class="tracking-wide">search</span>
-          <kbd
-            class="rounded border border-grid bg-term-bg px-1.5 py-0.5 text-[10px] tracking-widest text-ink-faint"
-            >⌘K</kbd
-          >
-        </button>
-      </li>
-      <li>
-        <button
-          type="button"
-          data-theme-toggle
-          aria-label="Toggle light / dark theme"
-          title="Toggle light / dark theme"
-          class="ml-1 inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded border border-grid text-ink-dim transition-colors hover:border-ink-faint hover:text-acid"
-        >
-          <svg
-            class="theme-icon-moon h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-          </svg>
-          <svg
-            class="theme-icon-sun h-4 w-4"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="4"></circle>
-            <path
-              d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
-            ></path>
-          </svg>
-        </button>
-      </li>
-    </ul>
 
-    {
-      coinBalance !== undefined && (
-        <CoinBalanceChip balance={coinBalance} class="hidden sm:inline-flex" />
-      )
-    }
-
-    {
-      notifications && (
-        <NotificationBell
-          unreadCount={notifications.unreadCount}
-          class="-ml-2"
-        />
-      )
-    }
-
-    <!-- Mobile toggle -->
-    <button
-      type="button"
-      id="nav-toggle"
-      class="inline-flex items-center gap-2 rounded border border-grid px-3 py-2 text-xs text-ink-dim hover:text-ink min-[1100px]:hidden"
-      aria-expanded="false"
-      aria-controls="mobile-menu"
-    >
-      <span class="text-acid">~/</span>
-      <span id="nav-toggle-label">menu</span>
-    </button>
+      <!-- Mobile toggle -->
+      <button
+        type="button"
+        id="nav-toggle"
+        class:list={[
+          utilityBox,
+          "gap-2 border-grid px-3 text-ink-dim hover:text-ink min-[1100px]:hidden",
+        ]}
+        aria-expanded="false"
+        aria-controls="mobile-menu"
+      >
+        <span class="text-acid" aria-hidden="true">~/</span>
+        <span id="nav-toggle-label">menu</span>
+      </button>
+    </div>
   </nav>
 
-  <!-- Mobile menu -->
+  <!-- Mobile menu: pages first, then account, then utilities -->
   <div
     id="mobile-menu"
-    class="hidden border-t border-grid bg-term-panel min-[1100px]:hidden"
+    class="hidden max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-grid bg-term-panel min-[1100px]:hidden"
   >
     <ul class="mx-auto max-w-6xl px-4 py-2 sm:px-6">
-      <li>
-        <button
-          type="button"
-          data-command-palette-trigger
-          class="flex w-full items-center gap-2 border-b border-grid-soft py-3 text-left text-sm tracking-wide text-ink-dim"
-        >
-          <span class="text-acid">$</span>
-          search
-          <kbd
-            class="ml-auto rounded border border-grid bg-term-bg px-1.5 py-0.5 text-[10px] tracking-widest text-ink-faint"
-            >⌘K</kbd
-          >
-        </button>
-      </li>
-      <li>
-        <button
-          type="button"
-          data-theme-toggle
-          aria-label="Toggle colour theme"
-          class="flex w-full items-center gap-2 border-b border-grid-soft py-3 text-left text-sm tracking-wide text-ink-dim"
-        >
-          <span class="text-acid">$</span>
-          theme
-          <span data-theme-state class="ml-auto tracking-widest text-ink-faint"
-            >--dark</span
-          >
-        </button>
+      <li class="border-b border-grid-soft py-2">
+        <ul class="grid grid-cols-2 gap-x-4">
+          {
+            primaryLinks.map((link) => (
+              <li>
+                <a
+                  href={withBase(link.href)}
+                  aria-current={isActive(link.href) ? "page" : undefined}
+                  class:list={[
+                    "flex items-center gap-2 py-2 text-sm font-bold tracking-wide",
+                    isActive(link.href) ? "text-acid" : "text-ink",
+                  ]}
+                >
+                  <span
+                    class:list={[
+                      isActive(link.href) ? "text-acid" : "text-ink-faint",
+                    ]}
+                  >
+                    ./
+                  </span>
+                  {link.label}
+                </a>
+              </li>
+            ))
+          }
+        </ul>
       </li>
       {
-        navGroups.map((group) => (
-          <li class="border-b border-grid-soft py-2 last:border-b-0">
-            <p class="px-0 py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+        moreGroups.map((group) => (
+          <li class="border-b border-grid-soft py-2">
+            <p class="py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
               {group.label}
             </p>
-            <ul>
+            <ul class="grid grid-cols-2 gap-x-4">
               {group.children.map((child) => (
                 <li>
                   <a
                     href={withBase(child.href)}
                     aria-current={isActive(child.href) ? "page" : undefined}
                     class:list={[
-                      "flex items-center gap-2 py-2 pl-3 text-sm tracking-wide",
+                      "flex items-center gap-2 py-2 text-sm tracking-wide",
                       isActive(child.href) ? "text-acid" : "text-ink-dim",
                     ]}
                   >
@@ -430,15 +496,35 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
           </li>
         ))
       }
-      <li class="border-b border-grid-soft py-2 last:border-b-0">
+      <li class="border-b border-grid-soft py-2">
         {
           viewer && (
-            <p class="py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+            <p class="truncate py-1 text-[10px] uppercase tracking-[0.25em] text-ink-faint">
               signed in as {viewer.name}
             </p>
           )
         }
-        <ul>
+        <ul class="grid grid-cols-2 gap-x-4">
+          {
+            coinBalance !== undefined && (
+              <li class="col-span-2 sm:hidden">
+                <a
+                  href={withBase("/account#wallet")}
+                  class="flex items-center gap-2 py-2 text-sm tracking-wide text-ink-dim"
+                >
+                  <span class="text-ink-faint">~/</span>
+                  wallet
+                  <CoinAmount
+                    amount={coinBalance}
+                    class:list={[
+                      "ml-auto",
+                      coinBalance < 0 ? "text-danger" : "text-amber",
+                    ]}
+                  />
+                </a>
+              </li>
+            )
+          }
           {
             accountLinks.map((link) => (
               <li>
@@ -447,16 +533,21 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
                   aria-current={isActive(link.href) ? "page" : undefined}
                   class:list={[
                     "flex items-center gap-2 py-2 text-sm tracking-wide",
-                    viewer && "pl-3",
-                    isActive(link.href) ? "text-acid" : "text-ink-dim",
+                    isActive(link.href)
+                      ? "text-acid"
+                      : viewer
+                        ? "text-ink-dim"
+                        : "text-acid",
                   ]}
                 >
                   <span
                     class:list={[
-                      isActive(link.href) ? "text-acid" : "text-ink-faint",
+                      isActive(link.href) || !viewer
+                        ? "text-acid"
+                        : "text-ink-faint",
                     ]}
                   >
-                    ./
+                    ~/
                   </span>
                   {link.label}
                 </a>
@@ -469,9 +560,9 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
                 <form method="post" action={withBase("/logout")}>
                   <button
                     type="submit"
-                    class="flex w-full items-center gap-2 py-2 pl-3 text-left text-sm tracking-wide text-ink-dim"
+                    class="flex w-full items-center gap-2 py-2 text-left text-sm tracking-wide text-ink-dim"
                   >
-                    <span class="text-ink-faint">./</span>
+                    <span class="text-ink-faint">~/</span>
                     logout
                   </button>
                 </form>
@@ -479,6 +570,34 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
             )
           }
         </ul>
+      </li>
+      <li>
+        <button
+          type="button"
+          data-command-palette-trigger
+          class="flex w-full items-center gap-2 border-b border-grid-soft py-3 text-left text-sm tracking-wide text-ink-dim sm:border-b-0"
+        >
+          <span class="text-acid">$</span>
+          search
+          <kbd
+            class="ml-auto rounded border border-grid bg-term-bg px-1.5 py-0.5 text-[10px] tracking-widest text-ink-faint"
+            >⌘K</kbd
+          >
+        </button>
+      </li>
+      <li class="sm:hidden">
+        <button
+          type="button"
+          data-theme-toggle
+          aria-label="Toggle colour theme"
+          class="flex w-full items-center gap-2 py-3 text-left text-sm tracking-wide text-ink-dim"
+        >
+          <span class="text-acid">$</span>
+          theme
+          <span data-theme-state class="ml-auto tracking-widest text-ink-faint"
+            >--dark</span
+          >
+        </button>
       </li>
     </ul>
   </div>

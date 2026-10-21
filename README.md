@@ -558,8 +558,8 @@ There is no public sign-up: admins invite players. Admins (including those
 who also play) land on `/admin` after signing in; an admin account without a
 player profile that tries to open `/account` is pointed to `/admin`.
 
-The navbar shows `login` to visitors. Once signed in it becomes an
-`account` dropdown (a flat list in the mobile menu) with `profile` for
+The navbar shows `login` to visitors. Once signed in it becomes an account
+menu (the person icon; a flat list in the mobile menu) with `profile` for
 players, `admin` for admins, and `logout`. Logging out is a `POST` to
 `/logout`. The session is only looked up when the request carries a Neon Auth
 session cookie, so anonymous page views make no auth call, and signed-in

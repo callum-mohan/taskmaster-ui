@@ -32,7 +32,7 @@ const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
 <article
   id={`item-${item.id}`}
   class:list={[
-    "flex scroll-mt-24 flex-col gap-3 rounded-lg border bg-term-panel/60 p-4 transition-colors",
+    "flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-lg border bg-term-panel/60 p-4 transition-colors",
     owned ? "border-acid-dim" : "border-grid hover:border-ink-faint",
     className,
   ]}

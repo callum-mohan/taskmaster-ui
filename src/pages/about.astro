@@ -70,7 +70,7 @@ const loop: { cmd: string; text: string }[] = [
         about --what-is-this
       </h2>
 
-      <div class="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+      <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">
         <TerminalWindow title="~/about/eayl-taskmaster.md">
           <h3 class="text-2xl font-extrabold text-ink sm:text-3xl">
             What is EAYL Taskmaster?
@@ -173,7 +173,9 @@ const loop: { cmd: string; text: string }[] = [
       </h2>
 
       <TerminalWindow title="~/whoami" meta="root@taskmaster">
-        <div class="grid gap-8 lg:grid-cols-[auto_1fr] lg:items-start">
+        <div
+          class="grid grid-cols-1 gap-8 lg:grid-cols-[auto_1fr] lg:items-start"
+        >
           <img
             src={withBase("/callum-pixel.webp")}
             alt="Pixelated portrait of Callum Mohan at Niagara Falls"

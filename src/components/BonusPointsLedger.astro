@@ -63,7 +63,10 @@ const thClass =
             <th scope="col" class:list={[thClass, "text-left"]}>
               {subject === "week" ? "Week" : "Player"}
             </th>
-            <th scope="col" class:list={[thClass, "text-left"]}>
+            <th
+              scope="col"
+              class:list={[thClass, "hidden text-left sm:table-cell"]}
+            >
               Reason
             </th>
             <th scope="col" class:list={[thClass, "text-right"]}>
@@ -76,7 +79,7 @@ const thClass =
             const kind = kindConfig[kindOf(entry.points)];
             return (
               <tr class="group border-b border-grid-soft transition-colors last:border-b-0 hover:bg-term-panel-2/60">
-                <td class="px-3 py-3 align-top whitespace-nowrap">
+                <td class="px-3 py-3 align-top sm:whitespace-nowrap">
                   {subject === "week" ? (
                     <a
                       href={withBase(`/tasks/${entry.task.id}`)}
@@ -98,13 +101,18 @@ const thClass =
                         player={entry.player}
                         class="h-8 w-8 rounded"
                       />
-                      <span class="font-semibold text-ink group-hover:text-acid">
+                      <span class="font-semibold wrap-break-word text-ink group-hover:text-acid">
                         {entry.player.name}
                       </span>
                     </a>
                   )}
+                  {/* On phones the reason sits under the subject instead of
+                      in a squeezed middle column. */}
+                  <p class="mt-1.5 text-xs text-ink-dim sm:hidden">
+                    {entry.reason}
+                  </p>
                 </td>
-                <td class="px-3 py-3 align-top text-ink-dim">
+                <td class="hidden px-3 py-3 align-top text-ink-dim sm:table-cell">
                   <span class="text-ink-faint" aria-hidden="true">
                     {" "}
                   </span>

@@ -232,7 +232,7 @@ const btnGhost =
           <h2 id="streaks-heading" class={sectionHeading}>
             streaks --and-comebacks
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {wrapped.streaks.map((award) => (
               <AwardCard award={award} />
             ))}
@@ -248,7 +248,7 @@ const btnGhost =
           <h2 id="awards-heading" class={sectionHeading}>
             awards --season
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {wrapped.awards.map((award) => (
               <AwardCard award={award} />
             ))}
@@ -268,7 +268,7 @@ const btnGhost =
         <span class="text-acid">//</span> Every player gets their own season in review.
         Find yours.
       </p>
-      <ol class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ol class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {
           standings.map((row) => (
             <li>

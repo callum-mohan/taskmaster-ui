@@ -160,28 +160,36 @@ const positionClasses = (position: number) => {
             <span class="font-bold tracking-widest text-magenta">
               RANK #{rank}
             </span>
-            <span class="text-ink-faint" aria-hidden="true">·</span>
-            <span class="text-ink-dim">
-              <span class="font-bold text-acid">{standing.points}</span> pts
+            {
+              /* Each separator travels with the item after it so a wrapped
+                line never ends on a dangling dot. */
+            }
+            <span class="inline-flex items-center gap-x-3 text-ink-dim">
+              <span class="text-ink-faint" aria-hidden="true">·</span>
+              <span>
+                <span class="font-bold text-acid">{standing.points}</span> pts
+              </span>
             </span>
-            <span class="text-ink-faint" aria-hidden="true">·</span>
-            <span class="text-ink-dim">
-              {standing.wins}{" "}
-              {standing.wins === 1 ? "win" : "wins"}
+            <span class="inline-flex items-center gap-x-3 text-ink-dim">
+              <span class="text-ink-faint" aria-hidden="true">·</span>
+              <span>
+                {standing.wins}{" "}
+                {standing.wins === 1 ? "win" : "wins"}
+              </span>
             </span>
             {
               team && (
-                <>
+                <span class="inline-flex min-w-0 items-center gap-x-3">
                   <span class="text-ink-faint" aria-hidden="true">
                     ·
                   </span>
                   <a
                     href={withBase(`/teams/${team.id}`)}
-                    class="text-cyan underline-offset-2 hover:underline"
+                    class="min-w-0 text-cyan underline-offset-2 hover:underline"
                   >
                     {team.name}
                   </a>
-                </>
+                </span>
               )
             }
           </p>
@@ -316,7 +324,9 @@ const positionClasses = (position: number) => {
 
     <!-- Task-by-task record -->
     <section id="history" class="mt-12 scroll-mt-24">
-      <div class="mb-4 flex items-end justify-between gap-4">
+      <div
+        class="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2"
+      >
         <h2
           class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
         >
@@ -347,7 +357,7 @@ const positionClasses = (position: number) => {
                   <tr class="border-b border-grid">
                     <th
                       scope="col"
-                      class="px-3 py-2.5 text-left text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase"
+                      class="hidden px-3 py-2.5 text-left text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase sm:table-cell"
                     >
                       Week
                     </th>
@@ -374,10 +384,13 @@ const positionClasses = (position: number) => {
                 <tbody>
                   {historyPage.items.map((result) => (
                     <tr class="group border-b border-grid-soft transition-colors last:border-b-0 hover:bg-term-panel-2/60">
-                      <td class="px-3 py-3 whitespace-nowrap text-[11px] font-bold tracking-[0.2em] text-magenta">
+                      <td class="hidden px-3 py-3 text-[11px] font-bold tracking-[0.2em] whitespace-nowrap text-magenta sm:table-cell">
                         {weekLabel(result.task.weekNumber)}
                       </td>
                       <td class="px-3 py-3">
+                        <span class="block text-[10px] font-bold tracking-[0.2em] text-magenta sm:hidden">
+                          {weekLabel(result.task.weekNumber)}
+                        </span>
                         <a
                           href={withBase(`/tasks/${result.task.id}`)}
                           class="font-semibold text-ink group-hover:text-acid"
@@ -386,7 +399,7 @@ const positionClasses = (position: number) => {
                         </a>
                       </td>
                       <td class="px-3 py-3 text-center">
-                        <span class="inline-flex items-center gap-1.5">
+                        <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
                           {medal(result.position) && (
                             <span aria-hidden="true">
                               {medal(result.position)}

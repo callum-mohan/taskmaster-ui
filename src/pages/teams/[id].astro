@@ -159,13 +159,13 @@ const positionClasses = (position: number) => {
                     <span class="block truncate text-sm font-bold text-ink group-hover:text-acid">
                       {player.name}
                     </span>
-                    <span class="block text-[11px] text-ink-faint">
+                    <span class="block truncate text-[11px] text-ink-faint">
                       {row && row.tasksCompleted > 0
                         ? `#${row.rank} overall · ${row.wins} ${row.wins === 1 ? "win" : "wins"}`
                         : "yet to score"}
                     </span>
                   </span>
-                  <span class="text-right">
+                  <span class="shrink-0 text-right whitespace-nowrap">
                     <span class="text-base font-extrabold tabular-nums text-acid">
                       {row?.points ?? 0}
                     </span>
@@ -196,14 +196,17 @@ const positionClasses = (position: number) => {
         ) : (
           <ul class="space-y-3">
             {teamTaskLog.map(({ task, result }) => (
-              <li class="flex items-center gap-4 rounded-lg border border-grid bg-term-panel p-4">
-                <span class="w-14 shrink-0 text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase">
+              <li class="flex items-center gap-3 rounded-lg border border-grid bg-term-panel p-4 sm:gap-4">
+                <span class="hidden w-14 shrink-0 text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase sm:block">
                   {weekLabel(task.weekNumber)}
                 </span>
                 <span class="min-w-0 flex-1">
+                  <span class="block text-[10px] font-bold tracking-[0.2em] text-ink-faint uppercase sm:hidden">
+                    {weekLabel(task.weekNumber)}
+                  </span>
                   <a
                     href={withBase(`/tasks/${task.id}`)}
-                    class="truncate text-sm font-bold text-ink transition-colors hover:text-acid"
+                    class="block truncate text-sm font-bold text-ink transition-colors hover:text-acid"
                   >
                     {task.title && task.title !== "???" ? task.title : "???"}
                   </a>
@@ -212,14 +215,14 @@ const positionClasses = (position: number) => {
                   <>
                     <span
                       class:list={[
-                        "inline-flex items-center rounded border px-2 py-0.5 text-xs font-bold tabular-nums",
+                        "inline-flex shrink-0 items-center rounded border px-2 py-0.5 text-xs font-bold whitespace-nowrap tabular-nums",
                         positionClasses(result.position),
                       ]}
                     >
                       {result.position === 1 ? "🥇 " : ""}
                       {`P${result.position}`}
                     </span>
-                    <span class="w-16 text-right">
+                    <span class="shrink-0 text-right whitespace-nowrap sm:w-16">
                       <span class="text-lg font-extrabold tabular-nums text-acid">
                         {result.points}
                       </span>

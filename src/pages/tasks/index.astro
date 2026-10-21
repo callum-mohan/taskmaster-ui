@@ -221,7 +221,7 @@ const clearSearchHref = withBase(
           <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
             tasks --filter {section.label}
           </h2>
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {section.items.map(({ summary, text, visible }) => (
               <div
                 class="grid"

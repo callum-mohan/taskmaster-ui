@@ -94,11 +94,11 @@ const leader = first;
             {podium.map((row) => {
               const style = podiumStyle[row.rank];
               return (
-                <li class:list={["flex", style.height]}>
+                <li class:list={["flex min-w-0", style.height]}>
                   <a
                     href={withBase(`/players/${row.player.id}`)}
                     class:list={[
-                      "group flex w-full flex-col items-center gap-2 rounded-xl border px-2 py-4 text-center transition-colors hover:border-ink-faint sm:px-4",
+                      "group flex w-full min-w-0 flex-col items-center gap-2 rounded-xl border px-2 py-4 text-center transition-colors hover:border-ink-faint sm:px-4",
                       style.ring,
                     ]}
                   >
@@ -109,8 +109,8 @@ const leader = first;
                       player={row.player}
                       class="h-11 w-11 rounded sm:h-14 sm:w-14"
                     />
-                    <span class="min-w-0">
-                      <span class="block truncate text-sm font-extrabold text-ink group-hover:text-acid sm:text-base">
+                    <span class="w-full min-w-0">
+                      <span class="line-clamp-2 text-sm font-extrabold wrap-break-word text-ink group-hover:text-acid sm:text-base">
                         {row.player.name}
                       </span>
                       <span class="block text-[10px] tracking-[0.2em] text-ink-faint">
@@ -159,7 +159,9 @@ const leader = first;
 
     <!-- ======================= FULL STANDINGS ======================= -->
     <section class="mt-12">
-      <div class="mb-4 flex items-end justify-between gap-4">
+      <div
+        class="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2"
+      >
         <h2
           class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
         >

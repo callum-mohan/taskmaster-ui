@@ -201,7 +201,7 @@ const btnGhost =
           <h2 id="weeks-heading" class={sectionHeading}>
             weeks --highs-and-lows
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {weekCards.map(({ label, command, result }) => (
               <a
                 href={withBase(`/tasks/${result.task.id}`)}
@@ -241,7 +241,7 @@ const btnGhost =
           <h2 id="highlights-heading" class={sectionHeading}>
             streaks --and-comebacks
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {highlights.map((stat) => (
               <AwardCard award={stat} />
             ))}
@@ -257,7 +257,7 @@ const btnGhost =
           <h2 id="awards-heading" class={sectionHeading}>
             awards --won
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {awardsWon.map((award) => (
               <AwardCard award={award} />
             ))}

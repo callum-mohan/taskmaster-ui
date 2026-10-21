@@ -53,13 +53,13 @@ const style = info ? config[info.status] : null;
         role="status"
         aria-live="polite"
         class:list={[
-          "hidden items-center gap-3 rounded-lg border px-4 py-3 text-sm",
+          "hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-lg border px-4 py-3 text-sm sm:gap-y-0",
           style.frame,
         ]}
       >
         <span
           class:list={[
-            "flex shrink-0 items-center gap-1.5 text-[10px] font-bold tracking-[0.2em]",
+            "order-1 flex shrink-0 items-center gap-1.5 text-[10px] font-bold tracking-[0.2em]",
             style.accent,
           ]}
         >
@@ -74,7 +74,7 @@ const style = info ? config[info.status] : null;
           {style.tag}
         </span>
 
-        <p class="min-w-0 flex-1 truncate text-ink-dim">
+        <p class="order-3 min-w-0 flex-1 truncate text-ink-dim sm:order-2">
           <span class={`font-bold ${style.accent}`}>{weekLabel}</span>
           <span class="mx-1.5 text-ink-faint" aria-hidden="true">
             ·
@@ -89,7 +89,7 @@ const style = info ? config[info.status] : null;
           href={info.href}
           data-whats-new-view
           class:list={[
-            "inline-flex shrink-0 items-center rounded-md border px-3 py-1.5 text-xs font-bold tracking-widest transition-colors",
+            "order-4 inline-flex shrink-0 items-center justify-self-end rounded-md border px-3 py-1.5 text-xs font-bold tracking-widest transition-colors sm:order-3",
             style.cta,
           ]}
         >
@@ -100,7 +100,7 @@ const style = info ? config[info.status] : null;
           type="button"
           data-whats-new-dismiss
           aria-label="Dismiss new task notice"
-          class="shrink-0 rounded px-1.5 py-1 text-ink-faint transition-colors hover:text-ink"
+          class="order-2 shrink-0 justify-self-end rounded px-1.5 py-1 text-ink-faint transition-colors hover:text-ink sm:order-4"
         >
           <span aria-hidden="true">✕</span>
         </button>
@@ -131,11 +131,15 @@ const style = info ? config[info.status] : null;
       lastSeen = null;
     }
 
+    // Two rows (grid) on phones so the title isn't squeezed out; one row
+    // (flex) from sm up.
+    const shownClasses = ["grid", "sm:flex"];
+
     // Only surface the banner when the current task differs from the one the
     // visitor last acknowledged — i.e. a new week has gone live since.
     if (taskId && lastSeen !== taskId) {
       banner.classList.remove("hidden");
-      banner.classList.add("flex");
+      banner.classList.add(...shownClasses);
     }
 
     banner
@@ -143,7 +147,7 @@ const style = info ? config[info.status] : null;
       ?.addEventListener("click", () => {
         markSeen();
         banner.classList.add("hidden");
-        banner.classList.remove("flex");
+        banner.classList.remove(...shownClasses);
       });
 
     // Viewing the task also counts as acknowledging it.

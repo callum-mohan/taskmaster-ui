@@ -166,7 +166,7 @@ const sectionHeading =
           <h2 id="squads-heading" class={sectionHeading}>
             squads --standings
           </h2>
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {squads.map((standing) => (
               <TeamCard standing={standing} />
             ))}
@@ -181,7 +181,7 @@ const sectionHeading =
           <h2 id="awards-heading" class={sectionHeading}>
             awards --season
           </h2>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {awards.map((award) => (
               <AwardCard award={award} />
             ))}
@@ -196,7 +196,7 @@ const sectionHeading =
           <h2 id="weeks-heading" class={sectionHeading}>
             ls ~/seasons/{season.id}/weeks
           </h2>
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {weeks.map((summary) => (
               <TaskCard summary={summary} />
             ))}

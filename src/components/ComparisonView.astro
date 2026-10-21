@@ -177,29 +177,31 @@ const cellResult = (result?: { position: number; points: number }) => result;
 
 <!-- Versus header -->
 <section
-  class="mt-6 grid grid-cols-[1fr_auto_1fr] items-stretch gap-3 sm:gap-4"
+  class="mt-6 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-3 sm:gap-4"
 >
   <a
     href={withBase(`/players/${a.player.id}`)}
     class:list={[
-      "group flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-ink-faint sm:p-5",
+      "group flex min-w-0 flex-col items-center gap-2 rounded-lg border px-2 py-4 text-center transition-colors hover:border-ink-faint sm:p-5",
       headerRing("a"),
     ]}
   >
     <PlayerAvatar
       player={a.player}
-      class="h-14 w-14 rounded-lg sm:h-16 sm:w-16"
+      class="h-12 w-12 rounded-lg sm:h-16 sm:w-16"
     />
     <span
-      class="truncate text-lg font-extrabold text-ink group-hover:text-acid sm:text-2xl"
+      class="line-clamp-2 w-full text-base font-extrabold wrap-break-word text-ink group-hover:text-acid sm:text-2xl"
       >{a.player.name}</span
     >
-    <span class="text-xs font-bold tracking-widest text-magenta"
+    <span class="text-[10px] font-bold tracking-widest text-magenta sm:text-xs"
       >RANK #{a.rank}</span
     >
   </a>
 
-  <div class="flex flex-col items-center justify-center gap-2 px-1">
+  <div
+    class="flex max-w-22 flex-col items-center justify-center gap-2 px-1 sm:max-w-none"
+  >
     <span
       class="text-xl font-extrabold tracking-widest text-ink-faint sm:text-3xl"
       aria-hidden="true">VS</span
@@ -227,19 +229,19 @@ const cellResult = (result?: { position: number; points: number }) => result;
   <a
     href={withBase(`/players/${b.player.id}`)}
     class:list={[
-      "group flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:border-ink-faint sm:p-5",
+      "group flex min-w-0 flex-col items-center gap-2 rounded-lg border px-2 py-4 text-center transition-colors hover:border-ink-faint sm:p-5",
       headerRing("b"),
     ]}
   >
     <PlayerAvatar
       player={b.player}
-      class="h-14 w-14 rounded-lg sm:h-16 sm:w-16"
+      class="h-12 w-12 rounded-lg sm:h-16 sm:w-16"
     />
     <span
-      class="truncate text-lg font-extrabold text-ink group-hover:text-acid sm:text-2xl"
+      class="line-clamp-2 w-full text-base font-extrabold wrap-break-word text-ink group-hover:text-acid sm:text-2xl"
       >{b.player.name}</span
     >
-    <span class="text-xs font-bold tracking-widest text-magenta"
+    <span class="text-[10px] font-bold tracking-widest text-magenta sm:text-xs"
       >RANK #{b.rank}</span
     >
   </a>

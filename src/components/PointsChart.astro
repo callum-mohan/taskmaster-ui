@@ -173,26 +173,29 @@ const areaFor = (values: number[]) =>
     )
   }
 
-  <!-- Screen-reader data table -->
-  <table class="sr-only">
-    <caption>{ariaLabel}</caption>
-    <thead>
-      <tr>
-        <th scope="col">Player</th>
-        {weeks.map((week) => <th scope="col">{week.label}</th>)}
-      </tr>
-    </thead>
-    <tbody>
-      {
-        series.map((s) => (
-          <tr>
-            <th scope="row">{s.label}</th>
-            {s.values.map((v) => (
-              <td>{v}</td>
-            ))}
-          </tr>
-        ))
-      }
-    </tbody>
-  </table>
+  <!-- Screen-reader data table. sr-only sits on a wrapper because tables
+       ignore the 1px width and would widen the page on mobile. -->
+  <div class="sr-only">
+    <table>
+      <caption>{ariaLabel}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Player</th>
+          {weeks.map((week) => <th scope="col">{week.label}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          series.map((s) => (
+            <tr>
+              <th scope="row">{s.label}</th>
+              {s.values.map((v) => (
+                <td>{v}</td>
+              ))}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
 </figure>

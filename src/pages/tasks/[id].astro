@@ -410,7 +410,7 @@ const medal = (position: number) =>
     </section>
 
     <!-- Schedule + countdown -->
-    <section class="mt-8 grid gap-4 sm:grid-cols-2">
+    <section class="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div class="rounded-lg border border-grid bg-term-panel p-5">
         <p class="text-[10px] tracking-[0.2em] text-ink-faint uppercase">
           Released
@@ -496,7 +496,7 @@ const medal = (position: number) =>
             </a>
             .
           </p>
-          <ul class="grid gap-3 sm:grid-cols-2">
+          <ul class="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {teams.map((team) => (
               <li>
                 <a
@@ -652,20 +652,23 @@ const medal = (position: number) =>
           </div>
 
           {/* Full results table */}
-          <div class="overflow-hidden rounded-lg border border-grid">
+          <div class="overflow-x-auto rounded-lg border border-grid">
             <table class="w-full text-left text-sm">
               <caption class="sr-only">
                 Final results for {weekLabel}: {task.title}
               </caption>
               <thead>
                 <tr class="border-b border-grid bg-term-bg/60 text-[10px] tracking-[0.2em] text-ink-faint uppercase">
-                  <th scope="col" class="px-4 py-3 font-semibold">
+                  <th scope="col" class="px-3 py-3 font-semibold sm:px-4">
                     Pos
                   </th>
-                  <th scope="col" class="px-4 py-3 font-semibold">
+                  <th scope="col" class="px-3 py-3 font-semibold sm:px-4">
                     Player
                   </th>
-                  <th scope="col" class="px-4 py-3 text-right font-semibold">
+                  <th
+                    scope="col"
+                    class="px-3 py-3 text-right font-semibold sm:px-4"
+                  >
                     Points
                   </th>
                 </tr>
@@ -673,7 +676,7 @@ const medal = (position: number) =>
               <tbody>
                 {resultsPage.items.map((row) => (
                   <tr class="border-b border-grid-soft last:border-b-0 hover:bg-term-panel/60">
-                    <td class="px-4 py-3">
+                    <td class="px-3 py-3 sm:px-4">
                       <span class="font-bold tabular-nums">
                         {medal(row.position) ?? (
                           <span class="text-ink-faint">
@@ -682,7 +685,7 @@ const medal = (position: number) =>
                         )}
                       </span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-3 py-3 sm:px-4">
                       <a
                         href={withBase(`/players/${row.player.id}`)}
                         class="group inline-flex items-center gap-3"
@@ -696,7 +699,7 @@ const medal = (position: number) =>
                         </span>
                       </a>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-3 py-3 text-right sm:px-4">
                       <ScoreBadge points={row.points} position={row.position} />
                     </td>
                   </tr>
@@ -745,20 +748,23 @@ const medal = (position: number) =>
           </div>
 
           {/* Full team results table */}
-          <div class="overflow-hidden rounded-lg border border-grid">
+          <div class="overflow-x-auto rounded-lg border border-grid">
             <table class="w-full text-left text-sm">
               <caption class="sr-only">
                 Final team results for {weekLabel}: {task.title}
               </caption>
               <thead>
                 <tr class="border-b border-grid bg-term-bg/60 text-[10px] tracking-[0.2em] text-ink-faint uppercase">
-                  <th scope="col" class="px-4 py-3 font-semibold">
+                  <th scope="col" class="px-3 py-3 font-semibold sm:px-4">
                     Pos
                   </th>
-                  <th scope="col" class="px-4 py-3 font-semibold">
+                  <th scope="col" class="px-3 py-3 font-semibold sm:px-4">
                     Squad
                   </th>
-                  <th scope="col" class="px-4 py-3 text-right font-semibold">
+                  <th
+                    scope="col"
+                    class="px-3 py-3 text-right font-semibold sm:px-4"
+                  >
                     Points
                   </th>
                 </tr>
@@ -766,7 +772,7 @@ const medal = (position: number) =>
               <tbody>
                 {teamResults.map((row) => (
                   <tr class="border-b border-grid-soft last:border-b-0 hover:bg-term-panel/60">
-                    <td class="px-4 py-3">
+                    <td class="px-3 py-3 sm:px-4">
                       <span class="font-bold tabular-nums">
                         {medal(row.position) ?? (
                           <span class="text-ink-faint">
@@ -775,12 +781,15 @@ const medal = (position: number) =>
                         )}
                       </span>
                     </td>
-                    <td class="px-4 py-3">
+                    <td class="px-3 py-3 sm:px-4">
                       <a
                         href={withBase(`/teams/${row.team.id}`)}
                         class="group inline-flex items-center gap-3"
                       >
-                        <span class="flex -space-x-2" aria-hidden="true">
+                        <span
+                          class="hidden -space-x-2 sm:flex"
+                          aria-hidden="true"
+                        >
                           {row.members.slice(0, 5).map((member) => (
                             <PlayerAvatar
                               player={member}
@@ -793,7 +802,7 @@ const medal = (position: number) =>
                         </span>
                       </a>
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-3 py-3 text-right sm:px-4">
                       <ScoreBadge points={row.points} position={row.position} />
                     </td>
                   </tr>

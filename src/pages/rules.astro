@@ -140,11 +140,11 @@ const bonusRows: BonusRow[] = [
       </p>
     </header>
 
-    <div class="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[1.5fr_1fr]">
       <!-- Contents -->
       <nav aria-label="Rules contents">
         <TerminalWindow title="~/rules/README.md" meta="ls -1">
-          <ol class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <ol class="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
             {
               contents.map((item, i) => (
                 <li>

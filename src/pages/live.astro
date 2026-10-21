@@ -171,7 +171,7 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
                         row.latest && !show.complete && "bg-amber/5",
                       ]}
                     >
-                      <span class="w-8 text-center font-bold tabular-nums">
+                      <span class="w-8 shrink-0 text-center font-bold tabular-nums">
                         {medal(row.position) ?? (
                           <span class="text-ink-faint">
                             {String(row.position).padStart(2, "0")}
@@ -180,7 +180,7 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
                       </span>
                       <a
                         href={row.href}
-                        class="group inline-flex min-w-0 items-center gap-3"
+                        class="group flex min-w-0 flex-1 items-center gap-3"
                       >
                         {row.player && (
                           <PlayerAvatar
@@ -189,7 +189,10 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
                           />
                         )}
                         {row.members && (
-                          <span class="flex -space-x-2" aria-hidden="true">
+                          <span
+                            class="hidden shrink-0 -space-x-2 sm:flex"
+                            aria-hidden="true"
+                          >
                             {row.members.slice(0, 5).map((member) => (
                               <PlayerAvatar
                                 player={member}
@@ -200,7 +203,7 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
                         )}
                         <span
                           class:list={[
-                            "truncate font-semibold group-hover:text-acid",
+                            "min-w-0 truncate font-semibold group-hover:text-acid",
                             row.type === "team" ? "text-magenta" : "text-ink",
                           ]}
                         >
@@ -208,18 +211,18 @@ const collapsedCount = (show?.hiddenCount ?? 0) - placeholderCount;
                         </span>
                       </a>
                       {row.latest && !show.complete && (
-                        <span class="text-[10px] font-bold tracking-widest text-amber uppercase">
+                        <span class="shrink-0 text-[10px] font-bold tracking-widest text-amber uppercase">
                           just in
                         </span>
                       )}
-                      <span class="ml-auto">
+                      <span class="ml-auto shrink-0">
                         <ScoreBadge
                           points={row.points}
                           position={row.position}
                         />
                       </span>
                       {row.comment && (
-                        <p class="w-full pl-12 text-xs text-ink-faint">
+                        <p class="w-full pl-12 text-xs wrap-break-word text-ink-faint">
                           <span class="text-acid">//</span> {row.comment}
                         </p>
                       )}

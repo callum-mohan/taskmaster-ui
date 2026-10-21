@@ -1,9 +1,11 @@
 import { z } from "astro/zod";
 import type { PollRecord } from "../data/admin";
 import { toWallClock } from "./time";
-import type { SubmissionOutcome } from "../types";
+import type { FeatureFlagKey, SubmissionOutcome } from "../types";
+import { FEATURE_FLAG_KEYS } from "../data/feature-flags";
 import {
   COSMETIC_KINDS,
+  CRATES,
   NAME_COLOURS,
   POWER_UP_KINDS,
   PROFILE_THEMES,
@@ -251,16 +253,19 @@ export function parseTeamForm(form: FormData): ParseResult<TeamInput> {
 
 // ── Tasks ─────────────────────────────────────────────────────────────
 
+const DATE_TIME_LOCAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+const toWallClockTimestamp = (v: string) => {
+  const [date, time] = v.split("T");
+  return `${date} ${time.length === 5 ? `${time}:00` : time}`;
+};
+
 /** `<input type="datetime-local">` value → Postgres wall-clock timestamp. */
 const localDateTime = z
   .string()
   .trim()
   .min(1, "Required.")
-  .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/, "Enter a date and time.")
-  .transform((v) => {
-    const [date, time] = v.split("T");
-    return `${date} ${time.length === 5 ? `${time}:00` : time}`;
-  });
+  .regex(DATE_TIME_LOCAL, "Enter a date and time.")
+  .transform(toWallClockTimestamp);
 
 const taskSchema = z
   .object({
@@ -972,6 +977,13 @@ const blankToNull = z
   .trim()
   .transform((v) => (v === "" ? null : v));
 
+/** An optional `<input type="datetime-local">`: blank means no limit. */
+const optionalLocalDateTime = z
+  .string()
+  .trim()
+  .refine((v) => v === "" || DATE_TIME_LOCAL.test(v), "Enter a date and time.")
+  .transform((v) => (v === "" ? null : toWallClockTimestamp(v)));
+
 const shopItemSchema = z
   .object({
     id: slug,
@@ -996,13 +1008,30 @@ const shopItemSchema = z
     powerUp: blankToNull,
     available: z.boolean(),
     crateOnly: z.boolean(),
+    crateId: blankToNull,
+    availableFrom: optionalLocalDateTime,
+    availableUntil: optionalLocalDateTime,
     sortOrder: optionalOrder,
   })
   .superRefine((item, ctx) => {
     const issue = (path: string, message: string) =>
       ctx.addIssue({ code: "custom", path: [path], message });
     if (item.crateOnly && item.category === "power_up") {
-      issue("crateOnly", "Eggs never hatch power-ups.");
+      issue("crateOnly", "Power-ups can't be egg exclusives.");
+    }
+    if (item.crateId !== null) {
+      if (!CRATES.some((c) => c.exclusive && c.id === item.crateId)) {
+        issue("crateId", "Pick one of the seasonal eggs.");
+      } else if (!item.crateOnly) {
+        issue("crateId", "A seasonal egg's exclusive must be egg exclusive.");
+      }
+    }
+    if (
+      item.availableFrom &&
+      item.availableUntil &&
+      item.availableUntil <= item.availableFrom
+    ) {
+      issue("availableUntil", "The end must be after the start.");
     }
     if (
       (item.category === "pet" || item.category === "avatar") &&
@@ -1072,6 +1101,9 @@ export function parseShopItemForm(form: FormData): ParseResult<ShopItemInput> {
       powerUp: values.powerUp ?? "",
       available,
       crateOnly,
+      crateId: values.crateId ?? "",
+      availableFrom: values.availableFrom ?? "",
+      availableUntil: values.availableUntil ?? "",
       sortOrder: values.sortOrder ?? "",
     },
     {
@@ -1080,6 +1112,25 @@ export function parseShopItemForm(form: FormData): ParseResult<ShopItemInput> {
       crateOnly: crateOnly ? "on" : "",
     },
   );
+}
+
+const featureFlagSchema = z.object({
+  key: z.enum(FEATURE_FLAG_KEYS as [FeatureFlagKey, ...FeatureFlagKey[]]),
+  enabled: z.enum(["on", "off"]).transform((v) => v === "on"),
+});
+
+export type FeatureFlagInput = z.output<typeof featureFlagSchema>;
+
+/** A feature flag toggle, or `undefined` for an unknown flag or value. */
+export function parseFeatureFlagForm(
+  form: FormData,
+): FeatureFlagInput | undefined {
+  const values = formValues(form);
+  const parsed = featureFlagSchema.safeParse({
+    key: values.key ?? "",
+    enabled: values.enabled ?? "",
+  });
+  return parsed.success ? parsed.data : undefined;
 }
 
 const coinAdjustmentSchema = z.object({

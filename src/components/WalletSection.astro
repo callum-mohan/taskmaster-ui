@@ -1,7 +1,7 @@
 ---
 // A signed-in player's Clim Coin wallet, as a section of their account page:
-// balance, power-ups for the live week, inventory (equip / take off) and
-// history. Its forms post to the account page with an `intent`.
+// balance, power-ups for the live week, gifting, inventory (equip / take
+// off) and history. Its forms post to the account page with an `intent`.
 import TerminalWindow from "./TerminalWindow.astro";
 import CoinAmount from "./CoinAmount.astro";
 import ShopItemArt from "./ShopItemArt.astro";
@@ -10,13 +10,16 @@ import Pagination from "./Pagination.astro";
 import { btnGhost, btnPrimary, inputClass, labelClass } from "./admin/styles";
 import type {
   CoinLedgerEntry,
+  GiftPanel,
   InventoryItem,
   LoadoutSlot,
   Page,
   PowerUpPanel,
   Wallet,
 } from "../types";
-import { POWER_UP_BLOCK_LABEL } from "../lib/coin-ui";
+import { GIFT_BLOCK_LABEL, POWER_UP_BLOCK_LABEL } from "../lib/coin-ui";
+import { GIFT_MESSAGE_MAX } from "../data/coin-rules";
+import { POWER_UP_INFO } from "../data/coins";
 import { ukDateFormat } from "../lib/time";
 import { withBase } from "../lib/url";
 
@@ -24,6 +27,7 @@ interface Props {
   wallet: Wallet;
   inventory: InventoryItem[];
   panel: PowerUpPanel;
+  gifts: GiftPanel;
   /** The live week's hint, if the player used Hint on it. */
   hint?: string;
   seasonName: string;
@@ -40,6 +44,7 @@ const {
   wallet,
   inventory,
   panel,
+  gifts,
   hint,
   seasonName,
   seasonClosed,
@@ -62,6 +67,8 @@ const wearables = SLOT_GROUPS.filter((g) => bySlot(g.slot).length > 0);
 const powerUps = inventory.filter(
   (entry) => entry.item.category === "power_up",
 );
+const isPassive = (entry: InventoryItem) =>
+  entry.item.powerUp !== undefined && POWER_UP_INFO[entry.item.powerUp].passive;
 
 const dateFmt = ukDateFormat({ day: "numeric", month: "short" });
 const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
@@ -99,7 +106,12 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
         ]}
       />
       <p class="mt-1 text-[11px] text-ink-faint">
-        earned {wallet.earned} · grants {wallet.adjusted} · spent {wallet.spent}
+        earned {wallet.earned} · grants {wallet.adjusted}
+        {
+          wallet.gifted !== 0 &&
+            ` · gifts ${wallet.gifted > 0 ? "+" : ""}${wallet.gifted}`
+        }
+        · spent {wallet.spent}
       </p>
     </div>
   </div>
@@ -177,7 +189,8 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
       {
         panel.options.length === 0 ? (
           <p class="text-xs text-ink-faint">
-            You don't hold any power-ups.{" "}
+            You don't hold any power-ups to use. (Shield, Mirror and Insurance
+            work by themselves; they're listed in your inventory.){" "}
             <a
               href={withBase("/shop#shop-power_up")}
               class="text-cyan hover:underline"
@@ -235,6 +248,74 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
               </li>
             ))}
           </ul>
+        )
+      }
+    </div>
+  </TerminalWindow>
+
+  <!-- Gifting -->
+  <TerminalWindow
+    title="~/gift"
+    meta={`${gifts.allowance}/${gifts.cap} left this week`}
+    class="mt-8"
+  >
+    <div id="gift" class="space-y-4">
+      <p class="text-sm text-ink-dim">
+        <span class="text-amber">&gt;</span> Send Clim Coin to another player: up
+        to {gifts.cap} in any 7 days. They'll see who it's from, and your note.
+      </p>
+      {
+        gifts.blocked ? (
+          <p class="text-xs text-ink-faint">
+            {GIFT_BLOCK_LABEL[gifts.blocked]}
+          </p>
+        ) : (
+          <form method="post" class="grid gap-3 sm:grid-cols-[1fr_7rem]">
+            <input type="hidden" name="intent" value="gift" />
+            <label class="block">
+              <span class={labelClass}>to</span>
+              <select
+                name="toPlayerId"
+                required
+                class:list={[inputClass(false), "mt-1"]}
+              >
+                {gifts.recipients.map((recipient) => (
+                  <option value={recipient.id}>{recipient.name}</option>
+                ))}
+              </select>
+            </label>
+            <label class="block">
+              <span class={labelClass}>coins</span>
+              <input
+                type="number"
+                name="amount"
+                required
+                min="1"
+                max={gifts.max}
+                value="1"
+                inputmode="numeric"
+                class:list={[inputClass(false), "mt-1"]}
+              />
+            </label>
+            <label class="block sm:col-span-2">
+              <span class={labelClass}>note (optional)</span>
+              <input
+                type="text"
+                name="message"
+                maxlength={GIFT_MESSAGE_MAX}
+                placeholder="for the carry last week"
+                class:list={[inputClass(false), "mt-1"]}
+              />
+            </label>
+            <div class="sm:col-span-2">
+              <button type="submit" class={btnPrimary}>
+                send coins
+              </button>
+              <span class="ml-3 text-[11px] text-ink-faint">
+                up to {gifts.max} now
+              </span>
+            </div>
+          </form>
         )
       }
     </div>
@@ -323,10 +404,26 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
             <div>
               <h3 class="text-xs font-bold text-ink-dim">power-ups</h3>
               <ul class="mt-2 flex flex-wrap gap-2">
-                {powerUps.map(({ item }) => (
-                  <li class="inline-flex items-center gap-2 rounded-md border border-grid px-3 py-1.5 text-xs text-ink">
-                    {item.name}
-                    <span class="text-ink-faint">ready</span>
+                {powerUps.map((entry) => (
+                  <li
+                    class:list={[
+                      "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-ink",
+                      isPassive(entry) ? "border-cyan/40" : "border-grid",
+                    ]}
+                    title={
+                      entry.item.powerUp
+                        ? POWER_UP_INFO[entry.item.powerUp].description
+                        : undefined
+                    }
+                  >
+                    {entry.item.name}
+                    <span
+                      class:list={[
+                        isPassive(entry) ? "text-cyan" : "text-ink-faint",
+                      ]}
+                    >
+                      {isPassive(entry) ? "armed · passive" : "ready"}
+                    </span>
                   </li>
                 ))}
               </ul>

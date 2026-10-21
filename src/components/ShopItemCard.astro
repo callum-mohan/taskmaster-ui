@@ -1,13 +1,15 @@
 ---
 // One shop listing: the item, its price and, for the viewer, a buy button
 // (a plain POST to `/account/shop/<id>`) or why they can't buy it.
+// Limited-time stock says when it leaves.
 import type { ShopListing } from "../types";
 import ShopItemArt from "./ShopItemArt.astro";
 import CoinAmount from "./CoinAmount.astro";
 import RarityBadge from "./RarityBadge.astro";
-import { rarityOf } from "../data/coin-rules";
-import { COSMETIC_KIND_LABELS } from "../data/coins";
-import { PURCHASE_BLOCK_LABEL } from "../lib/coin-ui";
+import { getCrate, rarityOf } from "../data/coin-rules";
+import { COSMETIC_KIND_LABELS, POWER_UP_INFO } from "../data/coins";
+import { PURCHASE_BLOCK_LABEL, timeLeftLabel } from "../lib/coin-ui";
+import { ukDateFormat } from "../lib/time";
 import { btnPrimary } from "./admin/styles";
 import { withBase } from "../lib/url";
 
@@ -27,6 +29,32 @@ const kindLabel = item.cosmetic
   : undefined;
 // Only what eggs (crates) can hatch has a rarity.
 const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
+const passive = item.powerUp ? POWER_UP_INFO[item.powerUp].passive : false;
+const exclusiveLabel = item.crateId
+  ? `${getCrate(item.crateId)?.name ?? "seasonal egg"} exclusive`
+  : "egg exclusive";
+const untilFmt = ukDateFormat({
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const status =
+  item.category === "power_up"
+    ? charges > 0
+      ? passive
+        ? "✓ armed"
+        : "✓ ready to use"
+      : owned
+        ? passive
+          ? "triggered this season"
+          : "used this season"
+        : passive
+          ? "passive · one per season"
+          : "one per season"
+    : owned
+      ? "✓ in your wallet"
+      : "";
 ---
 
 <article
@@ -52,7 +80,7 @@ const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
         {
           item.crateOnly ? (
             <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-magenta">
-              egg exclusive
+              {exclusiveLabel}
             </span>
           ) : (
             <CoinAmount amount={item.price} class="text-sm text-amber" />
@@ -63,24 +91,28 @@ const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
     </div>
   </div>
   {
+    item.availableUntil && (
+      <p class="flex flex-wrap items-center gap-x-2 text-[11px] text-amber">
+        <span class="font-bold uppercase tracking-[0.15em]">
+          <span aria-hidden="true">⏳ </span>limited
+        </span>
+        <span>
+          until{" "}
+          <time datetime={item.availableUntil}>
+            {untilFmt.format(new Date(item.availableUntil))}
+          </time>{" "}
+          · {timeLeftLabel(item.availableUntil)}
+        </span>
+      </p>
+    )
+  }
+  {
     item.description && (
       <p class="text-xs leading-relaxed text-ink-dim">{item.description}</p>
     )
   }
   <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
-    <p class="text-[11px] text-ink-faint">
-      {
-        item.category === "power_up"
-          ? charges > 0
-            ? "✓ ready to use"
-            : owned
-              ? "used this season"
-              : "one per season"
-          : owned
-            ? "✓ in your wallet"
-            : ""
-      }
-    </p>
+    <p class="text-[11px] text-ink-faint">{status}</p>
     {
       blocked === "guest" ? (
         <a href={loginHref} class="text-xs text-cyan hover:underline">

@@ -467,4 +467,88 @@ describe("getNotifications", () => {
       ).toBeUndefined();
     });
   });
+
+  describe("shields and mirrors", () => {
+    const ann = { id: "ann", seasonId: "cohort-2026", name: "Ann" };
+    const bob = { id: "bob", seasonId: "cohort-2026", name: "Bob" };
+    const bounced = {
+      id: 7,
+      taskId: "week-01",
+      effect: "sabotage" as const,
+      label: "sabotaged Ann, but it bounced off Ann's Mirror",
+      player: bob,
+      target: ann,
+      outcome: "reflected" as const,
+      at: "2026-06-25T09:00:00.000Z",
+    };
+    const RESULTS = "2026-06-30T20:00:00.000Z";
+    const feed = (playerId: string, now = NOW) =>
+      createNotificationQueries(
+        competitionData({
+          tasks: [week1, week2, week3],
+          resultsPostedAt: { "week-01": RESULTS },
+        }),
+        {
+          getPlayerRankHistory: () => [],
+          getSabotagesOf: (id) => (id === "ann" ? [bounced] : []),
+          getSabotagesBy: (id) => (id === "bob" ? [bounced] : []),
+        },
+      ).getNotifications({ now, playerId });
+
+    it("tells both sides once the week's results are out", () => {
+      expect(byId(feed("ann").items, "defended:7")).toMatchObject({
+        kind: "shielded",
+        title: "Your Mirror bounced Bob's Sabotage back",
+        detail: "no points lost · Week 01",
+        at: RESULTS,
+      });
+      expect(byId(feed("ann").items, "sabotage:7")?.detail).toBe(
+        "no points lost · Week 01",
+      );
+      expect(byId(feed("bob").items, "reflected:7")).toMatchObject({
+        kind: "reflected",
+        title: "Your Sabotage bounced off Ann's Mirror",
+        detail: "5 points lost · Week 01",
+      });
+      expect(
+        byId(feed("ann", at("2026-06-30T19:00:00Z")).items, "defended:7"),
+      ).toBeUndefined();
+    });
+  });
+
+  describe("gifts", () => {
+    it("tells the recipient who sent coins, with their note", () => {
+      const { items } = feedFor(
+        {
+          players: [
+            { id: "ann", seasonId: "cohort-2026", name: "Ann" },
+            { id: "bob", seasonId: "cohort-2026", name: "Bob" },
+          ],
+          coins: {
+            ...competitionData().coins,
+            gifts: [
+              {
+                id: 3,
+                fromPlayerId: "bob",
+                toPlayerId: "ann",
+                amount: 2,
+                message: "for the carry",
+                at: "2026-06-30T10:00:00.000Z",
+              },
+            ],
+          },
+        },
+        { playerId: "ann" },
+      );
+      expect(byId(items, "gift:3")).toEqual({
+        id: "gift:3",
+        kind: "gift-received",
+        title: "Bob sent you 2 Clim Coin",
+        detail: '"for the carry"',
+        href: "/account#history",
+        at: "2026-06-30T10:00:00.000Z",
+        unread: true,
+      });
+    });
+  });
 });

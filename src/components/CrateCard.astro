@@ -1,14 +1,21 @@
 ---
 // An egg (a crate, i.e. a lootbox) in the shop: its price, the viewer's
 // personal odds per rarity tier and per item, and a crack button (a plain
-// POST to `/account/crates/<id>`) or why they can't crack it.
+// POST to `/account/crates/<id>`) or why they can't crack it. Seasonal
+// eggs say when they leave.
 import type { CrateView } from "../types";
 import CoinAmount from "./CoinAmount.astro";
 import RarityBadge from "./RarityBadge.astro";
 import ShopItemArt from "./ShopItemArt.astro";
 import { btnPrimary } from "./admin/styles";
-import { CRATE_BLOCK_LABEL, RARITY_INFO, formatChance } from "../lib/coin-ui";
+import {
+  CRATE_BLOCK_LABEL,
+  RARITY_INFO,
+  formatChance,
+  timeLeftLabel,
+} from "../lib/coin-ui";
 import { eggArt } from "../data/coin-rules";
+import { ukDateFormat } from "../lib/time";
 import { assetUrl, withBase } from "../lib/url";
 
 interface Props {
@@ -25,16 +32,25 @@ const loginHref = withBase(
   `/login?${new URLSearchParams({ next: `/account/crates/${crate.id}` })}`,
 );
 const premium = crate.odds.common === undefined;
+const seasonal = crate.exclusive === true;
 const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
+const untilFmt = ukDateFormat({
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
 ---
 
 <article
   id={`crate-${crate.id}`}
   class:list={[
     "flex min-w-0 flex-col gap-4 rounded-xl border bg-term-panel/60 p-4 sm:p-5",
-    premium
-      ? "border-amber/50 shadow-[0_0_40px_-20px_var(--color-amber)]"
-      : "border-grid",
+    seasonal
+      ? "border-pumpkin/60 shadow-[0_0_40px_-20px_var(--color-pumpkin)]"
+      : premium
+        ? "border-amber/50 shadow-[0_0_40px_-20px_var(--color-amber)]"
+        : "border-grid",
     className,
   ]}
 >
@@ -48,7 +64,11 @@ const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
         height="64"
         class:list={[
           "h-16 w-16 shrink-0 rounded-md border bg-term-bg [image-rendering:pixelated]",
-          premium ? "border-amber/60" : "border-cyan/50",
+          seasonal
+            ? "border-pumpkin/60"
+            : premium
+              ? "border-amber/60"
+              : "border-cyan/50",
         ]}
       />
       <div>
@@ -74,6 +94,24 @@ const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
       )
     }
   </div>
+
+  {
+    crate.availableUntil && (
+      <p class="flex flex-wrap items-center gap-x-2 text-[11px] text-pumpkin">
+        <span class="font-bold uppercase tracking-[0.15em]">
+          <span aria-hidden="true">⏳ </span>
+          {seasonal ? "seasonal" : "limited"}
+        </span>
+        <span>
+          until{" "}
+          <time datetime={crate.availableUntil}>
+            {untilFmt.format(new Date(crate.availableUntil))}
+          </time>{" "}
+          · {timeLeftLabel(crate.availableUntil)}
+        </span>
+      </p>
+    )
+  }
 
   <p class="text-xs leading-relaxed text-ink-dim">{crate.description}</p>
 
@@ -143,8 +181,8 @@ const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
         <p class="text-[11px] text-ink-faint">
           Average value ≈ {Math.round(averageValue)} coins of items.
           {personal
-            ? " Your odds: anything you own can't hatch, and empty tiers share their chance out."
-            : " Shown for someone who owns nothing yet; items you own never hatch."}
+            ? " Your odds: nothing you own (or power-up you've had this season) can hatch, and empty tiers share their chance out."
+            : " Shown for someone who owns nothing yet; items you own, and power-ups you've had this season, never hatch."}
         </p>
       </>
     ) : (

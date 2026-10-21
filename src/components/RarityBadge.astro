@@ -1,11 +1,11 @@
 ---
-// An item's rarity as a small labelled badge (the name is always shown, so
-// the colour is never the only signal).
-import type { Rarity } from "../types";
+// An item's rarity (or an egg's power-up tier) as a small labelled badge
+// (the name is always shown, so the colour is never the only signal).
+import type { CrateTierKind } from "../types";
 import { RARITY_INFO } from "../lib/coin-ui";
 
 interface Props {
-  rarity: Rarity;
+  rarity: CrateTierKind;
   class?: string;
 }
 

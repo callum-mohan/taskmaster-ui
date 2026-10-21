@@ -17,7 +17,9 @@ const [queries, viewer] = await Promise.all([
 ]);
 const {
   season,
+  features,
   getShopSections,
+  getLimitedListings,
   getWallet,
   getPlayerById,
   getGameRules,
@@ -32,6 +34,7 @@ const playerId =
     ? viewer.playerId
     : undefined;
 const sections = getShopSections({ playerId });
+const limited = getLimitedListings({ playerId });
 const crates = getCrateViews({ playerId });
 const recentPulls = getRecentPulls();
 const wallet = playerId ? getWallet(playerId) : undefined;
@@ -126,44 +129,72 @@ const notice = outcome && !pull ? COIN_OUTCOME_NOTICE[outcome] : undefined;
 
     {pull && <CrateReveal pull={pull} class="mt-8" />}
 
-    <section
-      id="crates"
-      aria-labelledby="crates-heading"
-      class="mt-12 scroll-mt-24"
-    >
-      <p class="prompt text-[11px] text-ink-faint">ls ./eggs --odds</p>
-      <h2
-        id="crates-heading"
-        class="mt-1 text-2xl font-extrabold tracking-tight text-ink"
-      >
-        Mystery eggs
-      </h2>
-      <p class="mt-1 max-w-2xl text-xs leading-relaxed text-ink-dim">
-        Crack one open for a random pet, avatar or cosmetic you don't own yet
-        (never a power-up). Rarity follows the shop price: Common up to 15, Rare
-        16–29, Epic 30–39, Legendary 40+. The odds below are exact.
-      </p>
-      <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {
-          crates.map((view) => (
-            <CrateCard view={view} personal={playerId !== undefined} />
-          ))
-        }
-      </div>
-      {
-        recentPulls.length > 0 && (
-          <div class="mt-6 rounded-lg border border-grid bg-term-panel/40 px-4 py-3">
-            <h3 class="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-faint">
-              recently hatched
-            </h3>
-            <RecentPulls pulls={recentPulls} class="mt-1" />
+    {
+      // Behind the mystery eggs feature flag (/admin/site#flags).
+      features.shop_eggs && (
+        <section
+          id="crates"
+          aria-labelledby="crates-heading"
+          class="mt-12 scroll-mt-24"
+        >
+          <p class="prompt text-[11px] text-ink-faint">ls ./eggs --odds</p>
+          <h2
+            id="crates-heading"
+            class="mt-1 text-2xl font-extrabold tracking-tight text-ink"
+          >
+            Mystery eggs
+          </h2>
+          <p class="mt-1 max-w-2xl text-xs leading-relaxed text-ink-dim">
+            Crack one open for a random pet, avatar or cosmetic you don't own
+            yet, or, rarely, a power-up you haven't had this season. Rarity
+            follows the shop price: Common up to 7, Rare 8–14, Epic 15–19,
+            Legendary 20+. Seasonal eggs only hatch their own exclusives, and
+            only while they're on sale. The odds below are exact.
+          </p>
+          <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {crates.map((view) => (
+              <CrateCard view={view} personal={playerId !== undefined} />
+            ))}
           </div>
-        )
-      }
-    </section>
+          {recentPulls.length > 0 && (
+            <div class="mt-6 rounded-lg border border-grid bg-term-panel/40 px-4 py-3">
+              <h3 class="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-faint">
+                recently hatched
+              </h3>
+              <RecentPulls pulls={recentPulls} class="mt-1" />
+            </div>
+          )}
+        </section>
+      )
+    }
 
     {
-      sections.length === 0 ? (
+      limited.length > 0 && (
+        <section aria-labelledby="shop-limited" class="mt-12">
+          <p class="prompt text-[11px] text-ink-faint">
+            ls ./limited --sort leaving
+          </p>
+          <h2
+            id="shop-limited"
+            class="mt-1 text-2xl font-extrabold tracking-tight text-ink"
+          >
+            Limited time
+          </h2>
+          <p class="mt-1 max-w-2xl text-xs leading-relaxed text-ink-dim">
+            On the shelves for a short while only. Once they're gone, they're
+            gone.
+          </p>
+          <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {limited.map((listing) => (
+              <ShopItemCard listing={listing} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      sections.length === 0 && limited.length === 0 ? (
         <TerminalWindow title="~/shop" class="mt-10">
           <p class="text-sm text-ink-dim">
             <span class="text-amber">&gt;</span> The shelves are empty. The

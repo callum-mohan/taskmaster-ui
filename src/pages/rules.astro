@@ -4,11 +4,13 @@ import TerminalWindow from "../components/TerminalWindow.astro";
 import StatCard from "../components/StatCard.astro";
 import RulesSection from "../components/RulesSection.astro";
 import RuleItem from "../components/RuleItem.astro";
-import { CRATES as crates, RARITIES } from "../data/coin-rules";
+import { RARITIES, cratesOnSale } from "../data/coin-rules";
 import { RARITY_INFO, formatChance } from "../lib/coin-ui";
 import { withBase } from "../lib/url";
 
-const { getGameRules } = await Astro.locals.getQueries();
+// Seasonal eggs are only listed while they're on sale.
+const crates = cratesOnSale(Date.now());
+const { getGameRules, features } = await Astro.locals.getQueries();
 const rules = getGameRules();
 
 const pts = (n: number) => `${n} ${n === 1 ? "point" : "points"}`;
@@ -592,35 +594,59 @@ const bonusRows: BonusRow[] = [
             stay private in the wallet on your <a
               href={withBase("/account#wallet")}
               class={link}>profile</a
-            >.
+            >. Some stock is <span class="font-bold text-ink">limited time</span
+            >: it shows when it leaves, and after that it's gone.
           </RuleItem>
-          <RuleItem accent="cyan">
-            <span class="font-bold text-ink">Mystery eggs</span> crack open to hatch
-            a random pet, avatar or cosmetic you don't own yet (never a power-up).
-            Rarity follows the shop price: Common up to 15, Rare 16–29, Epic 30–39,
-            Legendary 40+.
-            {
-              crates
-                .map(
-                  (crate) =>
-                    `${crate.name} (${crate.price} coins): ${RARITIES.filter(
-                      (r) => crate.odds[r],
-                    )
-                      .map(
-                        (r) =>
-                          `${RARITY_INFO[r].label} ${formatChance(crate.odds[r] ?? 0)}`,
+          <RuleItem accent="amber">
+            <span class="font-bold text-ink">Gifting</span>: send coins to any
+            other player in your season from your wallet, up to {
+              rules.coins.giftWeeklyCap
+            } in any 7 days, with an optional note. They can't be taken back.
+          </RuleItem>
+          {
+            features.shop_eggs && (
+              <RuleItem accent="cyan">
+                <span class="font-bold text-ink">Mystery eggs</span> crack open
+                to hatch a random pet, avatar or cosmetic you don't own yet.
+                Rarity follows the shop price: Common up to 7, Rare 8–14, Epic
+                15–19, Legendary 20+.
+                {crates
+                  .map(
+                    (crate) =>
+                      `${crate.name} (${crate.price} coins): ${RARITIES.filter(
+                        (r) => crate.odds[r],
                       )
-                      .join(", ")}.`,
-                )
-                .join(" ")
-            } If a tier has nothing left for you, its chance is shared among the others;
-            the shop shows your exact odds for every item. Some items are egg exclusives
-            and can't be bought.
-          </RuleItem>
+                        .map(
+                          (r) =>
+                            `${RARITY_INFO[r].label} ${formatChance(crate.odds[r] ?? 0)}`,
+                        )
+                        .join(", ")}${
+                        crate.powerUpChance
+                          ? `, plus a ${formatChance(crate.powerUpChance)} power-up chance`
+                          : ""
+                      }.`,
+                  )
+                  .join(" ")}{" "}
+                If a tier has nothing left for you, its chance is shared among
+                the others; the shop shows your exact odds for every item.
+                <span class="font-bold text-ink">Power-ups</span> are rare
+                finds: one comes out instead of the usual prize, only ever one
+                you haven't had this season, and it counts as that power-up's
+                one for the season. That chance never grows, and an egg with
+                only power-ups left in it for you can't be cracked. Some items
+                are egg exclusives and can't be bought.{" "}
+                <span class="font-bold text-ink">Seasonal eggs</span>
+                (like the Haunted Egg at Halloween) are only on sale for a short
+                while and hatch only their own exclusives, which no other egg
+                drops.
+              </RuleItem>
+            )
+          }
           <RuleItem accent="magenta">
             <span class="font-bold text-ink">Power-ups</span> are
-            <span class="font-bold text-ink">single use</span>: you can buy each
-            one
+            <span class="font-bold text-ink">single use</span>: you can buy{
+              features.shop_eggs ? " (or hatch)" : ""
+            } each one
             <span class="font-bold text-ink">once a season</span> and use it from
             your wallet on the live week, one power-up per week. They're public the
             moment you use them:
@@ -648,6 +674,31 @@ const bonusRows: BonusRow[] = [
                 player can only be sabotaged once a week.
               </span>
             </span>
+          </RuleItem>
+          <RuleItem accent="cyan">
+            <span class="font-bold text-ink">Passive power-ups</span> work by themselves
+            once bought (still once a season each) and don't use your weekly power-up:
+            <span class="mt-2 block space-y-1">
+              <span class="block">
+                <span class="text-cyan">◈ Shield</span>: blocks the next
+                Sabotage against you.
+              </span>
+              <span class="block">
+                <span class="text-magenta">⇄ Mirror</span>: bounces the next
+                Sabotage against you back onto the saboteur. If you hold both,
+                the Mirror goes first.
+              </span>
+              <span class="block">
+                <span class="text-acid">✚ Insurance</span>: the first week you
+                finish last (from the next deadline after you buy it), you're
+                paid 3rd-place coins ({rules.coins.placement.third}) instead of {
+                  rules.coins.placement.scored
+                }.
+              </span>
+            </span>
+            Shields and Mirrors are secret: a Sabotage on you counts as normal until
+            that week's results are out, then the twist is revealed. A bounced Sabotage
+            can't be blocked or bounced again.
           </RuleItem>
           <RuleItem>
             If a result is corrected after you've spent, your balance can dip

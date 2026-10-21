@@ -481,11 +481,22 @@ reads too. Wallets are per season: they belong to the season's player rows.
 
 **Stored facts:** `shop_items` (the site-wide catalogue, edited in
 `/admin/site#shop`), `coin_purchases` (price copied at purchase),
-`power_up_uses`, `equipped_items` and `coin_adjustments` (admin grants and
-deductions, on the player's admin page). A purchase checks the balance against
-fresh (uncached) rows, then re-checks it in the insert under a per-player
-advisory lock, so concurrent buys can't overspend. A balance can go negative if
-a result is corrected after spending; buying is then blocked.
+`power_up_uses`, `equipped_items`, `coin_gifts` and `coin_adjustments` (admin
+grants and deductions, on the player's admin page). A purchase or gift checks
+the balance against fresh (uncached) rows, then re-checks it in the insert
+under a per-player advisory lock, so concurrent spends can't overspend. A
+balance can go negative if a result is corrected after spending; buying is
+then blocked.
+
+**Gifting:** from the wallet, a player can send coins to anyone else in their
+season, up to 5 in any rolling 7 days (`GIFT_WEEKLY_CAP`), with an optional
+80-character note. The cap is re-checked in the insert under the sender's
+lock, and the recipient gets a notification.
+
+**Limited-time stock:** `shop_items.available_from` / `available_until` (UK
+wall-clock, like task dates) set a sale window. Items with an end date sit on
+the shop's "limited time" shelf with a countdown; outside the window they
+can't be bought or hatched.
 
 **Power-ups** are single use: a player can buy each one once a season
 (checked by effect, and enforced by a unique `power_up_uses (player_id,
@@ -500,15 +511,36 @@ per player per week. Uses are public immediately (task page feed):
 - **Sabotage**: −5 to any other player that week (squad-mates included); each
   player can be sabotaged once a week, and the target is notified.
 
-**Mystery eggs** (lootboxes, called crates in the code) are on the shop page:
-a Mystery Egg (15 coins: Common 60%, Rare 28%, Epic 10%, Legendary 2%) and a
-Fabergé Egg (30 coins: Rare 55%, Epic 35%, Legendary 10%), defined in
+**Passive power-ups** (`shield`, `mirror`, `insurance`) are bought once a
+season like the others but never used: the database refuses them in
+`power_up_uses`, and their effect is derived in `coins.ts`:
+
+- **Shield** blocks, and **Mirror** bounces back onto the saboteur, the first
+  Sabotage on the owner used after they bought it (a Mirror is spent before a
+  Shield). The resolution is fixed when the Sabotage happens, but it's secret:
+  the target takes −5 as normal until the week's results are out, then the
+  deduction is dropped (Shield) or moved to the saboteur (Mirror), the task
+  feed says so and both players are notified.
+- **Insurance** pays 3rd-place coins instead of the base 2 for the first week
+  (whose deadline was after the purchase) where the owner finished last.
+
+**Mystery eggs** (lootboxes, called crates in the code) sit behind the
+`shop_eggs` [feature flag](#-feature-flags), off by default. When on, they're on the shop page:
+a Mystery Egg (8 coins: Common 60%, Rare 28%, Epic 10%, Legendary 2%) and a
+Fabergé Egg (15 coins: Rare 55%, Epic 35%, Legendary 10%), defined in
 `coin-rules.ts` with pixel art (whole, and top/bottom halves) in
-`public/shop/eggs`. An item's rarity comes from its price (≤15 common, 16–29
-rare, 30–39 epic, 40+ legendary). An egg only hatches available pets, avatars
+`public/shop/eggs`. **Seasonal eggs** (`exclusive: true` with a sale window,
+e.g. the Haunted Egg for Halloween) are only on sale in their window and hatch
+only items whose `shop_items.crate_id` names them; no other egg drops those. An item's rarity comes from its price (≤7 common, 8–14
+rare, 15–19 epic, 20+ legendary). An egg only hatches available pets, avatars
 and cosmetics the player doesn't own yet, so there are no duplicates; an
 empty tier's chance is shared among the others, and the shop shows every
-viewer their exact odds. The roll happens on the server
+viewer their exact odds. Each egg also has a small `powerUpChance` (Mystery 2%,
+Fabergé 5%, Haunted 3%) of hatching a power-up instead, picked from the ones
+the player hasn't had this season; it counts as that effect's one charge for
+the season, exactly like buying it. That chance is taken off the top of the
+other tiers and never scaled up, and an egg with only power-ups left for a
+player counts as empty, so it can't be farmed as a cheap power-up shop. The roll happens on the server
 (`crypto.getRandomValues`, from fresh rows) and is written to `crate_opens`,
 with a zero-price `coin_purchases` row so the prize is owned like anything
 bought. Items marked **egg exclusive** in the shop editor can't be bought
@@ -518,6 +550,20 @@ player watches their egg wobble, crack and split open to reveal the prize.
 Effects are applied when the snapshot is derived (`competition.ts`), so
 revoking a use from the week's judge tab undoes it and returns the charge.
 Starter items and their pixel art (`public/shop`) are in `db/seed-data.ts`.
+
+## 🚩 Feature flags
+
+Site-wide switches an admin flips in `/admin/site#flags`, with no deploy.
+They're defined in `src/data/feature-flags.ts` and stored in `feature_flags`
+(with who last changed each one). A flag with no row is **off**, so a new
+feature ships disabled. Flags load with the rest of the competition rows
+(one round trip, edge-cached); toggling one is an admin write, so the cache
+is purged and the change shows straight away. Read them from
+`getQueries().features`.
+
+| Flag        | Off (default)                                                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `shop_eggs` | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened. |
 
 ## 🔔 Notifications
 
@@ -535,7 +581,10 @@ a dropdown (a full-height drawer on phones) listing the newest 20 events:
   player up the leaderboard.
 - **Bonuses and deductions** the player is given (not the automatic
   poll-voting, People's Choice or prediction bonuses).
-- **Sabotage**, when another player uses the Clim Coin power-up on them.
+- **Sabotage**, when another player uses the Clim Coin power-up on them, and
+  once the week's results are out, whether a **Shield or Mirror** stopped it
+  (the saboteur hears about a bounce too).
+- **Gifts** of Clim Coin from another player.
 
 Guests and admin accounts without a player profile don't see it.
 

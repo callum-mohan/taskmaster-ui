@@ -18,6 +18,7 @@ import {
   coinAdjustments,
   coinPurchases,
   crateOpens,
+  featureFlags,
   powerUpUses,
   shopItems,
   playerAccounts,
@@ -41,12 +42,15 @@ import {
 import type { BatchItem } from "drizzle-orm/batch";
 import type {
   AdminUser,
+  FeatureFlagKey,
+  FeatureFlagView,
   Page,
   ScoreAuditEntry,
   SubmissionOwnerRef,
   WeekCounts,
 } from "../types";
 import { EMPTY_WEEK_COUNTS } from "./week-progress";
+import { featureFlagViews } from "./feature-flags";
 import { timestamptzToIso } from "../lib/time";
 import { LIST_PAGE_SIZE, pageInfo } from "../lib/pagination";
 import { deleteObjects, putObject } from "../lib/storage";
@@ -1336,6 +1340,29 @@ export async function deleteChangelogEntry(id: string): Promise<void> {
   await getDb().delete(changelogEntries).where(eq(changelogEntries.id, id));
 }
 
+// ── Feature flags ─────────────────────────────────────────────────────
+
+/** Every feature flag with its state and who last changed it. */
+export async function listFeatureFlags(): Promise<FeatureFlagView[]> {
+  return featureFlagViews(await getDb().select().from(featureFlags));
+}
+
+/** Turns a feature on or off, recording who did. */
+export async function setFeatureFlag(
+  key: FeatureFlagKey,
+  enabled: boolean,
+  actor: AdminUser,
+): Promise<void> {
+  const fields = { enabled, ...actorFields(actor) };
+  await getDb()
+    .insert(featureFlags)
+    .values({ key, ...fields })
+    .onConflictDoUpdate({
+      target: featureFlags.key,
+      set: { ...fields, updatedAt: sql`now()` },
+    });
+}
+
 // ── Clim Coin ─────────────────────────────────────────────────────────
 
 /** The catalogue in display order, with how many times each was bought. */
@@ -1398,6 +1425,9 @@ export async function updateShopItem(
       cosmeticValue: input.cosmeticValue,
       available: input.available,
       crateOnly: input.crateOnly,
+      crateId: input.crateId,
+      availableFrom: input.availableFrom,
+      availableUntil: input.availableUntil,
       ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
     })
     .where(eq(shopItems.id, id));
@@ -1494,7 +1524,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   coin_purchases_item_id_shop_items_id_fk:
     "Players own this item, so it can't be deleted. Retire it instead.",
   coin_adjustments_amount_range: "Use a non-zero amount up to 10000.",
-  shop_items_crate_only_droppable: "Eggs never hatch power-ups.",
+  shop_items_crate_only_droppable: "Power-ups can't be egg exclusives.",
   crate_opens_item_id_shop_items_id_fk:
     "Players hatched this item from an egg, so it can't be deleted. Retire it instead.",
 };

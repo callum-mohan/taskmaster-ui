@@ -34,9 +34,9 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     href: ADMIN_SITE,
     label: "site",
     title: "Polls, changelog & shop",
-    hint: "homepage polls, the what's new list and the Clim Coin shop",
+    hint: "feature flags, homepage polls, the what's new list and the Clim Coin shop",
     keywords:
-      "polls votes questions changelog whats new release notes clim coin shop pets avatars cosmetics power-ups items prices",
+      "feature flags toggles switches enable disable polls votes questions changelog whats new release notes clim coin shop pets avatars cosmetics power-ups items prices mystery eggs crates",
     match: ["/admin/polls", "/admin/changelog", "/admin/shop"],
   },
   {

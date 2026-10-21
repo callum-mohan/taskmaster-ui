@@ -1,7 +1,8 @@
 ---
 // The power-ups used on a week, public as soon as they're used (so a
-// Sabotage always names its saboteur). Oldest first.
-import type { PowerUpFeedEntry, PowerUpKind } from "../types";
+// Sabotage always names its saboteur). Oldest first. Once the week's
+// results are out, a Sabotage a Shield blocked or a Mirror bounced says so.
+import type { ActivePowerUpKind, PowerUpFeedEntry } from "../types";
 import { withBase } from "../lib/url";
 
 interface Props {
@@ -11,12 +12,13 @@ interface Props {
 
 const { entries, class: className } = Astro.props;
 
-const effectStyle: Record<PowerUpKind, { glyph: string; class: string }> = {
-  double_down: { glyph: "×2", class: "text-cyan" },
-  hint: { glyph: "?", class: "text-acid" },
-  golden_week: { glyph: "★", class: "text-amber" },
-  sabotage: { glyph: "☠", class: "text-danger" },
-};
+const effectStyle: Record<ActivePowerUpKind, { glyph: string; class: string }> =
+  {
+    double_down: { glyph: "×2", class: "text-cyan" },
+    hint: { glyph: "?", class: "text-acid" },
+    golden_week: { glyph: "★", class: "text-amber" },
+    sabotage: { glyph: "☠", class: "text-danger" },
+  };
 ---
 
 <ul class:list={["space-y-2 text-sm", className]}>
@@ -40,6 +42,16 @@ const effectStyle: Record<PowerUpKind, { glyph: string; class: string }> = {
             {entry.player.name}
           </a>{" "}
           {entry.label}
+          {entry.outcome === "blocked" && (
+            <span class="ml-1 text-[10px] font-bold uppercase tracking-widest text-cyan">
+              ◈ shielded
+            </span>
+          )}
+          {entry.outcome === "reflected" && (
+            <span class="ml-1 text-[10px] font-bold uppercase tracking-widest text-magenta">
+              ⇄ mirrored
+            </span>
+          )}
         </span>
       </li>
     ))

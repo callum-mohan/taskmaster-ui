@@ -46,6 +46,8 @@ interface NotificationDeps {
   getPlayerRankHistory: (playerId: string) => PlayerRankChange[];
   /** Sabotages that hit a player (Clim Coin power-ups). */
   getSabotagesOf?: (playerId: string) => PowerUpFeedEntry[];
+  /** Sabotages a player used. */
+  getSabotagesBy?: (playerId: string) => PowerUpFeedEntry[];
 }
 
 /**
@@ -58,10 +60,15 @@ interface NotificationDeps {
  */
 export function createNotificationQueries(
   data: CompetitionData,
-  { getPlayerRankHistory, getSabotagesOf = () => [] }: NotificationDeps,
+  {
+    getPlayerRankHistory,
+    getSabotagesOf = () => [],
+    getSabotagesBy = () => [],
+  }: NotificationDeps,
 ) {
-  const { tasks, polls, scores, bonusPoints, resultsPostedAt } = data;
+  const { tasks, polls, scores, bonusPoints, resultsPostedAt, players } = data;
   const taskById = new Map(tasks.map((t) => [t.id, t]));
+  const playerName = new Map(players.map((p) => [p.id, p.name]));
 
   // Locked tasks are only ever named by their week.
   const taskName = (task: Task) =>
@@ -205,13 +212,85 @@ export function createNotificationQueries(
               kind,
               title: `${use.player.name} sabotaged you`,
               detail: [
-                `${plural(-SABOTAGE_POINTS, "point")} lost`,
+                // Once results are out, a Shield or Mirror shows it missed.
+                use.outcome === "blocked" || use.outcome === "reflected"
+                  ? "no points lost"
+                  : `${plural(-SABOTAGE_POINTS, "point")} lost`,
                 ...(task ? [weekLabel(task.weekNumber)] : []),
               ].join(" · "),
               href: withBase(
                 task ? `/tasks/${task.id}#power-ups` : `/players/${playerId}`,
               ),
               at: use.at,
+              time,
+            },
+          ];
+        })
+      : [];
+
+    // Shields and Mirrors are revealed with the week's results.
+    const revealedAt = (use: PowerUpFeedEntry) => {
+      const at = resultsPostedAt[use.taskId];
+      const time = at ? new Date(at).getTime() : Number.NaN;
+      return Number.isNaN(time) || time > now ? undefined : { at, time };
+    };
+    const defended: FeedEvent[] = playerId
+      ? [
+          ...getSabotagesOf(playerId).flatMap((use): FeedEvent[] => {
+            const shown = revealedAt(use);
+            if (!shown || !use.outcome || use.outcome === "hit") return [];
+            const task = taskById.get(use.taskId);
+            return [
+              {
+                id: `defended:${use.id}`,
+                kind: "shielded",
+                title:
+                  use.outcome === "blocked"
+                    ? `Your Shield blocked ${use.player.name}'s Sabotage`
+                    : `Your Mirror bounced ${use.player.name}'s Sabotage back`,
+                detail: [
+                  "no points lost",
+                  ...(task ? [weekLabel(task.weekNumber)] : []),
+                ].join(" · "),
+                href: withBase(`/tasks/${use.taskId}#power-ups`),
+                ...shown,
+              },
+            ];
+          }),
+          ...getSabotagesBy(playerId).flatMap((use): FeedEvent[] => {
+            const shown = revealedAt(use);
+            if (!shown || use.outcome !== "reflected") return [];
+            const task = taskById.get(use.taskId);
+            return [
+              {
+                id: `reflected:${use.id}`,
+                kind: "reflected",
+                title: `Your Sabotage bounced off ${use.target?.name ?? "your target"}'s Mirror`,
+                detail: [
+                  `${plural(-SABOTAGE_POINTS, "point")} lost`,
+                  ...(task ? [weekLabel(task.weekNumber)] : []),
+                ].join(" · "),
+                href: withBase(`/tasks/${use.taskId}#power-ups`),
+                ...shown,
+              },
+            ];
+          }),
+        ]
+      : [];
+
+    const gifts: FeedEvent[] = playerId
+      ? data.coins.gifts.flatMap((gift): FeedEvent[] => {
+          if (gift.toPlayerId !== playerId) return [];
+          const time = new Date(gift.at).getTime();
+          if (Number.isNaN(time) || time > now) return [];
+          return [
+            {
+              id: `gift:${gift.id}`,
+              kind: "gift-received",
+              title: `${playerName.get(gift.fromPlayerId) ?? "Someone"} sent you ${gift.amount} Clim Coin`,
+              ...(gift.message && { detail: `"${gift.message}"` }),
+              href: withBase("/account#history"),
+              at: gift.at,
               time,
             },
           ];
@@ -244,6 +323,8 @@ export function createNotificationQueries(
       ...results,
       ...adjustments,
       ...sabotages,
+      ...defended,
+      ...gifts,
       ...opened,
     ];
   }

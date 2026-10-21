@@ -217,6 +217,8 @@ export function competitionData(
     recaps: {},
     changelog: [],
     coins: coinData(),
+    // Every flag off, as on a fresh site.
+    features: { shop_eggs: false },
     ...overrides,
   };
 }
@@ -230,6 +232,7 @@ export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
     adjustments: [],
     entries: [],
     crateOpens: [],
+    gifts: [],
     hints: {},
     ...overrides,
   };

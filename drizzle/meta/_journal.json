@@ -141,6 +141,34 @@
       "when": 1792595915903,
       "tag": "0019_crates",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792622831643,
+      "tag": "0020_seasonal_shop",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792624455149,
+      "tag": "0021_halve_wearable_prices",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792624885060,
+      "tag": "0022_egg_power_ups",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792625406218,
+      "tag": "0023_feature_flags",
+      "breakpoints": true
     }
   ]
 }

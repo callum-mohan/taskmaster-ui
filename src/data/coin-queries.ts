@@ -1,7 +1,9 @@
 import type {
+  ActivePowerUpKind,
   CompetitionData,
   CratePull,
   CrateView,
+  GiftPanel,
   InventoryItem,
   Player,
   PlayerFlair,
@@ -10,6 +12,7 @@ import type {
   PowerUpFeedEntry,
   PowerUpKind,
   PowerUpOption,
+  ShopListing,
   PowerUpPanel,
   PowerUpUse,
   PurchaseBlock,
@@ -19,18 +22,27 @@ import type {
   Wallet,
 } from "../types";
 import {
+  ACTIVE_POWER_UP_KINDS,
   CATEGORY_INFO,
   NAME_COLOURS,
   POWER_UP_INFO,
-  POWER_UP_KINDS,
   PROFILE_THEMES,
   SHOP_CATEGORIES,
   crateAverageValue,
   crateOdds,
   deriveWallet,
+  giftAllowance,
+  insuranceClaims,
+  isOnSale,
+  resolveSabotages,
   slotOf,
 } from "./coins";
-import { CRATES, getCrate } from "./coin-rules";
+import {
+  GIFT_WEEKLY_CAP,
+  cratesOnSale,
+  getCrate,
+  inSaleWindow,
+} from "./coin-rules";
 
 /** What a viewer of the shop is: a signed-in player (by id) or a guest. */
 export interface ShopViewer {
@@ -44,11 +56,29 @@ export interface ShopViewer {
  * stored facts.
  */
 export function createCoinQueries(data: CompetitionData) {
-  const { players, tasks, coins, predictions, season } = data;
+  const { players, tasks, coins, predictions, season, features } = data;
+  // The mystery eggs feature flag: off hides every crate and what they drop.
+  const eggsOn = features.shop_eggs;
   const itemById = new Map(coins.items.map((i) => [i.id, i]));
   const playerById = new Map(players.map((p) => [p.id, p]));
   const seasonClosed = season.status === "closed";
   const usedPurchaseIds = new Set(coins.uses.map((u) => u.purchaseId));
+  // Passive power-ups: how each Sabotage resolved (Shields and Mirrors are
+  // only shown once the week's results are out), and spent defences.
+  const sabotages = resolveSabotages(coins.uses, coins.purchases, coins.items);
+  const spentDefenceIds = new Set(
+    [...sabotages.values()].flatMap((r) => r.defencePurchaseId ?? []),
+  );
+  const resultsOut = (taskId: string) => taskId in data.resultsPostedAt;
+
+  /** Purchase ids of a player's power-up charges that are used up. */
+  function spentChargeIds(playerId: string): Set<number> {
+    return new Set([
+      ...usedPurchaseIds,
+      ...spentDefenceIds,
+      ...insuranceClaims(data, playerId).values(),
+    ]);
+  }
 
   function getShopItemById(id: string): ShopItem | undefined {
     return itemById.get(id);
@@ -84,9 +114,10 @@ export function createCoinQueries(data: CompetitionData) {
 
   /** Unused power-up charges a player holds, by item id. */
   function chargesByItem(playerId: string): Map<string, number> {
+    const spent = spentChargeIds(playerId);
     const charges = new Map<string, number>();
     for (const p of coins.purchases) {
-      if (p.playerId !== playerId || usedPurchaseIds.has(p.id)) continue;
+      if (p.playerId !== playerId || spent.has(p.id)) continue;
       if (itemById.get(p.itemId)?.category !== "power_up") continue;
       charges.set(p.itemId, (charges.get(p.itemId) ?? 0) + 1);
     }
@@ -192,7 +223,7 @@ export function createCoinQueries(data: CompetitionData) {
       return chargesFor(viewer.playerId, item.powerUp) > 0 ? "owned" : "used";
     }
     if (ownedItemIds(viewer.playerId).has(item.id)) return "owned";
-    if (!item.available) return "unavailable";
+    if (!isOnSale(item, now)) return "unavailable";
     if (item.crateOnly) return "crate-only";
     if (getWallet(viewer.playerId, now).balance < item.price) {
       return "unaffordable";
@@ -200,11 +231,28 @@ export function createCoinQueries(data: CompetitionData) {
     return undefined;
   }
 
-  /** The shop's available items by category, as `viewer` sees them. */
-  function getShopSections(
+  /**
+   * Whether the shop lists `item` now: on sale, and (for an egg exclusive)
+   * only while eggs are on, and a seasonal egg's only while that egg is.
+   */
+  function isListed(item: ShopItem, now: number): boolean {
+    if (!isOnSale(item, now)) return false;
+    // Egg exclusives can't be got any other way, so they go with the eggs.
+    if (item.crateOnly && !eggsOn) return false;
+    if (!item.crateId) return true;
+    const crate = getCrate(item.crateId);
+    return crate !== undefined && inSaleWindow(crate, now);
+  }
+
+  /** Limited-time stock sold directly: shown on its own shelf. */
+  const isLimited = (item: ShopItem) =>
+    item.availableUntil !== undefined && !item.crateOnly;
+
+  function toListings(
+    items: readonly ShopItem[],
     viewer: ShopViewer,
-    now: number = Date.now(),
-  ): ShopSection[] {
+    now: number,
+  ): ShopListing[] {
     const playerId =
       viewer.playerId && playerById.has(viewer.playerId)
         ? viewer.playerId
@@ -212,27 +260,56 @@ export function createCoinQueries(data: CompetitionData) {
     const owned = playerId ? ownedItemIds(playerId) : new Set<string>();
     const effects = playerId ? boughtEffects(playerId) : new Set();
     const charges = playerId ? chargesByItem(playerId) : new Map();
+    return items.map((item) => {
+      const blocked = getPurchaseBlock(item, { playerId }, now);
+      return {
+        item,
+        owned: item.powerUp ? effects.has(item.powerUp) : owned.has(item.id),
+        charges: charges.get(item.id) ?? 0,
+        ...(blocked && { blocked }),
+      };
+    });
+  }
+
+  /** The shop's items on sale by category, as `viewer` sees them. */
+  function getShopSections(
+    viewer: ShopViewer,
+    now: number = Date.now(),
+  ): ShopSection[] {
     return SHOP_CATEGORIES.map((category) => ({
       category,
       ...CATEGORY_INFO[category],
-      listings: coins.items
-        .filter((item) => item.category === category && item.available)
-        .map((item) => {
-          const blocked = getPurchaseBlock(item, { playerId }, now);
-          return {
-            item,
-            owned: item.powerUp
-              ? effects.has(item.powerUp)
-              : owned.has(item.id),
-            charges: charges.get(item.id) ?? 0,
-            ...(blocked && { blocked }),
-          };
-        }),
+      listings: toListings(
+        coins.items.filter(
+          (item) =>
+            item.category === category &&
+            isListed(item, now) &&
+            !isLimited(item),
+        ),
+        viewer,
+        now,
+      ),
     })).filter((section) => section.listings.length > 0);
   }
 
+  /** Limited-time stock on sale now, leaving soonest first. */
+  function getLimitedListings(
+    viewer: ShopViewer,
+    now: number = Date.now(),
+  ): ShopListing[] {
+    const leaves = (item: ShopItem) =>
+      new Date(item.availableUntil ?? 0).getTime();
+    return toListings(
+      coins.items
+        .filter((item) => isLimited(item) && isListed(item, now))
+        .sort((a, b) => leaves(a) - leaves(b)),
+      viewer,
+      now,
+    );
+  }
+
   const FEED_LABELS: Record<
-    PowerUpKind,
+    ActivePowerUpKind,
     (target: Player | undefined) => string
   > = {
     golden_week: () => "went for a Golden Week",
@@ -241,19 +318,37 @@ export function createCoinQueries(data: CompetitionData) {
     sabotage: (target) => `sabotaged ${target?.name ?? "a rival"}`,
   };
 
+  const SABOTAGE_TWIST: Record<
+    "blocked" | "reflected",
+    (target: string) => string
+  > = {
+    blocked: (target) => `, but ${target}'s Shield blocked it`,
+    reflected: (target) => `, but it bounced off ${target}'s Mirror`,
+  };
+
   function toFeedEntry(use: PowerUpUse): PowerUpFeedEntry | undefined {
     const player = playerById.get(use.playerId);
     if (!player) return undefined;
     const target = use.targetPlayerId
       ? playerById.get(use.targetPlayerId)
       : undefined;
+    // Shields and Mirrors stay secret until the week's results are out.
+    const outcome =
+      use.effect === "sabotage" && resultsOut(use.taskId)
+        ? (sabotages.get(use.id)?.outcome ?? "hit")
+        : undefined;
+    const twist =
+      outcome === "blocked" || outcome === "reflected"
+        ? SABOTAGE_TWIST[outcome](target?.name ?? "their target")
+        : "";
     return {
       id: use.id,
       taskId: use.taskId,
       effect: use.effect,
-      label: FEED_LABELS[use.effect](target),
+      label: `${FEED_LABELS[use.effect](target)}${twist}`,
       player,
       ...(target && { target }),
+      ...(outcome && { outcome }),
       at: use.at,
     };
   }
@@ -269,6 +364,13 @@ export function createCoinQueries(data: CompetitionData) {
   function getSabotagesOf(playerId: string): PowerUpFeedEntry[] {
     return coins.uses
       .filter((u) => u.effect === "sabotage" && u.targetPlayerId === playerId)
+      .flatMap((u) => toFeedEntry(u) ?? []);
+  }
+
+  /** Every Sabotage a player used, oldest first (for notifications). */
+  function getSabotagesBy(playerId: string): PowerUpFeedEntry[] {
+    return coins.uses
+      .filter((u) => u.effect === "sabotage" && u.playerId === playerId)
       .flatMap((u) => toFeedEntry(u) ?? []);
   }
 
@@ -293,7 +395,7 @@ export function createCoinQueries(data: CompetitionData) {
   function getPowerUpBlock(
     playerId: string,
     task: Task | undefined,
-    effect: PowerUpKind,
+    effect: ActivePowerUpKind,
   ): PowerUpBlock | undefined {
     if (seasonClosed) return "season-closed";
     if (chargesFor(playerId, effect) === 0) return "no-charge";
@@ -321,7 +423,7 @@ export function createCoinQueries(data: CompetitionData) {
       ? coins.uses.find((u) => u.taskId === task.id && u.playerId === playerId)
       : undefined;
     const used = usedRow ? toFeedEntry(usedRow) : undefined;
-    const options: PowerUpOption[] = POWER_UP_KINDS.flatMap((effect) => {
+    const options: PowerUpOption[] = ACTIVE_POWER_UP_KINDS.flatMap((effect) => {
       const charges = chargesFor(playerId, effect);
       if (charges === 0) return [];
       const blocked = getPowerUpBlock(playerId, task, effect);
@@ -342,6 +444,30 @@ export function createCoinQueries(data: CompetitionData) {
     };
   }
 
+  /** The wallet's "send coins" form for `playerId`. */
+  function getGiftPanel(playerId: string, now: number = Date.now()): GiftPanel {
+    const recipients = players.filter((p) => p.id !== playerId);
+    const allowance = giftAllowance(coins.gifts, playerId, now);
+    const balance = getWallet(playerId, now).balance;
+    const max = Math.max(0, Math.min(allowance, balance));
+    const blocked: GiftPanel["blocked"] = seasonClosed
+      ? "season-closed"
+      : recipients.length === 0
+        ? "no-recipients"
+        : allowance === 0
+          ? "limit"
+          : max === 0
+            ? "unaffordable"
+            : undefined;
+    return {
+      recipients,
+      cap: GIFT_WEEKLY_CAP,
+      allowance,
+      max,
+      ...(blocked && { blocked }),
+    };
+  }
+
   /** The week's hint, only for a player who used Hint on it. */
   function getUnlockedHint(
     taskId: string,
@@ -356,8 +482,9 @@ export function createCoinQueries(data: CompetitionData) {
   }
 
   /**
-   * Every crate with `viewer`'s personal odds (items they own never drop).
-   * Guests see the odds for a player who owns nothing.
+   * Every crate on sale with `viewer`'s personal odds (items they own never
+   * drop). Guests see the odds for a player who owns nothing. None while the
+   * mystery eggs flag is off, so they can't be opened either.
    */
   function getCrateViews(
     viewer: ShopViewer,
@@ -367,10 +494,13 @@ export function createCoinQueries(data: CompetitionData) {
       viewer.playerId && playerById.has(viewer.playerId)
         ? viewer.playerId
         : undefined;
+    if (!eggsOn) return [];
     const owned = playerId ? ownedItemIds(playerId) : new Set<string>();
+    // Power-ups are once a season by effect, bought or hatched.
+    const effects = playerId ? boughtEffects(playerId) : new Set<PowerUpKind>();
     const balance = playerId ? getWallet(playerId, now).balance : 0;
-    return CRATES.map((crate) => {
-      const tiers = crateOdds(crate, coins.items, owned);
+    return cratesOnSale(now).map((crate) => {
+      const tiers = crateOdds(crate, coins.items, owned, now, effects);
       const blocked: CrateView["blocked"] = !playerId
         ? "guest"
         : seasonClosed
@@ -408,6 +538,7 @@ export function createCoinQueries(data: CompetitionData) {
 
   /** The season's newest crate openings, newest first (public). */
   function getRecentPulls(limit = 10): CratePull[] {
+    if (!eggsOn) return [];
     return [...coins.crateOpens]
       .reverse()
       .slice(0, limit)
@@ -416,6 +547,7 @@ export function createCoinQueries(data: CompetitionData) {
 
   /** One crate opening, if it was `playerId`'s (for their reveal). */
   function getCratePull(id: number, playerId: string): CratePull | undefined {
+    if (!eggsOn) return undefined;
     const open = coins.crateOpens.find(
       (o) => o.id === id && o.playerId === playerId,
     );
@@ -436,8 +568,11 @@ export function createCoinQueries(data: CompetitionData) {
     getEquippedAvatarUrl,
     getPurchaseBlock,
     getShopSections,
+    getLimitedListings,
     getPowerUpFeed,
     getSabotagesOf,
+    getSabotagesBy,
+    getGiftPanel,
     getPowerUpWeek,
     getSabotageTargets,
     getPowerUpBlock,

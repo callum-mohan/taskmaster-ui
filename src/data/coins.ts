@@ -1,11 +1,14 @@
 import type {
+  ActivePowerUpKind,
   CoinAdjustment,
+  CoinGift,
   CoinLedgerEntry,
   CoinPurchase,
   CompetitionData,
   Crate,
   CrateOpen,
   CrateTier,
+  CrateTierKind,
   CosmeticKind,
   EntryActivity,
   EquippedItem,
@@ -13,13 +16,14 @@ import type {
   Player,
   PowerUpKind,
   PowerUpUse,
-  Rarity,
+  SabotageResolution,
   ShopCategory,
   ShopItem,
   Wallet,
 } from "../types";
 import type {
   coinAdjustments as coinAdjustmentsTable,
+  coinGifts as coinGiftsTable,
   coinPurchases as coinPurchasesTable,
   crateOpens as crateOpensTable,
   equippedItems as equippedItemsTable,
@@ -27,12 +31,14 @@ import type {
   shopItems as shopItemsTable,
   tasks as tasksTable,
 } from "../db/schema";
-import { timestamptzToIso } from "../lib/time";
+import { timestamptzToIso, wallClockToIso } from "../lib/time";
 import { peoplesChoiceClosesAt } from "./peoples-choice";
 import type { DerivedBonusRow } from "./polls";
 import {
   DOUBLE_DOWN_POINTS,
   ENTRY_COINS,
+  GIFT_WEEKLY_CAP,
+  GIFT_WINDOW_MS,
   GOLDEN_WEEK_MULTIPLIER,
   PEOPLES_CHOICE_VOTE_COINS,
   PLACEMENT_COINS,
@@ -40,15 +46,20 @@ import {
   PREDICTION_COINS,
   SABOTAGE_POINTS,
   CRATE_CATEGORIES,
+  CRATE_TIER_KINDS,
   RARITIES,
   getCrate,
+  inSaleWindow,
+  isActivePowerUp,
   rarityOf,
 } from "./coin-rules";
 
 export {
+  ACTIVE_POWER_UP_KINDS,
   COSMETIC_KINDS,
   LOADOUT_SLOTS,
   NAME_COLOURS,
+  PASSIVE_POWER_UP_KINDS,
   POWER_UP_KINDS,
   PROFILE_THEMES,
   SHOP_CATEGORIES,
@@ -57,8 +68,9 @@ export {
 // Clim Coin: a per-season wallet. Earnings are derived from the competition
 // records (like the poll and prediction bonuses), so a corrected score or a
 // withdrawn vote can never leave stale coins behind. Only purchases, power-up
-// uses, equipped items and admin adjustments are stored. The payout and
-// power-up numbers live in `coin-rules.ts`.
+// uses, equipped items, gifts and admin adjustments are stored; the passive
+// power-ups (Shield, Mirror, Insurance) are worked out from them here. The
+// payout and power-up numbers live in `coin-rules.ts`.
 
 export const CATEGORY_INFO: Record<
   ShopCategory,
@@ -78,24 +90,44 @@ export const COSMETIC_KIND_LABELS: Record<CosmeticKind, string> = {
 
 export const POWER_UP_INFO: Record<
   PowerUpKind,
-  { label: string; description: string }
+  { label: string; description: string; passive: boolean }
 > = {
   double_down: {
     label: "Double Down",
     description: `A correct winner call this week pays +${DOUBLE_DOWN_POINTS} instead of +1. Call the winner first.`,
+    passive: false,
   },
   hint: {
     label: "Taskmaster's Hint",
     description:
       "Reveals the Taskmaster's private hint for this week's task, for your eyes only.",
+    passive: false,
   },
   golden_week: {
     label: "Golden Week",
     description: `Your task score this week is multiplied by ${GOLDEN_WEEK_MULTIPLIER} (rounded up) before positions are decided. On team tasks it boosts only your own points.`,
+    passive: false,
   },
   sabotage: {
     label: "Sabotage",
     description: `Takes ${-SABOTAGE_POINTS} points from a rival this week. Everyone sees who did it, and each player can only be sabotaged once a week.`,
+    passive: false,
+  },
+  shield: {
+    label: "Shield",
+    description:
+      "Passive: blocks the next Sabotage against you. Nobody knows you have it until that week's results are out.",
+    passive: true,
+  },
+  mirror: {
+    label: "Mirror",
+    description: `Passive: bounces the next Sabotage against you back onto the saboteur (they lose the ${-SABOTAGE_POINTS} points). Secret until that week's results are out.`,
+    passive: true,
+  },
+  insurance: {
+    label: "Insurance",
+    description: `Passive: the first week you finish last after buying it, you're paid 3rd-place coins (${PLACEMENT_COINS.third}) instead of ${PLACEMENT_COINS.scored}.`,
+    passive: true,
   },
 };
 
@@ -110,7 +142,7 @@ export function slotOf(item: ShopItem): LoadoutSlot | undefined {
 /** `${taskId}:${playerId}` keys of uses with `effect`. */
 export function powerUpKeys(
   uses: readonly Pick<PowerUpUse, "taskId" | "playerId" | "effect">[],
-  effect: PowerUpKind,
+  effect: ActivePowerUpKind,
 ): Set<string> {
   return new Set(
     uses
@@ -119,24 +151,89 @@ export function powerUpKeys(
   );
 }
 
-/** Every Sabotage as a deduction on its target, in the order they were used. */
+const instant = (iso: string) => new Date(iso).getTime();
+
+/**
+ * How every Sabotage resolved, by use id. Each Shield or Mirror a target
+ * bought is spent on the first Sabotage against them used after they bought
+ * it; a Mirror is spent before a Shield. A bounced Sabotage can't itself be
+ * blocked or bounced. Resolution never depends on results being out (only
+ * whether it's shown does), so it can't change once decided.
+ */
+export function resolveSabotages(
+  uses: readonly PowerUpUse[],
+  purchases: readonly CoinPurchase[],
+  items: readonly ShopItem[],
+): Map<number, SabotageResolution> {
+  const effectOf = new Map(items.map((i) => [i.id, i.powerUp]));
+  const defences = [...purchases]
+    .filter((p) => {
+      const effect = effectOf.get(p.itemId);
+      return effect === "shield" || effect === "mirror";
+    })
+    .sort((a, b) => a.id - b.id);
+  const spent = new Set<number>();
+  const result = new Map<number, SabotageResolution>();
+  for (const use of [...uses].sort((a, b) => a.id - b.id)) {
+    if (use.effect !== "sabotage" || !use.targetPlayerId) continue;
+    const armed = (effect: PowerUpKind) =>
+      defences.find(
+        (p) =>
+          p.playerId === use.targetPlayerId &&
+          effectOf.get(p.itemId) === effect &&
+          !spent.has(p.id) &&
+          instant(p.at) < instant(use.at),
+      );
+    const mirror = armed("mirror");
+    const shield = mirror ? undefined : armed("shield");
+    const defence = mirror ?? shield;
+    if (defence) spent.add(defence.id);
+    result.set(use.id, {
+      outcome: mirror ? "reflected" : shield ? "blocked" : "hit",
+      ...(defence && { defencePurchaseId: defence.id }),
+    });
+  }
+  return result;
+}
+
+/**
+ * Every Sabotage as a deduction, in the order they were used. Until a week's
+ * results are out (`revealedTaskIds`) it lands on the target as usual, so
+ * Shields and Mirrors stay secret; after, a blocked one is dropped and a
+ * bounced one lands on the saboteur instead.
+ */
 export function deriveSabotageBonusRows(
   uses: readonly PowerUpUse[],
   players: readonly Player[],
+  resolutions: ReadonlyMap<number, SabotageResolution> = new Map(),
+  revealedTaskIds: ReadonlySet<string> = new Set(),
 ): DerivedBonusRow[] {
   const names = new Map(players.map((p) => [p.id, p.name]));
-  return uses.flatMap((use) =>
-    use.effect === "sabotage" && use.targetPlayerId
-      ? [
-          {
-            taskId: use.taskId,
-            playerId: use.targetPlayerId,
-            points: SABOTAGE_POINTS,
-            reason: `Sabotaged by ${names.get(use.playerId) ?? "a rival"}`,
-          },
-        ]
-      : [],
-  );
+  return uses.flatMap((use): DerivedBonusRow[] => {
+    if (use.effect !== "sabotage" || !use.targetPlayerId) return [];
+    const outcome = revealedTaskIds.has(use.taskId)
+      ? (resolutions.get(use.id)?.outcome ?? "hit")
+      : "hit";
+    if (outcome === "blocked") return [];
+    if (outcome === "reflected") {
+      return [
+        {
+          taskId: use.taskId,
+          playerId: use.playerId,
+          points: SABOTAGE_POINTS,
+          reason: `Sabotage bounced off ${names.get(use.targetPlayerId) ?? "a rival"}'s Mirror`,
+        },
+      ];
+    }
+    return [
+      {
+        taskId: use.taskId,
+        playerId: use.targetPlayerId,
+        points: SABOTAGE_POINTS,
+        reason: `Sabotaged by ${names.get(use.playerId) ?? "a rival"}`,
+      },
+    ];
+  });
 }
 
 // ── Mappers ───────────────────────────────────────────────────────────
@@ -147,6 +244,7 @@ type UseRow = typeof powerUpUsesTable.$inferSelect;
 type EquippedRow = typeof equippedItemsTable.$inferSelect;
 type AdjustmentRow = typeof coinAdjustmentsTable.$inferSelect;
 type CrateOpenRow = typeof crateOpensTable.$inferSelect;
+type GiftRow = typeof coinGiftsTable.$inferSelect;
 type TaskRow = typeof tasksTable.$inferSelect;
 
 export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
@@ -166,6 +264,13 @@ export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
       ...(row.powerUp !== null && { powerUp: row.powerUp }),
       available: row.available,
       crateOnly: row.crateOnly,
+      ...(row.crateId !== null && { crateId: row.crateId }),
+      ...(row.availableFrom !== null && {
+        availableFrom: wallClockToIso(row.availableFrom),
+      }),
+      ...(row.availableUntil !== null && {
+        availableUntil: wallClockToIso(row.availableUntil),
+      }),
       sortOrder: row.sortOrder,
     }));
 }
@@ -183,17 +288,24 @@ export function mapPurchases(rows: PurchaseRow[]): CoinPurchase[] {
 export function mapPowerUpUses(rows: UseRow[]): PowerUpUse[] {
   return [...rows]
     .sort((a, b) => a.id - b.id)
-    .map((row) => ({
-      id: row.id,
-      purchaseId: row.purchaseId,
-      playerId: row.playerId,
-      taskId: row.taskId,
-      effect: row.effect,
-      ...(row.targetPlayerId !== null && {
-        targetPlayerId: row.targetPlayerId,
-      }),
-      at: timestamptzToIso(row.createdAt),
-    }));
+    .flatMap((row): PowerUpUse[] => {
+      // Passive power-ups are never used (the database refuses them too).
+      const effect = row.effect;
+      if (!isActivePowerUp(effect)) return [];
+      return [
+        {
+          id: row.id,
+          purchaseId: row.purchaseId,
+          playerId: row.playerId,
+          taskId: row.taskId,
+          effect,
+          ...(row.targetPlayerId !== null && {
+            targetPlayerId: row.targetPlayerId,
+          }),
+          at: timestamptzToIso(row.createdAt),
+        },
+      ];
+    });
 }
 
 export function mapEquipped(rows: EquippedRow[]): EquippedItem[] {
@@ -221,7 +333,8 @@ export function mapCrateOpens(rows: CrateOpenRow[]): CrateOpen[] {
       crateId: row.crateId,
       price: row.price,
       itemId: row.itemId,
-      rarity: RARITIES.find((r) => r === row.rarity) ?? rarityOf(row.price),
+      rarity:
+        CRATE_TIER_KINDS.find((r) => r === row.rarity) ?? rarityOf(row.price),
       at: timestamptzToIso(row.createdAt),
     }));
 }
@@ -231,6 +344,19 @@ export function mapHints(rows: Pick<TaskRow, "id" | "hint">[]) {
   return Object.fromEntries(
     rows.flatMap((row) => (row.hint ? [[row.id, row.hint] as const] : [])),
   );
+}
+
+export function mapGifts(rows: GiftRow[]): CoinGift[] {
+  return [...rows]
+    .sort((a, b) => a.id - b.id)
+    .map((row) => ({
+      id: row.id,
+      fromPlayerId: row.fromPlayerId,
+      toPlayerId: row.toPlayerId,
+      amount: row.amount,
+      ...(row.message !== null && { message: row.message }),
+      at: timestamptzToIso(row.createdAt),
+    }));
 }
 
 export function mapEntries(rows: EntryActivity[]): EntryActivity[] {
@@ -262,7 +388,50 @@ type WalletData = Pick<
   | "predictions"
   | "resultsPostedAt"
   | "coins"
+  | "players"
 >;
+
+/**
+ * The week each of a player's Insurance charges paid out on, as task id →
+ * purchase id. A charge covers the first week (in week order) whose deadline
+ * was after it was bought where the player finished last and their place
+ * paid less than 3rd. Results only count once they're out.
+ */
+export function insuranceClaims(
+  data: Pick<WalletData, "tasks" | "scores" | "coins">,
+  playerId: string,
+): Map<string, number> {
+  const effectOf = new Map(data.coins.items.map((i) => [i.id, i.powerUp]));
+  const charges = data.coins.purchases
+    .filter(
+      (p) => p.playerId === playerId && effectOf.get(p.itemId) === "insurance",
+    )
+    .sort((a, b) => a.id - b.id);
+  const claims = new Map<string, number>();
+  if (charges.length === 0) return claims;
+
+  const lastPlace = new Map<string, number>();
+  for (const s of data.scores) {
+    lastPlace.set(s.taskId, Math.max(lastPlace.get(s.taskId) ?? 0, s.position));
+  }
+  const weeks = [...data.tasks].sort((a, b) => a.weekNumber - b.weekNumber);
+  for (const charge of charges) {
+    const week = weeks.find((task) => {
+      if (claims.has(task.id)) return false;
+      if (instant(task.deadline) <= instant(charge.at)) return false;
+      const score = data.scores.find(
+        (s) => s.taskId === task.id && s.playerId === playerId,
+      );
+      return (
+        score !== undefined &&
+        score.position === lastPlace.get(task.id) &&
+        placementCoins(score.position) < PLACEMENT_COINS.third
+      );
+    });
+    if (week) claims.set(week.id, charge.id);
+  }
+  return claims;
+}
 
 /**
  * The coins a player has earned, newest first. Results pay once they're
@@ -275,6 +444,7 @@ export function deriveEarnings(
   now: number = Date.now(),
 ): CoinLedgerEntry[] {
   const taskById = new Map(data.tasks.map((t) => [t.id, t]));
+  const insured = insuranceClaims(data, playerId);
   const entries: CoinLedgerEntry[] = [];
 
   for (const score of data.scores) {
@@ -284,8 +454,15 @@ export function deriveEarnings(
     const place = PLACE_LABELS[score.position - 1];
     entries.push({
       kind: "placement",
-      amount: placementCoins(score.position),
-      label: `${weekLabel(task.weekNumber)}: ${place ? `${place} place` : "scored"}`,
+      ...(insured.has(task.id)
+        ? {
+            amount: PLACEMENT_COINS.third,
+            label: `${weekLabel(task.weekNumber)}: last place, Insurance paid 3rd-place coins`,
+          }
+        : {
+            amount: placementCoins(score.position),
+            label: `${weekLabel(task.weekNumber)}: ${place ? `${place} place` : "scored"}`,
+          }),
       at: data.resultsPostedAt[task.id] ?? task.deadline,
       taskId: task.id,
     });
@@ -386,44 +563,106 @@ export function deriveWallet(
         amount: -o.price,
         label: `${getCrate(o.crateId)?.name ?? "Crate"} → ${
           itemNames.get(o.itemId) ?? o.itemId
-        } (${o.rarity})`,
+        } (${o.rarity === "power_up" ? "power-up" : o.rarity})`,
         at: o.at,
       })),
   ];
+  const names = new Map(data.players.map((p) => [p.id, p.name]));
+  const quoted = (message?: string) => (message ? `: "${message}"` : "");
+  const gifts: CoinLedgerEntry[] = data.coins.gifts.flatMap(
+    (g): CoinLedgerEntry[] => {
+      if (g.toPlayerId === playerId) {
+        return [
+          {
+            kind: "gift-in",
+            amount: g.amount,
+            label: `Gift from ${names.get(g.fromPlayerId) ?? "someone"}${quoted(g.message)}`,
+            at: g.at,
+          },
+        ];
+      }
+      if (g.fromPlayerId === playerId) {
+        return [
+          {
+            kind: "gift-out",
+            amount: -g.amount,
+            label: `Gift to ${names.get(g.toPlayerId) ?? "someone"}${quoted(g.message)}`,
+            at: g.at,
+          },
+        ];
+      }
+      return [];
+    },
+  );
   const sum = (list: CoinLedgerEntry[]) =>
     list.reduce((total, e) => total + e.amount, 0);
   const earned = sum(earnings);
   const adjusted = sum(adjustments);
   const spent = -sum(purchases);
+  const gifted = sum(gifts);
   return {
     playerId,
-    balance: earned + adjusted - spent,
+    balance: earned + adjusted - spent + gifted,
     earned,
     adjusted,
     spent,
-    ledger: [...earnings, ...adjustments, ...purchases].sort(
+    gifted,
+    ledger: [...earnings, ...adjustments, ...purchases, ...gifts].sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     ),
   };
 }
 
+/**
+ * How many coins a player can still gift now: the weekly cap less what
+ * they've sent in the last 7 days.
+ */
+export function giftAllowance(
+  gifts: readonly CoinGift[],
+  playerId: string,
+  now: number = Date.now(),
+): number {
+  const sent = gifts
+    .filter(
+      (g) =>
+        g.fromPlayerId === playerId && now - instant(g.at) < GIFT_WINDOW_MS,
+    )
+    .reduce((total, g) => total + g.amount, 0);
+  return Math.max(0, GIFT_WEEKLY_CAP - sent);
+}
+
 // ── Crates ────────────────────────────────────────────────────────────
 
+/** Whether an item is for sale (or droppable) at `now`. */
+export function isOnSale(item: ShopItem, now: number): boolean {
+  return item.available && inSaleWindow(item, now);
+}
+
 /**
- * A crate's odds for one player: every available pet, avatar and cosmetic
- * they don't own yet, grouped by rarity. A tier with nothing left in it has
- * its chance shared out among the others in proportion, and items in a tier
- * are equally likely. Returns no tiers when there's nothing left to win.
+ * A crate's odds for one player: every pet, avatar and cosmetic on sale
+ * now that they don't own yet, grouped by rarity. A seasonal egg drops only
+ * its own exclusives, and no other egg drops them. A tier with nothing left
+ * in it has its chance shared out among the others in proportion, and items
+ * in a tier are equally likely. Returns no tiers when there's nothing left.
+ *
+ * On top, the crate's small `powerUpChance` drops a power-up whose effect
+ * the player hasn't had this season (`ownedEffects`). That chance is never
+ * scaled up: with no power-ups left it goes to the other tiers, and a crate
+ * with only power-ups left counts as empty, so it can't become a cheap
+ * power-up vending machine.
  */
 export function crateOdds(
   crate: Crate,
   items: readonly ShopItem[],
   ownedItemIds: ReadonlySet<string>,
+  now: number = Date.now(),
+  ownedEffects: ReadonlySet<PowerUpKind> = new Set(),
 ): CrateTier[] {
   const pool = items.filter(
     (item) =>
-      item.available &&
+      isOnSale(item, now) &&
       CRATE_CATEGORIES.some((c) => c === item.category) &&
+      (crate.exclusive ? item.crateId === crate.id : !item.crateId) &&
       !ownedItemIds.has(item.id),
   );
   const byTier = RARITIES.map((rarity) => ({
@@ -431,15 +670,33 @@ export function crateOdds(
     weight: crate.odds[rarity] ?? 0,
     items: pool.filter((item) => rarityOf(item.price) === rarity),
   })).filter((tier) => tier.weight > 0 && tier.items.length > 0);
+  if (byTier.length === 0) return [];
+  const powerUps = items.filter(
+    (item) =>
+      item.powerUp !== undefined &&
+      isOnSale(item, now) &&
+      !ownedEffects.has(item.powerUp),
+  );
+  const powerUpChance =
+    powerUps.length > 0
+      ? Math.min(Math.max(crate.powerUpChance ?? 0, 0), 1)
+      : 0;
   const total = byTier.reduce((sum, tier) => sum + tier.weight, 0);
-  return byTier.map(({ rarity, weight, items: drops }) => {
-    const chance = weight / total;
-    return {
-      rarity,
-      chance,
-      drops: drops.map((item) => ({ item, chance: chance / drops.length })),
-    };
+  const tier = (
+    rarity: CrateTierKind,
+    chance: number,
+    drops: readonly ShopItem[],
+  ): CrateTier => ({
+    rarity,
+    chance,
+    drops: drops.map((item) => ({ item, chance: chance / drops.length })),
   });
+  return [
+    ...byTier.map(({ rarity, weight, items: drops }) =>
+      tier(rarity, (weight / total) * (1 - powerUpChance), drops),
+    ),
+    ...(powerUpChance > 0 ? [tier("power_up", powerUpChance, powerUps)] : []),
+  ];
 }
 
 /** The average shop value of one roll, in coins. */
@@ -458,9 +715,9 @@ export function crateAverageValue(tiers: readonly CrateTier[]): number {
 export function rollCrate(
   tiers: readonly CrateTier[],
   random: number,
-): { item: ShopItem; rarity: Rarity } | undefined {
+): { item: ShopItem; rarity: CrateTierKind } | undefined {
   let remaining = random;
-  let last: { item: ShopItem; rarity: Rarity } | undefined;
+  let last: { item: ShopItem; rarity: CrateTierKind } | undefined;
   for (const tier of tiers) {
     for (const drop of tier.drops) {
       last = { item: drop.item, rarity: tier.rarity };

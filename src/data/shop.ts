@@ -1,21 +1,24 @@
 import { and, eq, sql } from "drizzle-orm";
 import type {
+  ActivePowerUpKind,
   CoinOutcome,
   Crate,
+  CrateTierKind,
   LoadoutSlot,
-  PowerUpKind,
-  Rarity,
 } from "../types";
 import { getDb } from "../db";
 import {
   coinAdjustments,
+  coinGifts,
   coinPurchases,
   crateOpens,
   equippedItems,
+  players,
   powerUpUses,
   shopItems,
 } from "../db/schema";
 import { violatedConstraint } from "./db-errors";
+import { GIFT_WEEKLY_CAP } from "./coin-rules";
 
 // Clim Coin writes a player makes from `/account` (the middleware has
 // already required a signed-in player and purges the cached rows after).
@@ -30,7 +33,22 @@ const budget = (playerId: string, earned: number) => sql`
     - coalesce((select sum(price) from ${coinPurchases}
         where player_id = ${playerId}), 0)
     - coalesce((select sum(price) from ${crateOpens}
-        where player_id = ${playerId}), 0)`;
+        where player_id = ${playerId}), 0)
+    + coalesce((select sum(amount) from ${coinGifts}
+        where to_player_id = ${playerId}), 0)
+    - coalesce((select sum(amount) from ${coinGifts}
+        where from_player_id = ${playerId}), 0)`;
+
+/**
+ * Whether `item` (a `shop_items` alias) is in its sale window now. Windows
+ * are UK wall-clock times, so compare against the UK wall clock.
+ */
+const onSaleNow = (item: string) =>
+  sql.raw(`
+  (${item}.available_from is null
+    or ${item}.available_from <= (now() at time zone 'Europe/London'))
+  and (${item}.available_until is null
+    or ${item}.available_until > (now() at time zone 'Europe/London'))`);
 
 /** Serialises a player's spending, so two at once can't both spend. */
 const lockWallet = (playerId: string) =>
@@ -59,6 +77,7 @@ export async function buyItem(
       from ${shopItems} item
       where item.id = ${itemId}
         and item.available
+        and ${onSaleNow("item")}
         and not item.crate_only
         and not exists (
           select 1 from ${coinPurchases} owned
@@ -79,15 +98,17 @@ export async function buyItem(
  * Opens `crate` for the player, giving them `itemId` (rolled by the caller
  * from their personal odds): the item is owned through a zero-price
  * purchase and the crate's price is spent, in one statement under the
- * wallet lock. Returns the opening's id, or `undefined` if they can no
- * longer afford it or already own the item (e.g. a double-submit won it
- * first), so the caller can roll again.
+ * wallet lock. A power-up won this way is that effect's one charge for the
+ * season, exactly as if bought. Returns the opening's id, or `undefined` if
+ * they can no longer afford it or already own the item (or, for a power-up,
+ * its effect), e.g. a double-submit won it first, so the caller can roll
+ * again.
  */
 export async function openCrate(
   playerId: string,
   crate: Crate,
   itemId: string,
-  rarity: Rarity,
+  rarity: CrateTierKind,
   earned: number,
 ): Promise<number | undefined> {
   const db = getDb();
@@ -100,10 +121,15 @@ export async function openCrate(
         from ${shopItems} item
         where item.id = ${itemId}
           and item.available
-          and item.category <> 'power_up'
+          and ${onSaleNow("item")}
           and not exists (
             select 1 from ${coinPurchases} owned
-            where owned.player_id = ${playerId} and owned.item_id = item.id
+            join ${shopItems} owned_item on owned_item.id = owned.item_id
+            where owned.player_id = ${playerId}
+              and (
+                owned.item_id = item.id
+                or owned_item.power_up = item.power_up
+              )
           )
           and (${budget(playerId, earned)}) >= ${crate.price}
         returning id, item_id
@@ -117,6 +143,45 @@ export async function openCrate(
   ]);
   const id = (opened.rows[0] as { id?: number } | undefined)?.id;
   return typeof id === "number" ? id : undefined;
+}
+
+/**
+ * Sends `amount` coins from one player to another in the same season, if
+ * the sender can afford it and it keeps them within the weekly gift cap
+ * (gifts sent in the last 7 days count). `earned` is the sender's derived
+ * earnings from fresh rows. Checked under the sender's wallet lock, so two
+ * gifts at once can't both spend the same coins or beat the cap.
+ */
+export async function sendGift(
+  fromPlayerId: string,
+  toPlayerId: string,
+  amount: number,
+  message: string | null,
+  earned: number,
+): Promise<boolean> {
+  const db = getDb();
+  const [, inserted] = await db.batch([
+    db.execute(lockWallet(fromPlayerId)),
+    db.execute(sql`
+      insert into ${coinGifts}
+        (season_id, from_player_id, to_player_id, amount, message)
+      select sender.season_id, sender.id, recipient.id, ${amount}::integer,
+        ${message}::text
+      from ${players} sender
+      join ${players} recipient
+        on recipient.season_id = sender.season_id
+      where sender.id = ${fromPlayerId}
+        and recipient.id = ${toPlayerId}
+        and recipient.id <> sender.id
+        and ${amount}::integer > 0
+        and ${amount}::integer + coalesce((select sum(amount) from ${coinGifts}
+            where from_player_id = ${fromPlayerId}
+              and created_at > now() - interval '7 days'), 0)
+          <= ${GIFT_WEEKLY_CAP}
+        and (${budget(fromPlayerId, earned)}) >= ${amount}::integer
+      returning id`),
+  ]);
+  return inserted.rows.length > 0;
 }
 
 /** Wears an owned item in `slot`, replacing whatever was there. */
@@ -167,7 +232,7 @@ const USE_CONSTRAINT_OUTCOMES: Record<string, CoinOutcome> = {
 export async function usePowerUp(
   playerId: string,
   taskId: string,
-  effect: PowerUpKind,
+  effect: ActivePowerUpKind,
   targetPlayerId: string | null,
 ): Promise<CoinOutcome> {
   try {

@@ -1648,6 +1648,8 @@ export function createQueries(data: CompetitionData) {
 
   return {
     season: data.season,
+    /** Site-wide feature flags (off unless an admin turned them on). */
+    features: data.features,
     players,
     teams,
     tasks,
@@ -1698,6 +1700,7 @@ export function createQueries(data: CompetitionData) {
     ...createNotificationQueries(data, {
       getPlayerRankHistory,
       getSabotagesOf: coinQueries.getSabotagesOf,
+      getSabotagesBy: coinQueries.getSabotagesBy,
     }),
     ...createSubmissionQueries(data),
     ...createGalleryQueries(data),

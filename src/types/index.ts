@@ -282,6 +282,8 @@ export interface CompetitionData {
   changelog: FeatureUpdate[];
   /** Clim Coin: the shop, and the season's purchases, uses and grants. */
   coins: ClimCoinData;
+  /** Site-wide feature flags, toggled in `/admin/site` (off unless set). */
+  features: FeatureFlags;
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────
@@ -1062,7 +1064,10 @@ export type NotificationKind =
   | "rank-up"
   | "bonus-awarded"
   | "points-deducted"
-  | "sabotaged";
+  | "sabotaged"
+  | "shielded"
+  | "reflected"
+  | "gift-received";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
@@ -1528,17 +1533,56 @@ export interface Page<T> extends PageInfo {
 /** A slot in a pagination control: a page number, or a gap ("…"). */
 export type PageLinkSlot = number | "gap";
 
+// ── Feature flags ─────────────────────────────────────────────────────
+
+/** A site feature an admin can switch on or off (see `feature-flags.ts`). */
+export type FeatureFlagKey = "shop_eggs";
+
+/** Whether each feature is on. */
+export type FeatureFlags = Record<FeatureFlagKey, boolean>;
+
+/** A flag as the admin screen lists it. */
+export interface FeatureFlagView {
+  key: FeatureFlagKey;
+  label: string;
+  description: string;
+  enabled: boolean;
+  /** Who last changed it, and when (ISO 8601); unset if never changed. */
+  changedBy?: string;
+  changedAt?: string;
+}
+
 // ── Clim Coin ─────────────────────────────────────────────────────────
 
 export type ShopCategory = "pet" | "avatar" | "cosmetic" | "power_up";
 export type CosmeticKind = "title" | "name_colour" | "theme";
-export type PowerUpKind = "double_down" | "hint" | "golden_week" | "sabotage";
+/** Power-ups a player spends on a live week (a `power_up_uses` row). */
+export type ActivePowerUpKind =
+  "double_down" | "hint" | "golden_week" | "sabotage";
+/** Power-ups that work by themselves once bought (effects derived). */
+export type PassivePowerUpKind = "shield" | "mirror" | "insurance";
+export type PowerUpKind = ActivePowerUpKind | PassivePowerUpKind;
 /** Where an owned item is worn: one item per slot. */
 export type LoadoutSlot = "pet" | "avatar" | "title" | "name_colour" | "theme";
-/** Accent tokens a name colour cosmetic may use. */
-export type NameColour = "acid" | "amber" | "magenta" | "cyan";
+/** Name colour cosmetics: accent tokens, plus a few special effects. */
+export type NameColour =
+  | "acid"
+  | "amber"
+  | "magenta"
+  | "cyan"
+  | "gold"
+  | "pumpkin"
+  | "glitch"
+  | "rainbow";
 /** Profile terminal themes a theme cosmetic may use. */
-export type ProfileTheme = "phosphor" | "amber" | "synthwave" | "ice";
+export type ProfileTheme =
+  | "phosphor"
+  | "amber"
+  | "synthwave"
+  | "ice"
+  | "matrix"
+  | "vaporwave"
+  | "blueprint";
 
 /** An item in the (site-wide, admin-managed) shop catalogue. */
 export interface ShopItem {
@@ -1557,11 +1601,18 @@ export interface ShopItem {
   available: boolean;
   /** Crate exclusive: only drops from crates, never sold directly. */
   crateOnly: boolean;
+  /** Seasonal egg exclusive: only drops from this crate (by id). */
+  crateId?: string;
+  /** Limited-time stock: on sale from / until these instants (ISO 8601). */
+  availableFrom?: string;
+  availableUntil?: string;
   sortOrder: number;
 }
 
 /** How rare an item is, derived from its price (see `coin-rules.ts`). */
 export type Rarity = "common" | "rare" | "epic" | "legendary";
+/** A crate's tiers: the rarities, plus its small power-up chance. */
+export type CrateTierKind = Rarity | "power_up";
 
 /** A lootbox: what it costs and the chance of each rarity tier. */
 export interface Crate {
@@ -1571,6 +1622,19 @@ export interface Crate {
   price: number;
   /** Chance of each tier, out of 1 (tiers left out never drop). */
   odds: Partial<Record<Rarity, number>>;
+  /**
+   * Chance (out of 1) of a power-up instead, taken off the top of the other
+   * tiers. It's never scaled up when tiers empty. Unset = never.
+   */
+  powerUpChance?: number;
+  /**
+   * A seasonal egg: drops only the items exclusive to it (`crateId`), which
+   * no other egg drops.
+   */
+  exclusive?: boolean;
+  /** On sale from / until these instants (ISO 8601); unset = always. */
+  availableFrom?: string;
+  availableUntil?: string;
 }
 
 /** A crate a player opened, and what it gave them. */
@@ -1582,7 +1646,7 @@ export interface CrateOpen {
   crateId: string;
   price: number;
   itemId: string;
-  rarity: Rarity;
+  rarity: CrateTierKind;
   /** ISO 8601. */
   at: string;
 }
@@ -1596,7 +1660,7 @@ export interface CrateDrop {
 
 /** A rarity tier's share of a crate, and the items in it. */
 export interface CrateTier {
-  rarity: Rarity;
+  rarity: CrateTierKind;
   /** Out of 1, after empty tiers are shared out. */
   chance: number;
   drops: CrateDrop[];
@@ -1620,7 +1684,7 @@ export interface CratePull {
   player: Player;
   crate: Crate;
   item: ShopItem;
-  rarity: Rarity;
+  rarity: CrateTierKind;
   at: string;
 }
 
@@ -1640,9 +1704,34 @@ export interface PowerUpUse {
   purchaseId: number;
   playerId: string;
   taskId: string;
-  effect: PowerUpKind;
+  effect: ActivePowerUpKind;
   /** Sabotage only: who lost the point. */
   targetPlayerId?: string;
+  /** ISO 8601. */
+  at: string;
+}
+
+/**
+ * What a Sabotage did: hit its target, was blocked by their Shield, or was
+ * bounced back onto the saboteur by their Mirror. Shields and Mirrors stay
+ * secret until the week's results are out.
+ */
+export type SabotageOutcome = "hit" | "blocked" | "reflected";
+
+/** How a Sabotage resolved, and the defence charge it used up (if any). */
+export interface SabotageResolution {
+  outcome: SabotageOutcome;
+  /** The Shield or Mirror purchase that was spent on it. */
+  defencePurchaseId?: number;
+}
+
+/** Clim Coin one player sent another. */
+export interface CoinGift {
+  id: number;
+  fromPlayerId: string;
+  toPlayerId: string;
+  amount: number;
+  message?: string;
   /** ISO 8601. */
   at: string;
 }
@@ -1681,6 +1770,8 @@ export interface ClimCoinData {
   entries: EntryActivity[];
   /** Crates opened, oldest first. */
   crateOpens: CrateOpen[];
+  /** Gifts between this season's players, oldest first. */
+  gifts: CoinGift[];
   /** Taskmaster's Hints by task id; only shown to players who used Hint. */
   hints: Record<string, string>;
 }
@@ -1695,6 +1786,8 @@ export interface CoinRules {
   goldenWeekMultiplier: number;
   doubleDownPoints: number;
   sabotagePoints: number;
+  /** The most coins a player can gift in any 7 days. */
+  giftWeeklyCap: number;
 }
 
 export type CoinLedgerKind =
@@ -1705,7 +1798,9 @@ export type CoinLedgerKind =
   | "prediction"
   | "adjustment"
   | "purchase"
-  | "crate";
+  | "crate"
+  | "gift-in"
+  | "gift-out";
 
 /** One line in a wallet's history. */
 export interface CoinLedgerEntry {
@@ -1725,6 +1820,8 @@ export interface Wallet {
   earned: number;
   adjusted: number;
   spent: number;
+  /** Gifts received minus gifts sent. */
+  gifted: number;
   /** Newest first. */
   ledger: CoinLedgerEntry[];
 }
@@ -1782,10 +1879,12 @@ export interface ShopSection {
 export interface PowerUpFeedEntry {
   id: number;
   taskId: string;
-  effect: PowerUpKind;
+  effect: ActivePowerUpKind;
   label: string;
   player: Player;
   target?: Player;
+  /** Sabotage only, once the week's results reveal Shields and Mirrors. */
+  outcome?: SabotageOutcome;
   at: string;
 }
 
@@ -1800,7 +1899,7 @@ export type PowerUpBlock =
 
 /** A power-up a player could use on the live week. */
 export interface PowerUpOption {
-  effect: PowerUpKind;
+  effect: ActivePowerUpKind;
   label: string;
   description: string;
   charges: number;
@@ -1835,7 +1934,26 @@ export type CoinOutcome =
   | "no-prediction"
   | "no-hint"
   | "not-live"
-  | "no-charge";
+  | "no-charge"
+  | "gifted"
+  | "gift-limit";
+
+/** Why a player can't send a gift right now. */
+export type GiftBlock =
+  "season-closed" | "limit" | "unaffordable" | "no-recipients";
+
+/** The wallet's "send coins" form. */
+export interface GiftPanel {
+  /** Everyone else in the player's season. */
+  recipients: Player[];
+  /** The most anyone can send in any 7 days. */
+  cap: number;
+  /** What's left of the cap now (gifts sent in the last 7 days count). */
+  allowance: number;
+  /** The most they can send now: the allowance, or their balance if lower. */
+  max: number;
+  blocked?: GiftBlock;
+}
 
 /** A player's cosmetics as public lists show them. */
 export interface PlayerFlair {

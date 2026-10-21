@@ -158,5 +158,6 @@ export function rowsForSeason(
     coinAdjustmentRows: forPlayers(rows.coinAdjustmentRows),
     entryRows: bySeasonPlayers(rows.entryRows),
     crateOpenRows: forPlayers(rows.crateOpenRows),
+    coinGiftRows: inSeason(rows.coinGiftRows),
   };
 }

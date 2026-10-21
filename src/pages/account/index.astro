@@ -66,6 +66,7 @@ const walletView = season
       return {
         wallet,
         panel,
+        gifts: q.getGiftPanel(player.playerId),
         inventory: q.getInventory(player.playerId),
         hint: panel.task
           ? q.getUnlockedHint(panel.task.id, player.playerId)

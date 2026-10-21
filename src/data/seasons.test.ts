@@ -138,6 +138,8 @@ describe("rowsForSeason", () => {
     coinAdjustmentRows: [],
     entryRows: [],
     crateOpenRows: [],
+    coinGiftRows: [],
+    featureFlagRows: [],
   };
   const player = (id: string, seasonId: string) => ({
     id,
@@ -173,6 +175,16 @@ describe("rowsForSeason", () => {
     createdAt: "2026-01-01 00:00:00+00",
   });
 
+  const gift = (id: number, seasonId: string, playerId: string) => ({
+    id,
+    seasonId,
+    fromPlayerId: playerId,
+    toPlayerId: "x",
+    amount: 2,
+    message: null,
+    createdAt: "2026-01-01 00:00:00+00",
+  });
+
   const rows: CompetitionRows = {
     ...empty,
     playerRows: [player("ann", "a"), player("bob", "b")],
@@ -197,6 +209,11 @@ describe("rowsForSeason", () => {
       // A player from another season can't use power-ups on this one's weeks.
       use(2, "a1", "bob"),
     ],
+    coinGiftRows: [
+      gift(1, "a", "ann"),
+      // Another season's gift.
+      gift(2, "b", "bob"),
+    ],
     shopItemRows: [
       {
         id: "duck",
@@ -210,6 +227,9 @@ describe("rowsForSeason", () => {
         powerUp: null,
         available: true,
         crateOnly: false,
+        crateId: null,
+        availableFrom: null,
+        availableUntil: null,
         sortOrder: 0,
         createdAt: "2026-01-01 00:00:00+00",
         updatedAt: "2026-01-01 00:00:00+00",
@@ -236,6 +256,7 @@ describe("rowsForSeason", () => {
     expect(scoped.predictionRows).toEqual([prediction("a1", "ann")]);
     expect(scoped.coinPurchaseRows).toEqual([purchase(1, "ann")]);
     expect(scoped.powerUpUseRows).toEqual([use(1, "a1", "ann")]);
+    expect(scoped.coinGiftRows).toEqual([gift(1, "a", "ann")]);
   });
 
   it("leaves site-wide rows alone", () => {

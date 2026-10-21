@@ -506,6 +506,33 @@ const link = "text-cyan hover:underline";
             Only items nobody owns can be deleted.
           </li>
           <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Mystery eggs are
+            behind a feature flag and start off: turn them on (or off again) under
+            <a href={withBase("/admin/site#flags")} class={link}
+              >feature flags</a
+            >. While off, the eggs, recent hatches and egg-exclusive items are
+            hidden and nobody can crack one; anything already hatched stays
+            owned.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Set
+            <span class="text-ink">on sale from / until</span> (UK time) for limited-time
+            stock: it shows on the shop's limited-time shelf and disappears (and stops
+            hatching) after it ends. For a seasonal egg's exclusive, tick egg exclusive
+            and pick the egg: only that egg hatches it, and only while the egg's on
+            sale. Seasonal eggs themselves (like the Haunted Egg) and their dates
+            are defined in code, in
+            <code class="text-ink">src/data/coin-rules.ts</code>.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Shield, Mirror
+            and Insurance are passive: players never use them, so they don't appear
+            in the judge tab. A Sabotage on a shielded player still shows as −5 until
+            the week has results; then it's dropped (Shield) or moved onto the saboteur
+            (Mirror). Revoking that Sabotage gives the defence back. Players can also
+            gift each other up to 5 coins a week; gifts show in both wallets' history.
+          </li>
+          <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Grant or deduct
             coins on a player's page in the
             <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a> (with a reason

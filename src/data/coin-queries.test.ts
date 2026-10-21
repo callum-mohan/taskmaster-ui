@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createCoinQueries } from "./coin-queries";
-import type { CoinPurchase, PowerUpUse, ShopItem } from "../types";
+import type { CoinGift, CoinPurchase, PowerUpUse, ShopItem } from "../types";
 import {
   coinData,
   competitionData,
@@ -69,10 +69,12 @@ function setup({
   uses = [] as PowerUpUse[],
   closed = false,
   grant = 20,
+  eggs = true,
 } = {}) {
   return createCoinQueries(
     competitionData({
       season: season({ status: closed ? "closed" : "running" }),
+      features: { shop_eggs: eggs },
       players: [player("ann", "Ann"), player("bob", "Bob"), player("cat")],
       tasks: [done, live],
       predictions: [
@@ -309,12 +311,18 @@ describe("crates", () => {
   it("shows each viewer their own odds, and why they can't open", () => {
     const q = setup({ purchases: [bought("ann", duck)], grant: 40 });
     const [mystery, premium] = q.getCrateViews({ playerId: "ann" });
-    // Ann owns the duck, so only the robot and the name colour can drop.
-    expect(mystery.tiers.flatMap((t) => t.drops.map((d) => d.item.id))).toEqual(
-      ["robot", "amber"],
-    );
+    // Ann owns the duck, so only the robot and the name colour can drop,
+    // plus (rarely) any of the power-ups she hasn't had this season.
+    expect(
+      mystery.tiers.map((t) => [t.rarity, t.drops.map((d) => d.item.id)]),
+    ).toEqual([
+      ["common", ["robot", "amber"]],
+      ["power_up", ["sabotage", "hint", "dd"]],
+    ]);
+    expect(mystery.tiers[1].chance).toBeCloseTo(0.02);
     expect(mystery.blocked).toBeUndefined();
-    // Nothing rare or better is left, so the premium crate is empty.
+    // Nothing rare or better is left, so the premium crate is empty, even
+    // though power-ups could still drop from it.
     expect(premium.tiers).toEqual([]);
     expect(premium.blocked).toBe("empty");
     expect(q.getCrateViews({})[0].blocked).toBe("guest");
@@ -322,13 +330,14 @@ describe("crates", () => {
       "unaffordable",
     );
     expect(
-      setup({ grant: 10 }).getCrateViews({ playerId: "ann" })[0].blocked,
+      setup({ grant: 5 }).getCrateViews({ playerId: "ann" })[0].blocked,
     ).toBe("unaffordable");
   });
 
   it("lists pulls publicly and reveals one only to its opener", () => {
     const q = createCoinQueries(
       competitionData({
+        features: { shop_eggs: true },
         players: [player("ann", "Ann"), player("bob")],
         coins: coinData({
           items: [exclusive],
@@ -357,5 +366,264 @@ describe("crates", () => {
     ]);
     expect(q.getCratePull(4, "ann")?.item.id).toBe("egg");
     expect(q.getCratePull(4, "bob")).toBeUndefined();
+  });
+});
+
+describe("passive power-ups", () => {
+  const shield = shopItem({
+    id: "shield",
+    name: "Shield",
+    category: "power_up",
+    price: 3,
+    powerUp: "shield",
+  });
+  const insurance = shopItem({
+    id: "insurance",
+    name: "Insurance",
+    category: "power_up",
+    price: 3,
+    powerUp: "insurance",
+  });
+  const charge = bought("bob", shield);
+  const sabotageCharge = bought("ann", sabotage);
+  const hit: PowerUpUse = {
+    id: 1,
+    purchaseId: sabotageCharge.id,
+    playerId: "ann",
+    taskId: "w1",
+    effect: "sabotage",
+    targetPlayerId: "bob",
+    at: "2026-01-14T00:00:00.000Z",
+  };
+  const q = (resultsOut: boolean, uses: PowerUpUse[] = [hit]) =>
+    createCoinQueries(
+      competitionData({
+        players: [player("ann", "Ann"), player("bob", "Bob")],
+        tasks: [done, live],
+        resultsPostedAt: resultsOut ? { w1: "2026-01-15T00:00:00.000Z" } : {},
+        coins: coinData({
+          items: [sabotage, shield, insurance, hint],
+          purchases: [charge, sabotageCharge, bought("bob", insurance)],
+          uses,
+        }),
+      }),
+    );
+
+  it("are armed in the inventory but never offered on the live week", () => {
+    const armed = q(false, []);
+    expect(
+      armed.getInventory("bob").map((i) => [i.item.id, i.charges]),
+    ).toEqual([
+      ["shield", 1],
+      ["insurance", 1],
+    ]);
+    expect(armed.getPowerUpPanel("bob").options).toEqual([]);
+  });
+
+  it("keep a Shield secret until the week's results are out", () => {
+    const before = q(false);
+    expect(before.getPowerUpFeed("w1")).toEqual([
+      expect.objectContaining({ label: "sabotaged Bob" }),
+    ]);
+    expect(before.getPowerUpFeed("w1")[0].outcome).toBeUndefined();
+
+    const after = q(true);
+    expect(after.getPowerUpFeed("w1")).toEqual([
+      expect.objectContaining({
+        label: "sabotaged Bob, but Bob's Shield blocked it",
+        outcome: "blocked",
+      }),
+    ]);
+    expect(after.getSabotagesBy("ann")[0].outcome).toBe("blocked");
+  });
+
+  it("spend the Shield on the Sabotage, so it's used for the season", () => {
+    const spent = q(false);
+    expect(spent.getInventory("bob").map((i) => i.item.id)).toEqual([
+      "insurance",
+    ]);
+    expect(spent.getPurchaseBlock(shield, { playerId: "bob" })).toBe("used");
+  });
+});
+
+describe("limited-time stock", () => {
+  const hat = shopItem({
+    id: "hat",
+    name: "Hat",
+    category: "cosmetic",
+    price: 5,
+    cosmetic: { kind: "title", value: "Hat" },
+    availableFrom: "2026-01-10T00:00:00.000Z",
+    availableUntil: "2026-01-20T00:00:00.000Z",
+  });
+  const later = shopItem({
+    ...hat,
+    id: "later",
+    availableUntil: "2026-01-30T00:00:00.000Z",
+  });
+  const egged = shopItem({
+    id: "bat",
+    crateOnly: true,
+    crateId: "halloween-egg",
+  });
+  const q = createCoinQueries(
+    competitionData({
+      features: { shop_eggs: true },
+      players: [player("ann")],
+      coins: coinData({
+        items: [duck, later, hat, egged],
+        adjustments: [
+          {
+            id: 1,
+            playerId: "ann",
+            amount: 20,
+            reason: "Starter",
+            actorName: "Taskmaster",
+            at: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    }),
+  );
+  const NOW = new Date("2026-01-15T00:00:00.000Z").getTime();
+
+  it("sits on its own shelf, leaving soonest first, while on sale", () => {
+    expect(
+      q.getLimitedListings({ playerId: "ann" }, NOW).map((l) => l.item.id),
+    ).toEqual(["hat", "later"]);
+    // Not in the category shelves too.
+    expect(
+      q
+        .getShopSections({ playerId: "ann" }, NOW)
+        .flatMap((s) => s.listings.map((l) => l.item.id)),
+    ).toEqual(["duck"]);
+    const gone = new Date("2026-01-25T00:00:00.000Z").getTime();
+    expect(
+      q.getLimitedListings({ playerId: "ann" }, gone).map((l) => l.item.id),
+    ).toEqual(["later"]);
+    expect(q.getPurchaseBlock(hat, { playerId: "ann" }, gone)).toBe(
+      "unavailable",
+    );
+    expect(q.getPurchaseBlock(hat, { playerId: "ann" }, NOW)).toBeUndefined();
+  });
+
+  it("lists a seasonal egg and its exclusives only while it's on sale", () => {
+    const halloween = new Date("2026-10-25T12:00:00.000Z").getTime();
+    const ids = (now: number) =>
+      q.getCrateViews({}, now).map((v) => v.crate.id);
+    expect(ids(NOW)).toEqual(["mystery-egg", "faberge-egg"]);
+    expect(ids(halloween)).toEqual([
+      "mystery-egg",
+      "faberge-egg",
+      "halloween-egg",
+    ]);
+    const listed = (now: number) =>
+      q
+        .getShopSections({}, now)
+        .flatMap((s) => s.listings.map((l) => l.item.id));
+    expect(listed(NOW)).not.toContain("bat");
+    expect(listed(halloween)).toContain("bat");
+  });
+});
+
+describe("gifting", () => {
+  const gifts = (gifts: CoinGift[], grant = 20) =>
+    createCoinQueries(
+      competitionData({
+        players: [player("ann", "Ann"), player("bob", "Bob")],
+        coins: coinData({
+          gifts,
+          adjustments: [
+            {
+              id: 1,
+              playerId: "ann",
+              amount: grant,
+              reason: "Starter",
+              actorName: "Taskmaster",
+              at: "2026-01-01T00:00:00.000Z",
+            },
+          ],
+        }),
+      }),
+    );
+  const NOW = new Date("2026-01-15T00:00:00.000Z").getTime();
+  const sent = (amount: number): CoinGift => ({
+    id: 1,
+    fromPlayerId: "ann",
+    toPlayerId: "bob",
+    amount,
+    at: "2026-01-14T00:00:00.000Z",
+  });
+
+  it("offers everyone else, up to the cap or the balance", () => {
+    expect(gifts([]).getGiftPanel("ann", NOW)).toMatchObject({
+      recipients: [expect.objectContaining({ id: "bob" })],
+      cap: 5,
+      allowance: 5,
+      max: 5,
+    });
+    expect(gifts([sent(2)]).getGiftPanel("ann", NOW)).toMatchObject({
+      allowance: 3,
+      max: 3,
+    });
+    expect(gifts([], 2).getGiftPanel("ann", NOW).max).toBe(2);
+  });
+
+  it("explains why a player can't send", () => {
+    expect(gifts([sent(5)]).getGiftPanel("ann", NOW).blocked).toBe("limit");
+    expect(gifts([]).getGiftPanel("bob", NOW).blocked).toBe("unaffordable");
+  });
+});
+
+describe("power-ups in eggs", () => {
+  it("never offers a power-up already bought or hatched this season", () => {
+    const q = setup({ purchases: [bought("ann", hint)], grant: 40 });
+    const [mystery] = q.getCrateViews({ playerId: "ann" });
+    expect(
+      mystery.tiers
+        .find((t) => t.rarity === "power_up")
+        ?.drops.map((d) => d.item.id),
+    ).toEqual(["sabotage", "dd"]);
+  });
+});
+
+describe("mystery eggs feature flag", () => {
+  const exclusive = shopItem({ id: "egg", name: "Egg", crateOnly: true });
+
+  it("hides every crate, recent pull and egg exclusive while off", () => {
+    const off = createCoinQueries(
+      competitionData({
+        players: [player("ann")],
+        coins: coinData({
+          items: [duck, exclusive],
+          crateOpens: [
+            {
+              id: 4,
+              purchaseId: 1,
+              playerId: "ann",
+              crateId: "mystery-egg",
+              price: 8,
+              itemId: "egg",
+              rarity: "legendary",
+              at: "2026-01-13T00:00:00.000Z",
+            },
+          ],
+        }),
+      }),
+    );
+    expect(off.getCrateViews({ playerId: "ann" })).toEqual([]);
+    expect(off.getRecentPulls()).toEqual([]);
+    expect(off.getCratePull(4, "ann")).toBeUndefined();
+    expect(
+      off.getShopSections({}).flatMap((s) => s.listings.map((l) => l.item.id)),
+    ).toEqual(["duck"]);
+  });
+
+  it("shows them once an admin turns eggs on", () => {
+    const on = setup({ eggs: true });
+    expect(on.getCrateViews({}).map((v) => v.crate.id)).toContain(
+      "mystery-egg",
+    );
+    expect(setup({ eggs: false }).getCrateViews({})).toEqual([]);
   });
 });

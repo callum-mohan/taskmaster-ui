@@ -11,6 +11,7 @@ import {
   parseBonusForm,
   parseChangelogForm,
   parseCoinAdjustmentForm,
+  parseFeatureFlagForm,
   parseNewPlayerForm,
   parsePlayerEmailForm,
   parsePlayerForm,
@@ -1470,8 +1471,56 @@ describe("parseShopItemForm", () => {
       powerUp: null,
       available: true,
       crateOnly: false,
+      crateId: null,
+      availableFrom: null,
+      availableUntil: null,
       sortOrder: undefined,
     });
+  });
+
+  it("parses a sale window as UK wall-clock times", () => {
+    expect(
+      dataOf(
+        parse({
+          availableFrom: "2026-10-21T00:00",
+          availableUntil: "2026-10-31T23:59",
+        }),
+      ),
+    ).toMatchObject({
+      availableFrom: "2026-10-21 00:00:00",
+      availableUntil: "2026-10-31 23:59:00",
+    });
+    expect(
+      errorsOf(
+        parse({
+          availableFrom: "2026-10-31T00:00",
+          availableUntil: "2026-10-21T00:00",
+        }),
+      ).availableUntil,
+    ).toBe("The end must be after the start.");
+    expect(errorsOf(parse({ availableUntil: "soon" })).availableUntil).toBe(
+      "Enter a date and time.",
+    );
+  });
+
+  it("ties a seasonal egg's exclusive to that egg", () => {
+    expect(
+      dataOf(parse({ crateOnly: "on", crateId: "halloween-egg" })).crateId,
+    ).toBe("halloween-egg");
+    expect(errorsOf(parse({ crateId: "halloween-egg" })).crateId).toMatch(
+      /egg exclusive/,
+    );
+    // Regular eggs can't have exclusives of their own.
+    expect(
+      errorsOf(parse({ crateOnly: "on", crateId: "mystery-egg" })).crateId,
+    ).toBe("Pick one of the seasonal eggs.");
+  });
+
+  it("accepts the passive power-ups", () => {
+    const base = { category: "power_up", imageUrl: "" };
+    for (const powerUp of ["shield", "mirror", "insurance"]) {
+      expect(dataOf(parse({ ...base, powerUp })).powerUp).toBe(powerUp);
+    }
   });
 
   it("marks crate exclusives, but never a power-up", () => {
@@ -1485,7 +1534,7 @@ describe("parseShopItemForm", () => {
           imageUrl: "",
         }),
       ).crateOnly,
-    ).toBe("Eggs never hatch power-ups.");
+    ).toBe("Power-ups can't be egg exclusives.");
   });
 
   it("reads an unticked box as retired", () => {
@@ -1547,5 +1596,25 @@ describe("parseCoinAdjustmentForm", () => {
     );
     expect(errors.amount).toBe("Use a non-zero amount.");
     expect(errors.reason).toBe("Required.");
+  });
+});
+
+describe("parseFeatureFlagForm", () => {
+  it("parses a known flag turned on or off", () => {
+    expect(
+      parseFeatureFlagForm(formData({ key: "shop_eggs", enabled: "on" })),
+    ).toEqual({ key: "shop_eggs", enabled: true });
+    expect(
+      parseFeatureFlagForm(formData({ key: "shop_eggs", enabled: "off" })),
+    ).toEqual({ key: "shop_eggs", enabled: false });
+  });
+
+  it("rejects unknown flags and values", () => {
+    expect(
+      parseFeatureFlagForm(formData({ key: "nope", enabled: "on" })),
+    ).toBeUndefined();
+    expect(
+      parseFeatureFlagForm(formData({ key: "shop_eggs", enabled: "yes" })),
+    ).toBeUndefined();
   });
 });

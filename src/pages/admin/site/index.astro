@@ -10,7 +10,14 @@ import {
   tableCell,
   tableHead,
 } from "../../../components/admin/styles";
-import { listChangelog, listShopItems } from "../../../data/admin";
+import {
+  listChangelog,
+  listFeatureFlags,
+  listShopItems,
+  setFeatureFlag,
+} from "../../../data/admin";
+import { FEATURE_FLAGS } from "../../../data/feature-flags";
+import { parseFeatureFlagForm } from "../../../lib/admin-forms";
 import {
   CATEGORY_INFO,
   POWER_UP_INFO,
@@ -26,13 +33,28 @@ import {
 } from "../../../lib/pagination";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
 
-const [{ getPollSummaries, players }, changelog, shop] = await Promise.all([
-  Astro.locals.getQueries(),
-  listChangelog(),
-  listShopItems(),
-]);
+// The only form posted here: a feature flag toggle.
+if (Astro.request.method === "POST") {
+  const toggle = parseFeatureFlagForm(await Astro.request.formData());
+  if (!toggle) return Astro.redirect(withBase("/admin/site#flags"), 303);
+  await setFeatureFlag(toggle.key, toggle.enabled, admin);
+  const query = new URLSearchParams({
+    done: toggle.enabled ? "flag-on" : "flag-off",
+    name: FEATURE_FLAGS[toggle.key].label,
+  });
+  return Astro.redirect(withBase(`/admin/site?${query}#flags`), 303);
+}
+
+const [{ getPollSummaries, players }, changelog, shop, flags] =
+  await Promise.all([
+    Astro.locals.getQueries(),
+    listChangelog(),
+    listShopItems(),
+    listFeatureFlags(),
+  ]);
 const summaries = getPollSummaries();
 const changelogPage = paginate(
   changelog,
@@ -80,19 +102,91 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
     <span class="text-acid">$</span> ls ~/site
   </h1>
   <p class="mt-1 max-w-prose text-sm text-ink-dim">
-    The extras around the competition: polls for players to vote on, the "what's
-    new" list, and the Clim Coin shop.
+    The extras around the competition: feature flags, polls for players to vote
+    on, the "what's new" list, and the Clim Coin shop.
   </p>
 
   {
     done && subject && (
       <Notice tone="success" class="mt-6">
-        {done === "deleted" ? `Deleted "${subject}".` : `Saved "${subject}".`}
+        {done === "deleted"
+          ? `Deleted "${subject}".`
+          : done === "flag-on"
+            ? `Turned on "${subject}".`
+            : done === "flag-off"
+              ? `Turned off "${subject}".`
+              : `Saved "${subject}".`}
       </Notice>
     )
   }
 
-  <section id="polls" aria-labelledby="polls-heading" class="mt-8 scroll-mt-24">
+  <section id="flags" aria-labelledby="flags-heading" class="mt-8 scroll-mt-24">
+    <h2
+      id="flags-heading"
+      class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      feature flags ({flags.length})
+    </h2>
+    <p class="mt-1 text-xs text-ink-faint">
+      Switch site features on or off for everyone, straight away. New features
+      start off.
+    </p>
+    <TerminalWindow title="~/site/flags" class="mt-3">
+      <ul class="divide-y divide-grid/60">
+        {
+          flags.map((flag) => (
+            <li class="flex flex-wrap items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+              <div class="min-w-0 max-w-prose">
+                <p class="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
+                  {flag.label}
+                  <span
+                    class:list={[
+                      "rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest",
+                      flag.enabled
+                        ? "border-acid/50 bg-acid/10 text-acid"
+                        : "border-grid text-ink-faint",
+                    ]}
+                  >
+                    {flag.enabled ? "on" : "off"}
+                  </span>
+                  <code class="text-[10px] font-normal text-ink-faint">
+                    {flag.key}
+                  </code>
+                </p>
+                <p class="mt-1 text-xs text-ink-dim">{flag.description}</p>
+                {flag.changedBy && flag.changedAt && (
+                  <p class="mt-1 text-[11px] text-ink-faint">
+                    Last changed by {flag.changedBy} · {fmt(flag.changedAt)}
+                  </p>
+                )}
+              </div>
+              <form method="post">
+                <input type="hidden" name="key" value={flag.key} />
+                <input
+                  type="hidden"
+                  name="enabled"
+                  value={flag.enabled ? "off" : "on"}
+                />
+                <button
+                  type="submit"
+                  class={flag.enabled ? btnGhost : btnPrimary}
+                >
+                  {flag.enabled ? "turn off" : "turn on"}
+                  <span class="sr-only"> {flag.label}</span>
+                </button>
+              </form>
+            </li>
+          ))
+        }
+      </ul>
+    </TerminalWindow>
+  </section>
+
+  <section
+    id="polls"
+    aria-labelledby="polls-heading"
+    class="mt-10 scroll-mt-24"
+  >
     <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2
@@ -294,8 +388,10 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
         </h2>
         <p class="mt-1 text-xs text-ink-faint">
           What players can spend Clim Coin on, site-wide. Pets, avatars and
-          cosmetics also hatch from mystery eggs (rarity follows the price).
-          Retired items stay with their owners and stop dropping; items nobody
+          cosmetics also hatch from mystery eggs (rarity follows the price) when
+          the <a href="#flags" class="text-cyan hover:underline"
+            >mystery eggs flag</a
+          > is on. Retired items stay with their owners and stop dropping; items nobody
           owns can be deleted.
         </p>
       </div>
@@ -330,7 +426,14 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
                     )}
                     {item.crateOnly && (
                       <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-magenta">
-                        egg only
+                        {item.crateId ? `${item.crateId} only` : "egg only"}
+                      </span>
+                    )}
+                    {(item.availableFrom || item.availableUntil) && (
+                      <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-amber">
+                        limited
+                        {item.availableUntil &&
+                          ` · until ${item.availableUntil.slice(0, 16)}`}
                       </span>
                     )}
                   </td>

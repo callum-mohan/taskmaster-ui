@@ -331,4 +331,28 @@ describe("parseWalletAction", () => {
       parse({ intent: "use", taskId: "w2", effect: "nuke" }),
     ).toBeUndefined();
   });
+
+  it("never uses a passive power-up", () => {
+    for (const effect of ["shield", "mirror", "insurance"]) {
+      expect(parse({ intent: "use", taskId: "w2", effect })).toBeUndefined();
+    }
+  });
+
+  it("parses a gift within the weekly cap, with an optional note", () => {
+    const gift = { intent: "gift", toPlayerId: "bob" };
+    expect(parse({ ...gift, amount: "3", message: "  nice   work " })).toEqual({
+      intent: "gift",
+      toPlayerId: "bob",
+      amount: 3,
+      message: "nice work",
+    });
+    expect(parse({ ...gift, amount: "1" })).toMatchObject({ message: null });
+    for (const amount of ["0", "6", "-1", "1.5", "two", ""]) {
+      expect(parse({ ...gift, amount })).toBeUndefined();
+    }
+    expect(
+      parse({ ...gift, amount: "1", message: "x".repeat(81) }),
+    ).toBeUndefined();
+    expect(parse({ intent: "gift", amount: "1" })).toBeUndefined();
+  });
 });

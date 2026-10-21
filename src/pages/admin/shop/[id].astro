@@ -14,6 +14,7 @@ import {
 } from "../../../data/admin";
 import {
   parseShopItemForm,
+  toDateTimeLocal,
   type FieldErrors,
   type FormValues,
 } from "../../../lib/admin-forms";
@@ -41,6 +42,11 @@ let values: FormValues = {
   powerUp: item.powerUp ?? "",
   available: item.available ? "on" : "",
   crateOnly: item.crateOnly ? "on" : "",
+  crateId: item.crateId ?? "",
+  availableFrom: item.availableFrom ? toDateTimeLocal(item.availableFrom) : "",
+  availableUntil: item.availableUntil
+    ? toDateTimeLocal(item.availableUntil)
+    : "",
   sortOrder: String(item.sortOrder),
 };
 let errors: FieldErrors = {};

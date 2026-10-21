@@ -68,6 +68,11 @@ export const powerUpKind = pgEnum("power_up_kind", [
   "hint",
   "golden_week",
   "sabotage",
+  // Passive: never "used" on a week (no `power_up_uses` row). Their effect
+  // is derived from the records; see `src/data/coins.ts`.
+  "shield",
+  "mirror",
+  "insurance",
 ]);
 export const loadoutSlot = pgEnum("loadout_slot", [
   "pet",
@@ -632,6 +637,23 @@ export const changelogEntries = pgTable(
 // deduct, is written here.
 
 /**
+ * Site-wide feature flags, switched on and off in `/admin/site`. Keys are
+ * the ones in `src/data/feature-flags.ts`; a flag with no row is off, so new
+ * features ship disabled. The actor's name is copied in, like
+ * `coin_adjustments`.
+ */
+export const featureFlags = pgTable("feature_flags", {
+  key: text().primaryKey(),
+  enabled: boolean().notNull().default(false),
+  actorId: text().notNull(),
+  actorName: text().notNull(),
+  updatedAt: timestamp({ withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => sql`now()`),
+});
+
+/**
  * The shop catalogue (site-wide, managed in `/admin/shop`). Category, cosmetic
  * kind and power-up are fixed once created so owned items keep their slot
  * and effect. Items someone bought can't be deleted, only retired.
@@ -654,11 +676,26 @@ export const shopItems = pgTable(
     available: boolean().notNull().default(true),
     // Crate exclusives only drop from crates; they're never sold directly.
     crateOnly: boolean().notNull().default(false),
+    // A seasonal egg's exclusive (a crate id from `coin-rules.ts`): it only
+    // drops from that egg, and no other egg drops it.
+    crateId: text(),
+    // Limited-time stock: on sale (and droppable) only between these UK
+    // wall-clock times (Europe/London, no zone, like task dates). Unset = open.
+    availableFrom: timestamp({ mode: "string" }),
+    availableUntil: timestamp({ mode: "string" }),
     sortOrder: integer().notNull().default(0),
     ...recordedTimestamps(),
   },
   (t) => [
     check("shop_items_price_range", sql`${t.price} between 0 and 10000`),
+    check(
+      "shop_items_crate_id_crate_only",
+      sql`${t.crateId} is null or ${t.crateOnly}`,
+    ),
+    check(
+      "shop_items_sale_window_order",
+      sql`${t.availableFrom} is null or ${t.availableUntil} is null or ${t.availableUntil} > ${t.availableFrom}`,
+    ),
     check(
       "shop_items_image_when_visual",
       sql`${t.category} not in ('pet', 'avatar') or ${t.imageUrl} is not null`,
@@ -671,7 +708,8 @@ export const shopItems = pgTable(
       "shop_items_power_up_field",
       sql`(${t.category} = 'power_up') = (${t.powerUp} is not null)`,
     ),
-    // Crates never drop power-ups, so a power-up can't be crate-only.
+    // Power-ups drop from every crate through its small power-up chance, so
+    // one can't be crate-only (or a seasonal egg's exclusive).
     check(
       "shop_items_crate_only_droppable",
       sql`not (${t.crateOnly} and ${t.category} = 'power_up')`,
@@ -750,6 +788,12 @@ export const powerUpUses = pgTable(
       "power_up_uses_not_self",
       sql`${t.targetPlayerId} is distinct from ${t.playerId}`,
     ),
+    // Shield, Mirror and Insurance are passive. Compared as text so the
+    // check doesn't use the enum values added in the same migration.
+    check(
+      "power_up_uses_active_effect",
+      sql`${t.effect}::text not in ('shield', 'mirror', 'insurance')`,
+    ),
     index("power_up_uses_task_id_idx").on(t.taskId),
     index("power_up_uses_target_player_id_idx").on(t.targetPlayerId),
   ],
@@ -806,11 +850,53 @@ export const coinAdjustments = pgTable(
 );
 
 /**
+ * Clim Coin one player sent another. Both are in the same season (composite
+ * keys, like `team_members`), so a gift never crosses wallets' seasons. The
+ * weekly cap and the sender's balance are checked by the write, under the
+ * sender's wallet lock (`src/data/shop.ts`).
+ */
+export const coinGifts = pgTable(
+  "coin_gifts",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: seasonId(),
+    fromPlayerId: text().notNull(),
+    toPlayerId: text().notNull(),
+    amount: integer().notNull(),
+    message: text(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "coin_gifts_from_player_season_fk",
+      columns: [t.fromPlayerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "coin_gifts_to_player_season_fk",
+      columns: [t.toPlayerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    check("coin_gifts_not_self", sql`${t.fromPlayerId} <> ${t.toPlayerId}`),
+    check("coin_gifts_amount_positive", sql`${t.amount} > 0`),
+    check(
+      "coin_gifts_message_length",
+      sql`${t.message} is null or char_length(${t.message}) <= 80`,
+    ),
+    index("coin_gifts_from_player_id_idx").on(t.fromPlayerId),
+    index("coin_gifts_to_player_id_idx").on(t.toPlayerId),
+  ],
+);
+
+/**
  * A crate (lootbox) a player opened. The crates themselves are defined in
  * code (`src/data/coin-rules.ts`); `crateId` names one. The item won is
  * owned through `purchaseId`, a zero-price `coin_purchases` row written in
  * the same statement, so ownership works exactly like buying. `price` is
- * what the crate cost then, and `rarity` the tier it rolled.
+ * what the crate cost then, and `rarity` the tier it rolled (a rarity, or
+ * `power_up` for its small power-up chance).
  */
 export const crateOpens = pgTable(
   "crate_opens",
@@ -837,7 +923,7 @@ export const crateOpens = pgTable(
     check("crate_opens_price_positive", sql`${t.price} >= 0`),
     check(
       "crate_opens_rarity_known",
-      sql`${t.rarity} in ('common', 'rare', 'epic', 'legendary')`,
+      sql`${t.rarity} in ('common', 'rare', 'epic', 'legendary', 'power_up')`,
     ),
     index("crate_opens_player_id_idx").on(t.playerId),
     index("crate_opens_item_id_idx").on(t.itemId),

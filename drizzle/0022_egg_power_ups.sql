@@ -1,0 +1,2 @@
+ALTER TABLE "crate_opens" DROP CONSTRAINT "crate_opens_rarity_known";--> statement-breakpoint
+ALTER TABLE "crate_opens" ADD CONSTRAINT "crate_opens_rarity_known" CHECK ("crate_opens"."rarity" in ('common', 'rare', 'epic', 'legendary', 'power_up'));

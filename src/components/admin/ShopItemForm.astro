@@ -16,6 +16,7 @@ import {
   PROFILE_THEMES,
   SHOP_CATEGORIES,
 } from "../../data/coins";
+import { CRATES } from "../../data/coin-rules";
 import type { FieldErrors, FormValues } from "../../lib/admin-forms";
 import { withBase } from "../../lib/url";
 
@@ -28,6 +29,7 @@ interface Props {
 
 const { mode, values, errors = {}, formError } = Astro.props;
 const isCreate = mode === "create";
+const seasonalEggs = CRATES.filter((crate) => crate.exclusive);
 
 const select = (name: string) => ({
   id: `field-${name}`,
@@ -121,7 +123,7 @@ const select = (name: string) => ({
       value={values.price}
       error={errors.price}
       required
-      hint="In Clim Coin. Also sets the rarity: ≤15 common, 16–29 rare, 30–39 epic, 40+ legendary."
+      hint="In Clim Coin. Also sets the rarity: ≤7 common, 8–14 rare, 15–19 epic, 20+ legendary."
     />
     <AdminField
       label="sort order"
@@ -154,6 +156,7 @@ const select = (name: string) => ({
             {POWER_UP_KINDS.map((kind) => (
               <option value={kind} selected={values.powerUp === kind}>
                 {POWER_UP_INFO[kind].label}
+                {POWER_UP_INFO[kind].passive ? " (passive)" : ""}
               </option>
             ))}
           </select>
@@ -278,6 +281,57 @@ const select = (name: string) => ({
       )
     }
   </div>
+
+  <fieldset class="rounded-md border border-grid p-4">
+    <legend class:list={[labelClass, "px-1"]}
+      >limited time & seasonal eggs</legend
+    >
+    <div class="grid gap-5 sm:grid-cols-2">
+      <AdminField
+        label="on sale from"
+        name="availableFrom"
+        type="datetime-local"
+        value={values.availableFrom}
+        error={errors.availableFrom}
+        hint="UK time. Blank: on sale now."
+      />
+      <AdminField
+        label="on sale until"
+        name="availableUntil"
+        type="datetime-local"
+        value={values.availableUntil}
+        error={errors.availableUntil}
+        hint="UK time. Blank: no end. With an end it shows on the shop's limited-time shelf."
+      />
+    </div>
+    <div class="mt-5 space-y-1.5">
+      <label for="field-crateId" class={labelClass}
+        >seasonal egg exclusive</label
+      >
+      <select {...select("crateId")}>
+        <option value="">— (regular eggs can drop it)</option>
+        {
+          seasonalEggs.map((crate) => (
+            <option value={crate.id} selected={values.crateId === crate.id}>
+              {crate.name}
+            </option>
+          ))
+        }
+      </select>
+      <p class="text-xs text-ink-faint">
+        Only this egg hatches it, and only while the egg is on sale. Tick "egg
+        exclusive" too.
+      </p>
+      {
+        errors.crateId && (
+          <p id="field-crateId-error" class="text-xs text-danger">
+            <span aria-hidden="true">✗ </span>
+            {errors.crateId}
+          </p>
+        )
+      }
+    </div>
+  </fieldset>
 
   <div class="flex flex-wrap gap-3 pt-2">
     <button type="submit" class={btnPrimary}>

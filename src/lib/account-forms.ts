@@ -7,7 +7,12 @@ import {
   type ParseResult,
 } from "./admin-forms";
 import type { PollSettings } from "../types";
-import { LOADOUT_SLOTS, POWER_UP_KINDS } from "../data/coin-rules";
+import {
+  ACTIVE_POWER_UP_KINDS,
+  GIFT_MESSAGE_MAX,
+  GIFT_WEEKLY_CAP,
+  LOADOUT_SLOTS,
+} from "../data/coin-rules";
 
 // Validation for the player self-service forms under `/account`. Players can
 // only touch their bio and avatar; everything else stays admin-only.
@@ -180,8 +185,25 @@ const walletActionSchema = z.discriminatedUnion("intent", [
   z.object({ intent: z.literal("equip"), itemId: walletId }),
   z.object({ intent: z.literal("unequip"), slot: z.enum(LOADOUT_SLOTS) }),
   z.object({
+    intent: z.literal("gift"),
+    toPlayerId: walletId,
+    amount: z
+      .string()
+      .trim()
+      .regex(/^\d+$/)
+      .transform(Number)
+      .pipe(z.number().int().min(1).max(GIFT_WEEKLY_CAP)),
+    // Optional, shown on both wallets.
+    message: z
+      .string()
+      .trim()
+      .max(GIFT_MESSAGE_MAX)
+      .transform((v) => (v === "" ? null : v.replace(/\s+/g, " "))),
+  }),
+  z.object({
     intent: z.literal("use"),
-    effect: z.enum(POWER_UP_KINDS),
+    // Shield, Mirror and Insurance are passive: they're never used.
+    effect: z.enum(ACTIVE_POWER_UP_KINDS),
     taskId: walletId,
     // Sabotage only: blank for every other power-up.
     targetPlayerId: z
@@ -195,8 +217,9 @@ const walletActionSchema = z.discriminatedUnion("intent", [
 export type WalletAction = z.output<typeof walletActionSchema>;
 
 /**
- * A wallet page action (equip, unequip or use a power-up), or `undefined`
- * for a malformed post. Sabotage must name a target; nothing else may.
+ * A wallet page action (equip, unequip, use a power-up or send a gift), or
+ * `undefined` for a malformed post. Sabotage must name a target; nothing
+ * else may.
  */
 export function parseWalletAction(form: FormData): WalletAction | undefined {
   const values = formValues(form);
@@ -207,6 +230,9 @@ export function parseWalletAction(form: FormData): WalletAction | undefined {
     effect: values.effect ?? "",
     taskId: values.taskId ?? "",
     targetPlayerId: values.targetPlayerId ?? "",
+    toPlayerId: values.toPlayerId ?? "",
+    amount: values.amount ?? "",
+    message: values.message ?? "",
   });
   if (!parsed.success) return undefined;
   const action = parsed.data;

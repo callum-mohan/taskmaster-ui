@@ -30,6 +30,10 @@
   --color-cyan: #5bd6ff; /* links / info            */
   --color-danger: #ff5f56;
 
+  /* Clim Coin cosmetics only (name colours bought in the shop). */
+  --color-gold: #ffd75e;
+  --color-pumpkin: #ff8c2e;
+
   --color-dot-red: #ff5f56;
   --color-dot-amber: #ffbd2e;
   --color-dot-green: #27c93f;
@@ -66,6 +70,9 @@
   --color-magenta: #c21f98; /* accents / titles */
   --color-cyan: #0b7aa8; /* links / info */
   --color-danger: #d4352b;
+
+  --color-gold: #8a6400;
+  --color-pumpkin: #b94f00;
 
   --color-scanline: rgba(16, 24, 32, 0.02);
 
@@ -695,6 +702,105 @@ a[data-me-row].is-me {
   border-color: color-mix(in srgb, var(--profile-accent) 45%, transparent);
   box-shadow: 0 0 24px -8px var(--profile-accent);
 }
+/* Matrix: faint phosphor columns behind the header. */
+.profile-theme-matrix {
+  --profile-accent: var(--color-acid);
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-acid) 7%, transparent) 0 1px,
+    transparent 1px 12px
+  );
+}
+/* Vaporwave: a magenta-to-cyan wash with a two-tone glow. */
+.profile-theme-vaporwave {
+  --profile-accent: var(--color-magenta);
+  background-image: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--color-magenta) 9%, transparent),
+    color-mix(in srgb, var(--color-cyan) 9%, transparent)
+  );
+}
+.profile-theme-vaporwave[class*="profile-theme-"] {
+  box-shadow:
+    -10px 0 24px -12px var(--color-magenta),
+    10px 0 24px -12px var(--color-cyan);
+}
+/* Blueprint: drafting-paper grid in cyan. */
+.profile-theme-blueprint {
+  --profile-accent: var(--color-cyan);
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--color-cyan) 10%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-cyan) 10%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 16px 16px;
+}
+
+/* Clim Coin name colours with an effect (see NAME_COLOUR_CLASS). Placed
+   after `.text-glow` so they win over its shadow. */
+.name-gold {
+  color: var(--color-gold);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-gold) 45%, transparent);
+}
+.name-glitch {
+  color: var(--color-ink);
+  text-shadow:
+    1px 0 var(--color-magenta),
+    -1px 0 var(--color-cyan);
+  animation: name-glitch 3s steps(1) infinite;
+}
+@keyframes name-glitch {
+  0%,
+  86%,
+  100% {
+    text-shadow:
+      1px 0 var(--color-magenta),
+      -1px 0 var(--color-cyan);
+  }
+  88% {
+    text-shadow:
+      -3px 0 var(--color-magenta),
+      3px 0 var(--color-cyan);
+  }
+  92% {
+    text-shadow:
+      3px 1px var(--color-magenta),
+      -3px -1px var(--color-cyan);
+  }
+}
+.name-rainbow {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-acid),
+    var(--color-cyan),
+    var(--color-magenta),
+    var(--color-amber),
+    var(--color-acid)
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* A shadow would paint over the clipped gradient. */
+  text-shadow: none;
+  animation: name-rainbow 6s linear infinite;
+}
+@keyframes name-rainbow {
+  to {
+    background-position: 200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .name-glitch,
+  .name-rainbow {
+    animation: none;
+  }
+}
 
 /* Clim Coin egg (crate) reveal. `data-phase` steps through wobble → crack
    → open, set by the reveal's scripts; without JS (or under reduced motion)
@@ -745,6 +851,9 @@ a[data-me-row].is-me {
 }
 .crate-reveal[data-rarity="legendary"].is-revealed .crate-reveal__art {
   filter: drop-shadow(0 0 14px var(--color-amber));
+}
+.crate-reveal[data-rarity="power_up"].is-revealed .crate-reveal__art {
+  filter: drop-shadow(0 0 14px var(--color-acid));
 }
 @keyframes egg-wobble {
   0%,

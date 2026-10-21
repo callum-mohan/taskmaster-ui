@@ -11,9 +11,11 @@ import {
   bonusPoints as bonusPointsTable,
   changelogEntries as changelogTable,
   coinAdjustments as coinAdjustmentsTable,
+  coinGifts as coinGiftsTable,
   coinPurchases as coinPurchasesTable,
   crateOpens as crateOpensTable,
   equippedItems as equippedItemsTable,
+  featureFlags as featureFlagsTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
   peoplesChoiceVotes as peoplesChoiceVotesTable,
@@ -49,12 +51,15 @@ import {
   mapCrateOpens,
   mapEntries,
   mapEquipped,
+  mapGifts,
   mapHints,
   mapPowerUpUses,
   mapPurchases,
   mapShopItems,
   powerUpKeys,
+  resolveSabotages,
 } from "./coins";
+import { mapFeatureFlags } from "./feature-flags";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
 import { cachedJson, purgeCached } from "../lib/edge-cache";
@@ -115,6 +120,8 @@ async function fetchCompetitionRows() {
     coinAdjustmentRows,
     entryRows,
     crateOpenRows,
+    coinGiftRows,
+    featureFlagRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -172,6 +179,8 @@ async function fetchCompetitionRows() {
       .from(taskSubmissionsTable)
       .where(isNull(taskSubmissionsTable.hiddenAt)),
     db.select().from(crateOpensTable).orderBy(asc(crateOpensTable.id)),
+    db.select().from(coinGiftsTable).orderBy(asc(coinGiftsTable.id)),
+    db.select().from(featureFlagsTable),
   ]);
   return {
     seasonRows,
@@ -196,6 +205,8 @@ async function fetchCompetitionRows() {
     coinAdjustmentRows,
     entryRows,
     crateOpenRows,
+    coinGiftRows,
+    featureFlagRows,
   };
 }
 
@@ -288,6 +299,8 @@ async function buildSeasonCompetition(
     coinAdjustmentRows,
     entryRows,
     crateOpenRows,
+    coinGiftRows,
+    featureFlagRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -359,12 +372,20 @@ async function buildSeasonCompetition(
       players.some((p) => p.id === row.playerId),
     ),
     ...derivePeoplesChoiceBonusRows(peoplesChoiceVotes, tasks, teams),
-    ...deriveSabotageBonusRows(uses, players),
   ];
-  // Correct predictions depend on the week's finishing positions, so rank
-  // once without them, then again with their bonuses added (bonuses never
-  // change positions).
+  // Correct predictions depend on the week's finishing positions, and
+  // Shields and Mirrors on whether the week's results are out, so rank once
+  // without them, then again with their bonuses added (bonuses never change
+  // positions or when results are out).
   const ranked = buildScoreRecords({ ...scoreRows, bonusPoints }, context);
+  const purchases = mapPurchases(coinPurchaseRows);
+  const items = mapShopItems(shopItemRows);
+  const sabotageRows = deriveSabotageBonusRows(
+    uses,
+    players,
+    resolveSabotages(uses, purchases, items),
+    new Set(Object.keys(ranked.resultsPostedAt)),
+  );
   const predictionBonuses = derivePredictionBonusRows(
     predictions,
     ranked,
@@ -372,11 +393,12 @@ async function buildSeasonCompetition(
     new Map(teams.map((t) => [t.id, t.name])),
     powerUpKeys(uses, "double_down"),
   );
+  const derivedBonuses = [...sabotageRows, ...predictionBonuses];
   const records =
-    predictionBonuses.length === 0
+    derivedBonuses.length === 0
       ? ranked
       : buildScoreRecords(
-          { ...scoreRows, bonusPoints: [...bonusPoints, ...predictionBonuses] },
+          { ...scoreRows, bonusPoints: [...bonusPoints, ...derivedBonuses] },
           context,
         );
 
@@ -392,14 +414,16 @@ async function buildSeasonCompetition(
     recaps: mapRecaps(recapRows),
     changelog: mapChangelog(changelogRows),
     coins: {
-      items: mapShopItems(shopItemRows),
-      purchases: mapPurchases(coinPurchaseRows),
+      items,
+      purchases,
       uses,
       equipped: mapEquipped(equippedRows),
       adjustments: mapAdjustments(coinAdjustmentRows),
       entries: mapEntries(entryRows),
       crateOpens: mapCrateOpens(crateOpenRows),
+      gifts: mapGifts(coinGiftRows),
       hints: mapHints(taskRows),
     },
+    features: mapFeatureFlags(featureFlagRows),
   };
 }

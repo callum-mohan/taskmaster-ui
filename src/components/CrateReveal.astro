@@ -85,7 +85,7 @@ const egg = eggArt(crate);
         class:list={[
           "text-2xl font-extrabold tracking-tight sm:text-3xl",
           RARITY_INFO[rarity].text,
-          rarity === "legendary" && "text-glow",
+          (rarity === "legendary" || rarity === "power_up") && "text-glow",
         ]}
       >
         <span class="sr-only">You hatched </span>
@@ -96,7 +96,11 @@ const egg = eggArt(crate);
         It's in your <a
           href={withBase("/account#wallet")}
           class="text-cyan hover:underline">wallet</a
-        >, ready to equip.
+        >, {
+          item.category === "power_up"
+            ? "ready for the season."
+            : "ready to equip."
+        }
       </p>
     </div>
   </TerminalWindow>

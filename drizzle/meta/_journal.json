@@ -120,6 +120,27 @@
       "when": 1792487494487,
       "tag": "0016_squad_season_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792592760606,
+      "tag": "0017_clim_coin",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792595386345,
+      "tag": "0018_power_up_once_per_season",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792595915903,
+      "tag": "0019_crates",
+      "breakpoints": true
     }
   ]
 }

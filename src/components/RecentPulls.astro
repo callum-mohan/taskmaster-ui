@@ -1,0 +1,36 @@
+---
+// The season's newest eggs cracked (crate openings), public like power-ups:
+// who cracked what, and what hatched.
+import type { CratePull } from "../types";
+import ShopItemArt from "./ShopItemArt.astro";
+import RarityBadge from "./RarityBadge.astro";
+import { withBase } from "../lib/url";
+
+interface Props {
+  pulls: CratePull[];
+  class?: string;
+}
+
+const { pulls, class: className } = Astro.props;
+---
+
+<ul class:list={["divide-y divide-grid/60", className]}>
+  {
+    pulls.map((pull) => (
+      <li class="flex items-center gap-3 py-2 text-sm">
+        <ShopItemArt item={pull.item} class="h-8 w-8" />
+        <span class="min-w-0 flex-1 text-ink-dim">
+          <a
+            href={withBase(`/players/${pull.player.id}`)}
+            class="font-bold text-ink hover:text-acid"
+          >
+            {pull.player.name}
+          </a>{" "}
+          cracked a {pull.crate.name} →{" "}
+          <span class="text-ink">{pull.item.name}</span>
+        </span>
+        <RarityBadge rarity={pull.rarity} />
+      </li>
+    ))
+  }
+</ul>

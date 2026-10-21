@@ -116,8 +116,8 @@ export function isWrappedLive(season: Season): boolean {
 
 /**
  * Narrows every row to one season: its roster, squads and weeks, and the
- * scores, bonuses, votes, predictions and recaps for those weeks. Polls and
- * the changelog are site-wide; a poll's vote bonus only counts when it lands
+ * scores, bonuses, votes, predictions, recaps and Clim Coin records for
+ * those weeks and players. Polls, the changelog and the shop are site-wide; a poll's vote bonus only counts when it lands
  * in one of the season's weeks and the voter is on its roster.
  */
 export function rowsForSeason(
@@ -136,6 +136,8 @@ export function rowsForSeason(
   const bySeasonPlayers = <Row extends { taskId: string; playerId: string }>(
     list: Row[],
   ) => forWeeks(list).filter((row) => playerIds.has(row.playerId));
+  const forPlayers = <Row extends { playerId: string }>(list: Row[]) =>
+    list.filter((row) => playerIds.has(row.playerId));
   return {
     ...rows,
     playerRows,
@@ -148,5 +150,13 @@ export function rowsForSeason(
     peoplesChoiceRows: bySeasonPlayers(rows.peoplesChoiceRows),
     predictionRows: bySeasonPlayers(rows.predictionRows),
     recapRows: forWeeks(rows.recapRows),
+    // Wallets are per season: the season's players' purchases, uses on its
+    // weeks, equipped items and grants. The catalogue is site-wide.
+    coinPurchaseRows: forPlayers(rows.coinPurchaseRows),
+    powerUpUseRows: bySeasonPlayers(rows.powerUpUseRows),
+    equippedRows: forPlayers(rows.equippedRows),
+    coinAdjustmentRows: forPlayers(rows.coinAdjustmentRows),
+    entryRows: bySeasonPlayers(rows.entryRows),
+    crateOpenRows: forPlayers(rows.crateOpenRows),
   };
 }

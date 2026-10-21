@@ -430,4 +430,41 @@ describe("getNotifications", () => {
       expect(unreadCount).toBe(1);
     });
   });
+
+  describe("sabotages", () => {
+    const sabotage = {
+      id: 7,
+      taskId: "week-02",
+      effect: "sabotage" as const,
+      label: "sabotaged Ann",
+      player: { id: "bob", seasonId: "cohort-2026", name: "Bob" },
+      at: "2026-06-30T09:00:00.000Z",
+    };
+    const feed = (now = NOW) =>
+      createNotificationQueries(
+        competitionData({ tasks: [week1, week2, week3] }),
+        {
+          getPlayerRankHistory: () => [],
+          getSabotagesOf: (id) => (id === "ann" ? [sabotage] : []),
+        },
+      ).getNotifications({ now, playerId: "ann" });
+
+    it("tells the target who sabotaged them, and in which week", () => {
+      expect(byId(feed().items, "sabotage:7")).toEqual({
+        id: "sabotage:7",
+        kind: "sabotaged",
+        title: "Bob sabotaged you",
+        detail: "5 points lost · Week 02",
+        href: "/tasks/week-02#power-ups",
+        at: sabotage.at,
+        unread: true,
+      });
+    });
+
+    it("doesn't show it before it happened", () => {
+      expect(
+        byId(feed(at("2026-06-30T08:00:00Z")).items, "sabotage:7"),
+      ).toBeUndefined();
+    });
+  });
 });

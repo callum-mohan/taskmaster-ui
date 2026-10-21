@@ -649,6 +649,141 @@ a[data-me-row].is-me {
   }
 }
 
+/* Clim Coin: the signed-in player's equipped pet, wandering the bottom edge.
+   Click-through so it never covers anything. Reuses Eggy's waddle. */
+.wandering-pet {
+  position: fixed;
+  left: 0;
+  bottom: 8px;
+  z-index: 40;
+  width: 48px;
+  height: 48px;
+  pointer-events: none;
+}
+.wandering-pet__img {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+  transform: scaleX(var(--egg-face, 1));
+  transform-origin: 50% 90%;
+}
+.wandering-pet.is-walking .wandering-pet__img {
+  animation: egg-waddle 0.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wandering-pet.is-walking .wandering-pet__img {
+    animation: none;
+  }
+}
+
+/* Clim Coin profile themes: recolour a profile's frame and headline. */
+.profile-theme-phosphor {
+  --profile-accent: var(--color-acid);
+}
+.profile-theme-amber {
+  --profile-accent: var(--color-amber);
+}
+.profile-theme-synthwave {
+  --profile-accent: var(--color-magenta);
+}
+.profile-theme-ice {
+  --profile-accent: var(--color-cyan);
+}
+[class*="profile-theme-"] {
+  border-color: color-mix(in srgb, var(--profile-accent) 45%, transparent);
+  box-shadow: 0 0 24px -8px var(--profile-accent);
+}
+
+/* Clim Coin egg (crate) reveal. `data-phase` steps through wobble → crack
+   → open, set by the reveal's scripts; without JS (or under reduced motion)
+   it's never set, so the egg stays hidden and the prize simply shows. */
+.crate-reveal__egg {
+  display: none;
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 90%;
+}
+.crate-reveal[data-phase] .crate-reveal__egg {
+  display: block;
+}
+.crate-reveal__half {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 4px rgba(0, 0, 0, 0.45));
+}
+.crate-reveal[data-phase="wobble"] .crate-reveal__art,
+.crate-reveal[data-phase="crack"] .crate-reveal__art,
+.crate-reveal[data-phase="wobble"] .crate-reveal__badge,
+.crate-reveal[data-phase="crack"] .crate-reveal__badge,
+.crate-reveal[data-phase="wobble"] [data-crate-name] {
+  visibility: hidden;
+}
+.crate-reveal[data-phase="wobble"] .crate-reveal__egg {
+  animation: egg-wobble 0.3s ease-in-out infinite;
+}
+/* The shell gives: the top half lifts off along the zigzag crack. */
+.crate-reveal[data-phase="crack"] .crate-reveal__egg {
+  animation: egg-wobble 0.12s ease-in-out infinite;
+}
+.crate-reveal[data-phase="crack"] .crate-reveal__half--top {
+  transform: translate(2px, -4px) rotate(-6deg);
+  transition: transform 0.15s ease-out;
+}
+.crate-reveal[data-phase="open"] .crate-reveal__half--top {
+  animation: egg-top-off 0.6s ease-in forwards;
+}
+.crate-reveal[data-phase="open"] .crate-reveal__half--bottom {
+  animation: egg-bottom-off 0.6s ease-in forwards;
+}
+.crate-reveal[data-phase="open"] .crate-reveal__art {
+  animation: crate-pop 0.45s ease-out 0.12s both;
+}
+.crate-reveal[data-rarity="legendary"].is-revealed .crate-reveal__art {
+  filter: drop-shadow(0 0 14px var(--color-amber));
+}
+@keyframes egg-wobble {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(8deg);
+  }
+}
+@keyframes egg-top-off {
+  to {
+    transform: translate(18px, -46px) rotate(-35deg);
+    opacity: 0;
+  }
+}
+@keyframes egg-bottom-off {
+  to {
+    transform: translateY(18px);
+    opacity: 0;
+  }
+}
+@keyframes crate-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* Countdown reaching zero live: a brief glitch shudder. */
 .cd-zero-glitch {
   animation: cd-glitch 0.4s steps(2) 3;

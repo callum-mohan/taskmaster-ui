@@ -9,6 +9,7 @@ import type {
 import { getDb } from "../db";
 import { predictions } from "../db/schema";
 import type { DerivedBonusRow } from "./polls";
+import { DOUBLE_DOWN_POINTS } from "./coin-rules";
 
 // "Call the winner": while a task is live, each player can back who they
 // think will win it (a squad on team tasks), never themselves or their own
@@ -58,6 +59,8 @@ export function derivePredictionBonusRows(
   { scores, teamScores }: { scores: Score[]; teamScores: TeamScore[] },
   players: Player[],
   teamNames: Map<string, string>,
+  /** `${taskId}:${playerId}` of every Double Down used. */
+  doubleDownKeys: ReadonlySet<string> = new Set(),
 ): DerivedBonusRow[] {
   const playerNames = new Map(players.map((p) => [p.id, p.name]));
   return calls.flatMap((call) => {
@@ -66,12 +69,15 @@ export function derivePredictionBonusRows(
       call.pick.type === "team"
         ? teamNames.get(call.pick.id)
         : playerNames.get(call.pick.id);
+    const doubled = doubleDownKeys.has(`${call.taskId}:${call.playerId}`);
     return [
       {
         taskId: call.taskId,
         playerId: call.playerId,
-        points: PREDICTION_BONUS_POINTS,
-        reason: `Called the winner${name ? ` (${name})` : ""}`,
+        points: doubled ? DOUBLE_DOWN_POINTS : PREDICTION_BONUS_POINTS,
+        reason: `Called the winner${name ? ` (${name})` : ""}${
+          doubled ? " · Double Down" : ""
+        }`,
       },
     ];
   });

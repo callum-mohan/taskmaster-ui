@@ -1,0 +1,29 @@
+---
+// Navbar chip with a signed-in player's Clim Coin balance; links to the
+// wallet section of their account page.
+import CoinAmount from "./CoinAmount.astro";
+import { withBase } from "../lib/url";
+
+interface Props {
+  balance: number;
+  class?: string;
+}
+
+const { balance, class: className } = Astro.props;
+const href = withBase("/account#wallet");
+---
+
+<a
+  href={href}
+  title="Your Clim Coin wallet"
+  class:list={[
+    "inline-flex h-[34px] shrink-0 items-center rounded border px-2.5 text-xs transition-colors",
+    balance < 0
+      ? "border-danger/50 text-danger hover:border-danger"
+      : "border-amber/40 text-amber hover:border-amber",
+    className,
+  ]}
+>
+  <span class="sr-only">Wallet: </span>
+  <CoinAmount amount={balance} />
+</a>

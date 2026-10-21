@@ -10,12 +10,14 @@ import {
   parseAddEntryForm,
   parseBonusForm,
   parseChangelogForm,
+  parseCoinAdjustmentForm,
   parseNewPlayerForm,
   parsePlayerEmailForm,
   parsePlayerForm,
   parsePollForm,
   parseRecapForm,
   parseRowId,
+  parseShopItemForm,
   parseTaskForm,
   parseTaskScoresForm,
   parseTeamForm,
@@ -388,6 +390,7 @@ describe("parseTaskForm", () => {
       deadline: "2026-01-12 09:00:00",
       format: "individual",
       revealPassword: null,
+      hint: null,
       maxSubmissions: 0,
       submissionKinds: [],
     });
@@ -1438,5 +1441,111 @@ describe("pollBonusWeeks", () => {
       { id: "week-01", label: "week 01: Paper planes" },
       { id: "week-12", label: "week 12: Towers" },
     ]);
+  });
+});
+
+describe("parseShopItemForm", () => {
+  const pet = {
+    id: "rubber-duck",
+    name: "Rubber Duck",
+    description: "Quacks at bugs.",
+    category: "pet",
+    price: "25",
+    imageUrl: "/shop/pets/rubber-duck.svg",
+    available: "on",
+  };
+  const parse = (overrides: Record<string, string> = {}) =>
+    parseShopItemForm(formData({ ...pet, ...overrides }));
+
+  it("parses a pet and clears fields for other categories", () => {
+    expect(dataOf(parse({ powerUp: "hint", cosmeticValue: "x" }))).toEqual({
+      id: "rubber-duck",
+      name: "Rubber Duck",
+      description: "Quacks at bugs.",
+      category: "pet",
+      price: 25,
+      imageUrl: "/shop/pets/rubber-duck.svg",
+      cosmeticKind: null,
+      cosmeticValue: null,
+      powerUp: null,
+      available: true,
+      crateOnly: false,
+      sortOrder: undefined,
+    });
+  });
+
+  it("marks crate exclusives, but never a power-up", () => {
+    expect(dataOf(parse({ crateOnly: "on" })).crateOnly).toBe(true);
+    expect(
+      errorsOf(
+        parse({
+          crateOnly: "on",
+          category: "power_up",
+          powerUp: "hint",
+          imageUrl: "",
+        }),
+      ).crateOnly,
+    ).toBe("Eggs never hatch power-ups.");
+  });
+
+  it("reads an unticked box as retired", () => {
+    const form = formData({ ...pet });
+    form.delete("available");
+    expect(dataOf(parseShopItemForm(form)).available).toBe(false);
+  });
+
+  it("needs an image for pets and avatars", () => {
+    expect(errorsOf(parse({ imageUrl: "" })).imageUrl).toMatch(/image/);
+    expect(errorsOf(parse({ imageUrl: "ftp://x" })).imageUrl).toMatch(/https/);
+  });
+
+  it("rejects a negative or missing price", () => {
+    expect(errorsOf(parse({ price: "-1" })).price).toBeDefined();
+    expect(errorsOf(parse({ price: "" })).price).toBe("Required.");
+  });
+
+  it("needs a power-up's effect", () => {
+    const base = { category: "power_up", imageUrl: "" };
+    expect(errorsOf(parse(base)).powerUp).toBeDefined();
+    expect(dataOf(parse({ ...base, powerUp: "golden_week" })).powerUp).toBe(
+      "golden_week",
+    );
+  });
+
+  it("checks a cosmetic's value against its kind", () => {
+    const base = { category: "cosmetic", imageUrl: "" };
+    expect(errorsOf(parse(base)).cosmeticKind).toBeDefined();
+    expect(
+      errorsOf(
+        parse({ ...base, cosmeticKind: "name_colour", cosmeticValue: "red" }),
+      ).cosmeticValue,
+    ).toMatch(/acid/);
+    expect(
+      errorsOf(parse({ ...base, cosmeticKind: "theme", cosmeticValue: "" }))
+        .cosmeticValue,
+    ).toMatch(/phosphor/);
+    expect(
+      dataOf(
+        parse({ ...base, cosmeticKind: "title", cosmeticValue: "Legend" }),
+      ),
+    ).toMatchObject({ cosmeticKind: "title", cosmeticValue: "Legend" });
+  });
+});
+
+describe("parseCoinAdjustmentForm", () => {
+  it("parses a grant or deduction with a reason", () => {
+    expect(
+      dataOf(
+        parseCoinAdjustmentForm(formData({ amount: "-5", reason: "Fine" })),
+      ),
+    ).toEqual({ amount: -5, reason: "Fine" });
+  });
+
+  it("rejects zero and a missing reason", () => {
+    const errors = errorsOf(
+      parseCoinAdjustmentForm(formData({ amount: "0", reason: " " })),
+    );
+    expect(errors.amount).toBe("Use a non-zero amount.");
+    expect(errors.reason).toBe("Required.");
   });
 });

@@ -29,6 +29,7 @@ import {
   saveTeamScores,
   setSubmissionHidden,
   updateBonus,
+  revokePowerUpUse,
 } from "../../../../data/admin";
 import { loadTaskSubmissions } from "../../../../data/submissions";
 import { getWeekProgress } from "../../../../data/week-progress";
@@ -69,6 +70,7 @@ const {
   getSubmissionOwnerRef,
   canAddEntriesForPlayers,
   getSubmitterOptions,
+  getPowerUpFeed,
 } = await queriesForTask(Astro.locals, Astro.params.id);
 const task = getTaskById(Astro.params.id!);
 if (!task) return Astro.rewrite("/404");
@@ -151,6 +153,10 @@ if (Astro.request.method === "POST" && tooLarge) {
         }
         bonusEdit = { rowId, values: parsed.values, errors: parsed.errors };
       }
+    } else if (intent === "revoke-power-up") {
+      const rowId = parseRowId(form);
+      if (rowId !== undefined) await revokePowerUpUse(task.id, rowId);
+      return Astro.redirect(`${selfUrl}?done=power-up-revoked#power-ups`);
     } else if (
       intent === "hide-entry" ||
       intent === "show-entry" ||
@@ -271,6 +277,7 @@ const gridRows = isTeam
 // Scores for the other format can exist if a task's format was changed.
 const otherFormatCount = isTeam ? sheet.individual.length : sheet.team.length;
 const pollBonuses = getPollBonusesForTask(task.id);
+const powerUps = getPowerUpFeed(task.id);
 const playerName = (id: string) => getPlayerById(id)?.name ?? id;
 const subjectNames: Record<string, string> = Object.fromEntries([
   ...players.map((p) => [p.id, p.name]),
@@ -296,6 +303,8 @@ const doneMessage: Record<string, string> = {
   "bonus-added": "Bonus added.",
   "bonus-saved": "Bonus saved.",
   "bonus-deleted": "Bonus deleted.",
+  "power-up-revoked":
+    "Power-up revoked. Its effect is gone and the charge is back in the player's wallet.",
   "entry-hidden": "Entry hidden from the public gallery.",
   "entry-shown": "Entry visible again.",
   "entry-deleted": "Entry deleted.",
@@ -611,6 +620,51 @@ const historyHref = (page: number) =>
           errors={newBonusErrors}
         />
       </div>
+    </TerminalWindow>
+  </section>
+
+  <section
+    id="power-ups"
+    aria-labelledby="power-ups-heading"
+    class="mt-8 scroll-mt-24"
+  >
+    <TerminalWindow
+      title={`~/weeks/${task.id}/power-ups`}
+      meta={`${powerUps.length} used`}
+    >
+      <h2 id="power-ups-heading" class="text-sm font-bold text-ink">
+        <span class="text-acid">$</span> power-ups --week {task.weekNumber}
+      </h2>
+      <p class="mt-1 mb-5 text-sm text-ink-dim">
+        Clim Coin power-ups players used on this week. Golden Week, Double Down
+        and Sabotage change the scores automatically. Revoking one removes its
+        effect and gives the player their charge back.
+      </p>
+      {
+        powerUps.length === 0 ? (
+          <p class="text-sm text-ink-faint">None used.</p>
+        ) : (
+          <ul class="divide-y divide-grid/60 rounded-md border border-grid text-sm">
+            {powerUps.map((use) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                <span class="text-ink-dim">
+                  <span class="font-bold text-ink">{use.player.name}</span>{" "}
+                  {use.label}
+                  <span class="block text-[11px] text-ink-faint">
+                    {formatStamp(use.at)}
+                  </span>
+                </span>
+                <ConfirmDelete
+                  subject={`${use.player.name}'s power-up (${use.label})`}
+                  intent="revoke-power-up"
+                  fields={{ rowId: use.id }}
+                  label="revoke"
+                />
+              </li>
+            ))}
+          </ul>
+        )
+      }
     </TerminalWindow>
   </section>
 

@@ -3,7 +3,9 @@ import Layout from "../../layouts/Layout.astro";
 import PlayerCard from "../../components/PlayerCard.astro";
 import StatCard from "../../components/StatCard.astro";
 
-const { getLeaderboard, getCompetitionStats } = await Astro.locals.getQueries();
+const { getLeaderboard, getCompetitionStats, getPlayerFlairs } =
+  await Astro.locals.getQueries();
+const flair = getPlayerFlairs();
 
 const roster = getLeaderboard();
 const stats = getCompetitionStats();
@@ -105,7 +107,11 @@ const unscored = roster.filter((row) => row.tasksCompleted === 0).length;
         {
           roster.map((row) => (
             <li data-player-item data-name={row.player.name.toLowerCase()}>
-              <PlayerCard row={row} class="h-full" />
+              <PlayerCard
+                row={row}
+                flair={flair[row.player.id]}
+                class="h-full"
+              />
             </li>
           ))
         }

@@ -12,6 +12,7 @@ const {
   getLeaderboardWithMovement,
   getCompetitionStats,
   getPointsRaceChart,
+  getPlayerFlairs,
 } = await Astro.locals.getQueries();
 
 const leaderboard = getLeaderboardWithMovement();
@@ -177,7 +178,7 @@ const leader = first;
         meta="sort: rank ▲"
         bodyClass="p-0 sm:p-0"
       >
-        <StandingsTable rows={leaderboard} />
+        <StandingsTable rows={leaderboard} flair={getPlayerFlairs()} />
       </TerminalWindow>
 
       <!-- Form guide legend -->

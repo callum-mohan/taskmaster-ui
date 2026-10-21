@@ -29,6 +29,7 @@ const [
     getAwards,
     getTaskSummaries,
     getCompetitionStats,
+    getPlayerFlairs,
   },
   hallOfFame,
 ] = await Promise.all([
@@ -156,7 +157,7 @@ const sectionHeading =
         meta={`${leaderboard.length} players`}
         bodyClass="p-0 sm:p-0"
       >
-        <StandingsTable rows={leaderboard} />
+        <StandingsTable rows={leaderboard} flair={getPlayerFlairs()} />
       </TerminalWindow>
     </section>
 

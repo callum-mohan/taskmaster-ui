@@ -462,6 +462,63 @@ count shows), then everyone's picks are revealed. A correct call (a shared
 first place counts) earns +1 bonus point once the results are published,
 derived from the results so a corrected score can't leave a stale bonus.
 
+## 🪙 Clim Coin
+
+A per-season currency. Players earn **Clim Coin** and spend it in the
+[`/shop`](src/pages/shop.astro) on pets, avatars, cosmetics (titles, name
+colours, profile themes) and power-ups. Their balance, history and inventory
+live in the wallet section of their account page (`/account#wallet`, also
+linked from the navbar coin chip); everyone can see what a player wears, but
+only they (and admins) see their balance and inventory.
+
+**Earning is derived, never stored** (`src/data/coins.ts`), like the poll and
+prediction bonuses, so a corrected score or withdrawn vote can't leave stale
+coins behind. Results pay once published (1st 10 · 2nd 7 · 3rd 5 · anyone else
+scored 2); activity pays once it locks in (entry 2 at the deadline, winner call
+1 at the deadline, People's Choice vote 1 when voting closes, poll vote 1 when
+the poll closes). Every number lives in `src/data/coin-rules.ts`, which `/rules`
+reads too. Wallets are per season: they belong to the season's player rows.
+
+**Stored facts:** `shop_items` (the site-wide catalogue, edited in
+`/admin/site#shop`), `coin_purchases` (price copied at purchase),
+`power_up_uses`, `equipped_items` and `coin_adjustments` (admin grants and
+deductions, on the player's admin page). A purchase checks the balance against
+fresh (uncached) rows, then re-checks it in the insert under a per-player
+advisory lock, so concurrent buys can't overspend. A balance can go negative if
+a result is corrected after spending; buying is then blocked.
+
+**Power-ups** are single use: a player can buy each one once a season
+(checked by effect, and enforced by a unique `power_up_uses (player_id,
+effect)` constraint) and use it from the wallet on the live week, one power-up
+per player per week. Uses are public immediately (task page feed):
+
+- **Golden Week**: the player's task score ×1.5 (rounded up) before positions
+  are decided. On team tasks only their own credit is boosted.
+- **Double Down**: a correct winner call pays +2 instead of +1.
+- **Taskmaster's Hint**: shows the week's `tasks.hint` (written on the brief
+  tab) to that player only.
+- **Sabotage**: −5 to any other player that week (squad-mates included); each
+  player can be sabotaged once a week, and the target is notified.
+
+**Mystery eggs** (lootboxes, called crates in the code) are on the shop page:
+a Mystery Egg (15 coins: Common 60%, Rare 28%, Epic 10%, Legendary 2%) and a
+Fabergé Egg (30 coins: Rare 55%, Epic 35%, Legendary 10%), defined in
+`coin-rules.ts` with pixel art (whole, and top/bottom halves) in
+`public/shop/eggs`. An item's rarity comes from its price (≤15 common, 16–29
+rare, 30–39 epic, 40+ legendary). An egg only hatches available pets, avatars
+and cosmetics the player doesn't own yet, so there are no duplicates; an
+empty tier's chance is shared among the others, and the shop shows every
+viewer their exact odds. The roll happens on the server
+(`crypto.getRandomValues`, from fresh rows) and is written to `crate_opens`,
+with a zero-price `coin_purchases` row so the prize is owned like anything
+bought. Items marked **egg exclusive** in the shop editor can't be bought
+directly. Cracks are public in the shop's "recently hatched" feed, and the
+player watches their egg wobble, crack and split open to reveal the prize.
+
+Effects are applied when the snapshot is derived (`competition.ts`), so
+revoking a use from the week's judge tab undoes it and returns the charge.
+Starter items and their pixel art (`public/shop`) are in `db/seed-data.ts`.
+
 ## 🔔 Notifications
 
 Signed-in **players** get a bell in the navbar with an unread count. It opens
@@ -478,6 +535,7 @@ a dropdown (a full-height drawer on phones) listing the newest 20 events:
   player up the leaderboard.
 - **Bonuses and deductions** the player is given (not the automatic
   poll-voting, People's Choice or prediction bonuses).
+- **Sabotage**, when another player uses the Clim Coin power-up on them.
 
 Guests and admin accounts without a player profile don't see it.
 
@@ -495,7 +553,7 @@ Players sign in at `/login` (the same page admins use) with an email and
 password. Signing in takes them straight to the homepage (or back to the
 `/account` page that sent them to sign in). They edit **their own bio and
 avatar URL** at `/account`; changes are
-live immediately. Name, id, roster position, team and scores stay admin-only.
+live immediately. Their Clim Coin wallet is a section of the same page (`/account#wallet`). Name, id, roster position, team and scores stay admin-only.
 There is no public sign-up: admins invite players. Admins (including those
 who also play) land on `/admin` after signing in; an admin account without a
 player profile that tries to open `/account` is pointed to `/admin`.

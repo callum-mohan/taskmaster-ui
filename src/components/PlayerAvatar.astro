@@ -1,6 +1,6 @@
 ---
 import type { Player } from "../types";
-import { withBase } from "../lib/url";
+import { assetUrl } from "../lib/url";
 
 interface Props {
   player: Pick<Player, "id" | "name" | "avatarUrl"> &
@@ -15,7 +15,7 @@ const { player, class: className = "h-9 w-9 rounded" } = Astro.props;
 const { getPlayerIcon } = await Astro.locals.getQueries(player.seasonId);
 
 // Decorative: the player's name is always rendered alongside the avatar.
-const src = withBase(getPlayerIcon(player));
+const src = assetUrl(getPlayerIcon(player));
 ---
 
 <img

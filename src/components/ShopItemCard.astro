@@ -1,0 +1,107 @@
+---
+// One shop listing: the item, its price and, for the viewer, a buy button
+// (a plain POST to `/account/shop/<id>`) or why they can't buy it.
+import type { ShopListing } from "../types";
+import ShopItemArt from "./ShopItemArt.astro";
+import CoinAmount from "./CoinAmount.astro";
+import RarityBadge from "./RarityBadge.astro";
+import { rarityOf } from "../data/coin-rules";
+import { COSMETIC_KIND_LABELS } from "../data/coins";
+import { PURCHASE_BLOCK_LABEL } from "../lib/coin-ui";
+import { btnPrimary } from "./admin/styles";
+import { withBase } from "../lib/url";
+
+interface Props {
+  listing: ShopListing;
+  class?: string;
+}
+
+const { listing, class: className } = Astro.props;
+const { item, owned, charges, blocked } = listing;
+const action = withBase(`/account/shop/${encodeURIComponent(item.id)}`);
+const loginHref = withBase(
+  `/login?${new URLSearchParams({ next: `/account/shop/${item.id}` })}`,
+);
+const kindLabel = item.cosmetic
+  ? COSMETIC_KIND_LABELS[item.cosmetic.kind]
+  : undefined;
+// Only what eggs (crates) can hatch has a rarity.
+const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
+---
+
+<article
+  id={`item-${item.id}`}
+  class:list={[
+    "flex scroll-mt-24 flex-col gap-3 rounded-lg border bg-term-panel/60 p-4 transition-colors",
+    owned ? "border-acid-dim" : "border-grid hover:border-ink-faint",
+    className,
+  ]}
+>
+  <div class="flex items-start gap-3">
+    <ShopItemArt item={item} />
+    <div class="min-w-0 flex-1">
+      <h3 class="truncate text-sm font-extrabold text-ink">{item.name}</h3>
+      {
+        kindLabel && (
+          <p class="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+            {kindLabel}
+          </p>
+        )
+      }
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        {
+          item.crateOnly ? (
+            <span class="text-[10px] font-bold uppercase tracking-[0.15em] text-magenta">
+              egg exclusive
+            </span>
+          ) : (
+            <CoinAmount amount={item.price} class="text-sm text-amber" />
+          )
+        }
+        {rarity && <RarityBadge rarity={rarity} />}
+      </div>
+    </div>
+  </div>
+  {
+    item.description && (
+      <p class="text-xs leading-relaxed text-ink-dim">{item.description}</p>
+    )
+  }
+  <div class="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
+    <p class="text-[11px] text-ink-faint">
+      {
+        item.category === "power_up"
+          ? charges > 0
+            ? "✓ ready to use"
+            : owned
+              ? "used this season"
+              : "one per season"
+          : owned
+            ? "✓ in your wallet"
+            : ""
+      }
+    </p>
+    {
+      blocked === "guest" ? (
+        <a href={loginHref} class="text-xs text-cyan hover:underline">
+          {PURCHASE_BLOCK_LABEL.guest} →
+        </a>
+      ) : blocked ? (
+        <span
+          class:list={[
+            "text-[11px] font-bold uppercase tracking-widest",
+            blocked === "owned" ? "text-acid" : "text-ink-faint",
+          ]}
+        >
+          {PURCHASE_BLOCK_LABEL[blocked]}
+        </span>
+      ) : (
+        <form method="post" action={action}>
+          <button type="submit" class={btnPrimary}>
+            buy<span class="sr-only"> {item.name}</span>
+          </button>
+        </form>
+      )
+    }
+  </div>
+</article>

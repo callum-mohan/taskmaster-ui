@@ -1,0 +1,400 @@
+---
+// A signed-in player's Clim Coin wallet, as a section of their account page:
+// balance, power-ups for the live week, inventory (equip / take off) and
+// history. Its forms post to the account page with an `intent`.
+import TerminalWindow from "./TerminalWindow.astro";
+import CoinAmount from "./CoinAmount.astro";
+import ShopItemArt from "./ShopItemArt.astro";
+import Notice from "./admin/Notice.astro";
+import Pagination from "./Pagination.astro";
+import { btnGhost, btnPrimary, inputClass, labelClass } from "./admin/styles";
+import type {
+  CoinLedgerEntry,
+  InventoryItem,
+  LoadoutSlot,
+  Page,
+  PowerUpPanel,
+  Wallet,
+} from "../types";
+import { POWER_UP_BLOCK_LABEL } from "../lib/coin-ui";
+import { ukDateFormat } from "../lib/time";
+import { withBase } from "../lib/url";
+
+interface Props {
+  wallet: Wallet;
+  inventory: InventoryItem[];
+  panel: PowerUpPanel;
+  /** The live week's hint, if the player used Hint on it. */
+  hint?: string;
+  seasonName: string;
+  seasonClosed: boolean;
+  /** The page of history to show, and links to the others. */
+  ledgerPage: Page<CoinLedgerEntry>;
+  ledgerHref: (page: number) => string;
+  /** The outcome of the last wallet action, if any. */
+  notice?: { tone: "success" | "error"; message: string };
+  class?: string;
+}
+
+const {
+  wallet,
+  inventory,
+  panel,
+  hint,
+  seasonName,
+  seasonClosed,
+  ledgerPage,
+  ledgerHref,
+  notice,
+  class: className,
+} = Astro.props;
+
+const SLOT_GROUPS: { slot: LoadoutSlot; label: string }[] = [
+  { slot: "pet", label: "pet" },
+  { slot: "avatar", label: "avatar" },
+  { slot: "title", label: "title" },
+  { slot: "name_colour", label: "name colour" },
+  { slot: "theme", label: "profile theme" },
+];
+const bySlot = (slot: LoadoutSlot): InventoryItem[] =>
+  inventory.filter((entry) => entry.slot === slot);
+const wearables = SLOT_GROUPS.filter((g) => bySlot(g.slot).length > 0);
+const powerUps = inventory.filter(
+  (entry) => entry.item.category === "power_up",
+);
+
+const dateFmt = ukDateFormat({ day: "numeric", month: "short" });
+const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
+---
+
+<section
+  id="wallet"
+  aria-labelledby="wallet-heading"
+  class:list={["scroll-mt-24", className]}
+>
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p
+        class="prompt text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+      >
+        wallet --season
+      </p>
+      <h2
+        id="wallet-heading"
+        class="mt-1 text-2xl font-extrabold tracking-tight text-ink"
+      >
+        Clim Coin wallet
+      </h2>
+      <p class="mt-1 text-xs text-ink-faint">{seasonName}</p>
+    </div>
+    <div class="text-right">
+      <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+        balance
+      </p>
+      <CoinAmount
+        amount={wallet.balance}
+        class:list={[
+          "text-4xl",
+          wallet.balance < 0 ? "text-danger" : "text-amber",
+        ]}
+      />
+      <p class="mt-1 text-[11px] text-ink-faint">
+        earned {wallet.earned} · grants {wallet.adjusted} · spent {wallet.spent}
+      </p>
+    </div>
+  </div>
+
+  {
+    notice && (
+      <Notice tone={notice.tone} class="mt-6">
+        {notice.message}
+      </Notice>
+    )
+  }
+  {
+    wallet.balance < 0 && (
+      <Notice tone="error" class="mt-6">
+        Your balance is below zero (a result or grant was corrected after you
+        spent). Earn it back before buying again.
+      </Notice>
+    )
+  }
+  {
+    seasonClosed && (
+      <Notice tone="error" class="mt-6">
+        {seasonName} is closed, so this wallet is frozen.
+      </Notice>
+    )
+  }
+
+  <!-- Power-ups for the live week -->
+  <TerminalWindow
+    title="~/power-ups"
+    meta={panel.task ? weekLabel(panel.task.weekNumber) : "no live week"}
+    class="mt-8"
+  >
+    <div id="power-ups" class="space-y-4">
+      {
+        !panel.task ? (
+          <p class="text-sm text-ink-dim">
+            <span class="text-amber">&gt;</span> Power-ups can be used while a
+            week is live. None is right now.
+          </p>
+        ) : panel.used ? (
+          <p class="text-sm text-ink-dim">
+            <span class="text-acid">✓</span> You {panel.used.label} on{" "}
+            <a
+              href={withBase(`/tasks/${panel.task.id}#power-ups`)}
+              class="text-cyan hover:underline"
+            >
+              {weekLabel(panel.task.weekNumber)}
+            </a>
+            . One power-up per week, and each one once a season.
+          </p>
+        ) : (
+          <p class="text-sm text-ink-dim">
+            <span class="text-amber">&gt;</span> Use one power-up on{" "}
+            <a
+              href={withBase(`/tasks/${panel.task.id}`)}
+              class="text-cyan hover:underline"
+            >
+              {weekLabel(panel.task.weekNumber)}
+            </a>{" "}
+            before its deadline. Everyone sees who used what.
+          </p>
+        )
+      }
+      {
+        hint && panel.task && (
+          <div class="rounded-md border border-acid-dim bg-acid/5 p-3">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-acid">
+              taskmaster's hint · for your eyes only
+            </p>
+            <p class="mt-1 whitespace-pre-line text-sm text-ink">{hint}</p>
+          </div>
+        )
+      }
+      {
+        panel.options.length === 0 ? (
+          <p class="text-xs text-ink-faint">
+            You don't hold any power-ups.{" "}
+            <a
+              href={withBase("/shop#shop-power_up")}
+              class="text-cyan hover:underline"
+            >
+              Browse the shop →
+            </a>
+          </p>
+        ) : (
+          <ul class="grid gap-3 sm:grid-cols-2">
+            {panel.options.map((option) => (
+              <li class="flex flex-col gap-2 rounded-md border border-grid bg-term-bg/60 p-3">
+                <div class="flex items-baseline justify-between gap-2">
+                  <h3 class="text-sm font-extrabold text-ink">
+                    {option.label}
+                  </h3>
+                  <span class="text-[11px] text-ink-faint">single use</span>
+                </div>
+                <p class="text-xs text-ink-dim">{option.description}</p>
+                {option.blocked || !panel.task ? (
+                  <p class="mt-auto text-[11px] text-ink-faint">
+                    {POWER_UP_BLOCK_LABEL[option.blocked ?? "not-live"]}
+                  </p>
+                ) : (
+                  <form method="post" class="mt-auto space-y-2">
+                    <input type="hidden" name="intent" value="use" />
+                    <input type="hidden" name="effect" value={option.effect} />
+                    <input type="hidden" name="taskId" value={panel.task.id} />
+                    {option.effect === "sabotage" &&
+                      (panel.targets.length > 0 ? (
+                        <label class="block">
+                          <span class={labelClass}>target</span>
+                          <select
+                            name="targetPlayerId"
+                            required
+                            class:list={[inputClass(false), "mt-1"]}
+                          >
+                            {panel.targets.map((target) => (
+                              <option value={target.id}>{target.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <p class="text-[11px] text-ink-faint">
+                          Everyone's already been sabotaged this week.
+                        </p>
+                      ))}
+                    {(option.effect !== "sabotage" ||
+                      panel.targets.length > 0) && (
+                      <button type="submit" class={btnPrimary}>
+                        use {option.label}
+                      </button>
+                    )}
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+  </TerminalWindow>
+
+  <!-- Inventory -->
+  <section aria-labelledby="inventory-heading" class="mt-8">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <h2
+        id="inventory-heading"
+        class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+      >
+        inventory
+      </h2>
+      <a href={withBase("/shop")} class="text-xs text-cyan hover:underline">
+        visit the shop →
+      </a>
+    </div>
+    {
+      wearables.length === 0 && powerUps.length === 0 ? (
+        <p class="mt-3 text-sm text-ink-dim">
+          Nothing yet. Pets, avatars and flair you buy show up here to equip.
+        </p>
+      ) : (
+        <div class="mt-3 space-y-6">
+          {wearables.map((group) => (
+            <div>
+              <h3 class="text-xs font-bold text-ink-dim">{group.label}</h3>
+              <ul class="mt-2 grid gap-3 sm:grid-cols-2">
+                {bySlot(group.slot).map(({ item, equipped }) => (
+                  <li
+                    class:list={[
+                      "flex items-center gap-3 rounded-md border p-3",
+                      equipped ? "border-acid-dim bg-acid/5" : "border-grid",
+                    ]}
+                  >
+                    <ShopItemArt item={item} class="h-12 w-12" />
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-bold text-ink">
+                        {item.name}
+                      </p>
+                      {equipped && (
+                        <p class="text-[11px] text-acid">✓ equipped</p>
+                      )}
+                    </div>
+                    {!seasonClosed && (
+                      <form method="post">
+                        {equipped ? (
+                          <>
+                            <input
+                              type="hidden"
+                              name="intent"
+                              value="unequip"
+                            />
+                            <input
+                              type="hidden"
+                              name="slot"
+                              value={group.slot}
+                            />
+                            <button type="submit" class={btnGhost}>
+                              take off
+                              <span class="sr-only"> {item.name}</span>
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <input type="hidden" name="intent" value="equip" />
+                            <input
+                              type="hidden"
+                              name="itemId"
+                              value={item.id}
+                            />
+                            <button type="submit" class={btnPrimary}>
+                              equip<span class="sr-only"> {item.name}</span>
+                            </button>
+                          </>
+                        )}
+                      </form>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          {powerUps.length > 0 && (
+            <div>
+              <h3 class="text-xs font-bold text-ink-dim">power-ups</h3>
+              <ul class="mt-2 flex flex-wrap gap-2">
+                {powerUps.map(({ item }) => (
+                  <li class="inline-flex items-center gap-2 rounded-md border border-grid px-3 py-1.5 text-xs text-ink">
+                    {item.name}
+                    <span class="text-ink-faint">ready</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )
+    }
+  </section>
+
+  <!-- History -->
+  <section
+    id="history"
+    aria-labelledby="history-heading"
+    class="mt-8 scroll-mt-24"
+  >
+    <h2
+      id="history-heading"
+      class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      history
+    </h2>
+    {
+      wallet.ledger.length === 0 ? (
+        <p class="mt-3 text-sm text-ink-dim">
+          No coins yet. Placing, entering, voting and calling winners all pay;{" "}
+          <a
+            href={withBase("/rules#clim-coin")}
+            class="text-cyan hover:underline"
+          >
+            see the payouts
+          </a>
+          .
+        </p>
+      ) : (
+        <>
+          <ul class="mt-3 divide-y divide-grid/60 rounded-md border border-grid">
+            {ledgerPage.items.map((entry) => (
+              <li class="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                <span class="min-w-0 truncate text-ink-dim">{entry.label}</span>
+                <span class="flex shrink-0 items-center gap-3">
+                  <time
+                    datetime={entry.at}
+                    class="text-[11px] text-ink-faint tabular-nums"
+                  >
+                    {dateFmt.format(new Date(entry.at))}
+                  </time>
+                  <CoinAmount
+                    amount={entry.amount}
+                    signed
+                    class:list={[
+                      "w-16 justify-end",
+                      entry.amount < 0 ? "text-danger" : "text-amber",
+                    ]}
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
+          <Pagination
+            info={ledgerPage}
+            href={ledgerHref}
+            label="Wallet history pages"
+            itemLabel="entries"
+            class="mt-4"
+          />
+        </>
+      )
+    }
+  </section>
+</section>

@@ -1,0 +1,147 @@
+---
+// What an egg (a crate) just hatched. The result is server-rendered; with JS
+// (and motion allowed) the egg wobbles, cracks along its zigzag, splits
+// apart and the prize pops out while its name decrypts from noise. Without
+// JS, or under reduced motion, the prize simply shows.
+import type { CratePull } from "../types";
+import TerminalWindow from "./TerminalWindow.astro";
+import ShopItemArt from "./ShopItemArt.astro";
+import RarityBadge from "./RarityBadge.astro";
+import { eggArt } from "../data/coin-rules";
+import { RARITY_INFO } from "../lib/coin-ui";
+import { assetUrl, withBase } from "../lib/url";
+
+interface Props {
+  pull: CratePull;
+  class?: string;
+}
+
+const { pull, class: className } = Astro.props;
+const { crate, item, rarity } = pull;
+const rarityLabel = RARITY_INFO[rarity].label;
+const egg = eggArt(crate);
+---
+
+<section
+  id="crate-reveal"
+  aria-labelledby="crate-reveal-heading"
+  data-crate-reveal
+  data-rarity={rarity}
+  class:list={["crate-reveal scroll-mt-24", className]}
+>
+  <TerminalWindow title={`~/eggs/${crate.id}`} meta="hatched">
+    <p class="text-xs text-ink-dim">
+      <span class="text-acid">$</span> crack ./{crate.id}
+    </p>
+    <p class="mt-1 text-xs text-ink-faint">
+      <span class="text-cyan">&gt;</span> shell breached · contents hatched
+    </p>
+    <div class="mt-5 flex flex-col items-center gap-3 text-center">
+      <div class="crate-reveal__stage relative h-28 w-28">
+        <div
+          class="crate-reveal__art absolute inset-0 flex items-center justify-center"
+        >
+          <ShopItemArt item={item} class="h-24 w-24" />
+        </div>
+        <div class="crate-reveal__egg" aria-hidden="true">
+          <img
+            class="crate-reveal__half crate-reveal__half--bottom"
+            src={assetUrl(egg.bottom)}
+            alt=""
+            width="64"
+            height="64"
+          />
+          <img
+            class="crate-reveal__half crate-reveal__half--top"
+            src={assetUrl(egg.top)}
+            alt=""
+            width="64"
+            height="64"
+          />
+        </div>
+      </div>
+      <!--
+        Runs while the page parses, before the prize paints, so a reload or a
+        slow script never spoils it. Reduced motion skips the whole show.
+      -->
+      <script is:inline>
+        (function () {
+          const root = document.getElementById("crate-reveal");
+          if (
+            !root ||
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ) {
+            return;
+          }
+          root.setAttribute("data-phase", "wobble");
+          // Safety net: never leave the prize hidden if the animation stalls.
+          setTimeout(function () {
+            root.removeAttribute("data-phase");
+          }, 5000);
+        })();
+      </script>
+      <h2
+        id="crate-reveal-heading"
+        class:list={[
+          "text-2xl font-extrabold tracking-tight sm:text-3xl",
+          RARITY_INFO[rarity].text,
+          rarity === "legendary" && "text-glow",
+        ]}
+      >
+        <span class="sr-only">You hatched </span>
+        <span data-crate-name>{item.name}</span>
+      </h2>
+      <RarityBadge rarity={rarity} class="crate-reveal__badge" />
+      <p class="text-xs text-ink-dim">
+        It's in your <a
+          href={withBase("/account#wallet")}
+          class="text-cyan hover:underline">wallet</a
+        >, ready to equip.
+      </p>
+    </div>
+  </TerminalWindow>
+  <p class="sr-only" role="status">
+    {crate.name} cracked open: {item.name}, {rarityLabel}.
+  </p>
+</section>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-crate-reveal]");
+  const name = root?.querySelector<HTMLElement>("[data-crate-name]");
+  if (root && name && root.dataset.phase === "wobble") {
+    const GLYPHS = "!<>-_\\/[]{}=+*^?#%&$01░▒▓";
+    const finalText = name.textContent ?? "";
+    // Wobble → crack → split open, then the name settles.
+    const CRACK_AT = 900;
+    const OPEN_AT = 1500;
+    const SETTLED_AT = 2300;
+    const start = performance.now();
+
+    const scramble = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.max(
+        0,
+        Math.min(1, (elapsed - OPEN_AT) / (SETTLED_AT - OPEN_AT)),
+      );
+      const settled = Math.floor(progress * finalText.length);
+      name.textContent = [...finalText]
+        .map((ch, i) =>
+          i < settled || ch === " "
+            ? ch
+            : GLYPHS[Math.floor(Math.random() * GLYPHS.length)],
+        )
+        .join("");
+      if (progress < 1) requestAnimationFrame(scramble);
+      else name.textContent = finalText;
+    };
+    requestAnimationFrame(scramble);
+
+    window.setTimeout(() => (root.dataset.phase = "crack"), CRACK_AT);
+    window.setTimeout(() => (root.dataset.phase = "open"), OPEN_AT);
+    window.setTimeout(() => {
+      name.textContent = finalText;
+      delete root.dataset.phase;
+      root.classList.add("is-revealed");
+    }, SETTLED_AT + 200);
+  }
+</script>

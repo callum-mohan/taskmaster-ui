@@ -33,6 +33,10 @@ describe("isAdminSectionActive", () => {
     expect(
       isAdminSectionActive("/admin/polls", roster.href, roster.match),
     ).toBe(false);
+    const site = ADMIN_SECTIONS.find((s) => s.label === "site")!;
+    expect(isAdminSectionActive("/admin/shop/new", site.href, site.match)).toBe(
+      true,
+    );
   });
 });
 
@@ -64,6 +68,7 @@ describe("legacyAdminPath", () => {
     ["/admin/teams", "/admin/roster#squads"],
     ["/admin/polls", "/admin/site"],
     ["/admin/changelog", "/admin/site#changelog"],
+    ["/admin/shop", "/admin/site#shop"],
   ])("sends %s to %s", (from, to) => {
     expect(legacyAdminPath(from)).toBe(to);
   });
@@ -77,6 +82,8 @@ describe("legacyAdminPath", () => {
     "/admin/teams/red",
     "/admin/polls/new",
     "/admin/changelog/3",
+    "/admin/shop/new",
+    "/admin/shop/rubber-duck",
     "/admin/scores/week-02/extra",
     "/tasks/week-02",
   ])("leaves %s alone", (path) => {

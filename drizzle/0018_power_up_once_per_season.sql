@@ -1,0 +1,1 @@
+ALTER TABLE "power_up_uses" ADD CONSTRAINT "power_up_uses_player_id_effect_unique" UNIQUE("player_id","effect");

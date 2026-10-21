@@ -235,6 +235,15 @@ const briefMode = values.briefMode ?? "prose";
     placeholder="(none)"
     hint="Optional. Keeps the title and brief encrypted until a visitor enters it on the task page. Case and spaces are ignored. Changing it re-locks everyone."
   />
+  <AdminField
+    label="taskmaster's hint"
+    name="hint"
+    rows={3}
+    value={values.hint}
+    error={errors.hint}
+    placeholder="(none)"
+    hint="Optional. Only players who spend a Taskmaster's Hint power-up on this week ever see it. Without one, the Hint power-up can't be used this week."
+  />
   <div class="flex flex-wrap gap-3 pt-2">
     <button type="submit" class={btnPrimary}>
       {isCreate ? "create week" : "save changes"}

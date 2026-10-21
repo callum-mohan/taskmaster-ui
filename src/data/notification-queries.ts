@@ -4,10 +4,12 @@ import type {
   NotificationItem,
   NotificationKind,
   PlayerRankChange,
+  PowerUpFeedEntry,
   Task,
 } from "../types";
 import { withBase } from "../lib/url";
 import { ukDateFormat } from "../lib/time";
+import { SABOTAGE_POINTS } from "./coin-rules";
 
 const weekLabel = (weekNumber: number) =>
   `Week ${String(weekNumber).padStart(2, "0")}`;
@@ -42,6 +44,8 @@ type FeedEvent = Omit<NotificationItem, "unread"> & { time: number };
 
 interface NotificationDeps {
   getPlayerRankHistory: (playerId: string) => PlayerRankChange[];
+  /** Sabotages that hit a player (Clim Coin power-ups). */
+  getSabotagesOf?: (playerId: string) => PowerUpFeedEntry[];
 }
 
 /**
@@ -54,7 +58,7 @@ interface NotificationDeps {
  */
 export function createNotificationQueries(
   data: CompetitionData,
-  { getPlayerRankHistory }: NotificationDeps,
+  { getPlayerRankHistory, getSabotagesOf = () => [] }: NotificationDeps,
 ) {
   const { tasks, polls, scores, bonusPoints, resultsPostedAt } = data;
   const taskById = new Map(tasks.map((t) => [t.id, t]));
@@ -189,6 +193,31 @@ export function createNotificationQueries(
         })
       : [];
 
+    const sabotages: FeedEvent[] = playerId
+      ? getSabotagesOf(playerId).flatMap((use) => {
+          const time = new Date(use.at).getTime();
+          if (Number.isNaN(time) || time > now) return [];
+          const task = taskById.get(use.taskId);
+          const kind: NotificationKind = "sabotaged";
+          return [
+            {
+              id: `sabotage:${use.id}`,
+              kind,
+              title: `${use.player.name} sabotaged you`,
+              detail: [
+                `${plural(-SABOTAGE_POINTS, "point")} lost`,
+                ...(task ? [weekLabel(task.weekNumber)] : []),
+              ].join(" · "),
+              href: withBase(
+                task ? `/tasks/${task.id}#power-ups` : `/players/${playerId}`,
+              ),
+              at: use.at,
+              time,
+            },
+          ];
+        })
+      : [];
+
     const opened: FeedEvent[] = polls.flatMap((poll) => {
       const time = new Date(poll.opensAt).getTime();
       if (!poll.published || Number.isNaN(time) || time > now) return [];
@@ -214,6 +243,7 @@ export function createNotificationQueries(
       ...climbs,
       ...results,
       ...adjustments,
+      ...sabotages,
       ...opened,
     ];
   }

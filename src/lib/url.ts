@@ -16,3 +16,11 @@ export function withoutBase(pathname: string): string {
   if (!base || !pathname.startsWith(base)) return pathname;
   return pathname.slice(base.length) || "/";
 }
+
+/**
+ * An image source that may be an absolute https URL (left as is) or a site
+ * path (given the `base`), e.g. a shop item's `imageUrl`.
+ */
+export function assetUrl(src: string): string {
+  return /^https:\/\//i.test(src) ? src : withBase(src);
+}

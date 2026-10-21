@@ -1,0 +1,38 @@
+---
+// A player's name as lists show it, with their Clim Coin flair: the name
+// colour they bought and a tiny icon of their equipped pet.
+import type { PlayerFlair } from "../types";
+import { NAME_COLOUR_CLASS } from "../lib/coin-ui";
+import { assetUrl } from "../lib/url";
+
+interface Props {
+  name: string;
+  flair?: PlayerFlair;
+  /** Classes for the name itself (weight, truncation, hover colour). */
+  class?: string;
+}
+
+const { name, flair, class: className } = Astro.props;
+---
+
+<span
+  class:list={[
+    "min-w-0 truncate",
+    flair?.nameColour ? NAME_COLOUR_CLASS[flair.nameColour] : "text-ink",
+    className,
+  ]}>{name}</span
+>
+{
+  flair?.pet && (
+    <img
+      src={assetUrl(flair.pet.imageUrl)}
+      alt=""
+      aria-hidden="true"
+      title={flair.pet.name}
+      loading="lazy"
+      width="16"
+      height="16"
+      class="h-4 w-4 shrink-0 [image-rendering:pixelated]"
+    />
+  )
+}

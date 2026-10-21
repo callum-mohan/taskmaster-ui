@@ -1,0 +1,94 @@
+---
+// The signed-in player's equipped Clim Coin pet, pottering along the bottom
+// of the screen on every page. Purely decorative and click-through, so it
+// never blocks the page; hidden without JS and parked in the corner under
+// prefers-reduced-motion. Unequip the pet in the wallet to send it home.
+import { assetUrl } from "../lib/url";
+
+interface Props {
+  name: string;
+  imageUrl: string;
+  class?: string;
+}
+
+const { name, imageUrl, class: className } = Astro.props;
+---
+
+<div
+  id="wandering-pet"
+  class:list={["wandering-pet", className]}
+  data-pet-name={name}
+  aria-hidden="true"
+  hidden
+>
+  <img
+    class="wandering-pet__img"
+    src={assetUrl(imageUrl)}
+    alt=""
+    width="40"
+    height="40"
+  />
+</div>
+
+<script>
+  const root = document.getElementById("wandering-pet");
+  const img = root?.querySelector<HTMLImageElement>(".wandering-pet__img");
+  if (root && img) {
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const SIZE = 48;
+    const MARGIN = 12;
+    const SPEED = 45; // px per second
+
+    const maxX = () => Math.max(MARGIN, window.innerWidth - SIZE - MARGIN);
+    const rand = (min: number, max: number) =>
+      min + Math.random() * (max - min);
+
+    let x = rand(MARGIN, maxX());
+    let targetX = rand(MARGIN, maxX());
+    let facing = 1;
+    let pauseUntil = 0;
+    let lastT = 0;
+
+    const place = () => {
+      root.style.transform = `translateX(${x}px)`;
+      img.style.setProperty("--egg-face", String(facing));
+    };
+
+    const step = (t: number) => {
+      const dt = lastT ? Math.min(0.05, (t - lastT) / 1000) : 0;
+      lastT = t;
+      if (t >= pauseUntil) {
+        const dx = targetX - x;
+        const walking = Math.abs(dx) > 2;
+        root.classList.toggle("is-walking", walking);
+        if (walking) {
+          x += Math.sign(dx) * Math.min(Math.abs(dx), SPEED * dt);
+          facing = dx < 0 ? -1 : 1;
+          place();
+        } else {
+          // Have a sit, then wander off somewhere new.
+          pauseUntil = t + rand(1500, 5000);
+          targetX = rand(MARGIN, maxX());
+        }
+      }
+      requestAnimationFrame(step);
+    };
+
+    window.addEventListener(
+      "resize",
+      () => {
+        x = Math.min(x, maxX());
+        targetX = Math.min(targetX, maxX());
+        place();
+      },
+      { passive: true },
+    );
+
+    if (reduced) x = maxX();
+    place();
+    root.hidden = false;
+    if (!reduced) requestAnimationFrame(step);
+  }
+</script>

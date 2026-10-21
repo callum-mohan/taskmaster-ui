@@ -47,8 +47,9 @@ import { createLiveQueries } from "./live-queries";
 import { createRulesQueries } from "./rules-queries";
 import { createStreakQueries } from "./streak-queries";
 import { createWrappedQueries } from "./wrapped-queries";
+import { createCoinQueries } from "./coin-queries";
 import { isWrappedLive } from "./seasons";
-import { withBase } from "../lib/url";
+import { assetUrl, withBase } from "../lib/url";
 import { ADMIN_HOME, ADMIN_SECTIONS } from "../lib/admin-nav";
 
 // This module is the single "data layer" the UI talks to. Pages read these
@@ -71,6 +72,8 @@ export function createQueries(data: CompetitionData) {
     recaps,
     changelog,
   } = data;
+
+  const coinQueries = createCoinQueries(data);
 
   function getPlayerById(id: string): Player | undefined {
     return players.find((p) => p.id === id);
@@ -661,8 +664,14 @@ export function createQueries(data: CompetitionData) {
     return assignment;
   })();
 
-  /** Root-relative path to the avatar image assigned to this player. */
+  /**
+   * The player's avatar image: their equipped Clim Coin avatar, else the
+   * generated icon assigned to them. A root-relative path or https URL; give
+   * it to `assetUrl`.
+   */
   function getPlayerIcon(player: Pick<Player, "id">): string {
+    const equipped = coinQueries.getEquippedAvatarUrl(player.id);
+    if (equipped) return equipped;
     const index =
       playerIconIndex.get(player.id) ??
       hashString(player.id) % PLAYER_ICON_COUNT;
@@ -916,7 +925,7 @@ export function createQueries(data: CompetitionData) {
       return {
         id: row.player.id,
         name: row.player.name,
-        icon: withBase(getPlayerIcon(row.player)),
+        icon: assetUrl(getPlayerIcon(row.player)),
         rank: row.rank,
         points: row.points,
         wins: row.wins,
@@ -1686,7 +1695,10 @@ export function createQueries(data: CompetitionData) {
     getLostArchive,
     ...createPollQueries(data),
     getPlayerRankHistory,
-    ...createNotificationQueries(data, { getPlayerRankHistory }),
+    ...createNotificationQueries(data, {
+      getPlayerRankHistory,
+      getSabotagesOf: coinQueries.getSabotagesOf,
+    }),
     ...createSubmissionQueries(data),
     ...createGalleryQueries(data),
     ...createPredictionQueries(data),
@@ -1694,5 +1706,6 @@ export function createQueries(data: CompetitionData) {
     ...createRulesQueries(data),
     ...streakQueries,
     ...wrappedQueries,
+    ...coinQueries,
   };
 }

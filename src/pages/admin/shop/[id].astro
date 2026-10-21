@@ -1,0 +1,123 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import ShopItemForm from "../../../components/admin/ShopItemForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import {
+  deleteShopItem,
+  describeWriteError,
+  getShopItem,
+  getShopItemPurchaseCount,
+  updateShopItem,
+} from "../../../data/admin";
+import {
+  parseShopItemForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const id = Astro.params.id!;
+const [item, purchases] = await Promise.all([
+  getShopItem(id),
+  getShopItemPurchaseCount(id),
+]);
+if (!item) return Astro.rewrite("/404");
+
+let values: FormValues = {
+  id: item.id,
+  name: item.name,
+  description: item.description,
+  category: item.category,
+  price: String(item.price),
+  imageUrl: item.imageUrl ?? "",
+  cosmeticKind: item.cosmeticKind ?? "",
+  cosmeticValue: item.cosmeticValue ?? "",
+  powerUp: item.powerUp ?? "",
+  available: item.available ? "on" : "",
+  crateOnly: item.crateOnly ? "on" : "",
+  sortOrder: String(item.sortOrder),
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  if (form.get("intent") === "delete") {
+    try {
+      await deleteShopItem(id);
+      const query = new URLSearchParams({ done: "deleted", name: item.name });
+      return Astro.redirect(withBase(`/admin/site?${query}#shop`));
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  } else {
+    // The id, category, cosmetic kind and power-up are fixed once created.
+    form.set("id", id);
+    form.set("category", item.category);
+    form.set("cosmeticKind", item.cosmeticKind ?? "");
+    form.set("powerUp", item.powerUp ?? "");
+    const parsed = parseShopItemForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updateShopItem(id, parsed.data);
+        const query = new URLSearchParams({
+          done: "saved",
+          name: parsed.data.name,
+        });
+        return Astro.redirect(withBase(`/admin/site?${query}#shop`));
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+---
+
+<AdminLayout title={`Edit "${item.name}"`}>
+  <a href={withBase("/admin/site#shop")} class={btnGhost}>&larr; SHOP</a>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> shop edit {item.id}
+  </h1>
+  <p class="mt-1 text-sm text-ink-dim">
+    Bought {purchases}
+    {purchases === 1 ? "time" : "times"}. Price changes only affect new
+    purchases.
+  </p>
+  <TerminalWindow title={`~/shop/${item.id}.item`} class="mt-6">
+    <ShopItemForm
+      mode="edit"
+      values={values}
+      errors={errors}
+      formError={formError}
+    />
+  </TerminalWindow>
+  <section aria-labelledby="danger-heading" class="mt-8">
+    <h2
+      id="danger-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      danger zone
+    </h2>
+    {
+      purchases > 0 ? (
+        <Notice tone="error">
+          Players own this item, so it can't be deleted. Untick "for sale" to
+          retire it instead.
+        </Notice>
+      ) : (
+        <ConfirmDelete subject={`item "${item.name}"`} label="delete item" />
+      )
+    }
+  </section>
+</AdminLayout>

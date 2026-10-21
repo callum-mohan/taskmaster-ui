@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, isNull } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import type {
   CompetitionData,
@@ -10,6 +10,12 @@ import { getDb } from "../db";
 import {
   bonusPoints as bonusPointsTable,
   changelogEntries as changelogTable,
+  coinAdjustments as coinAdjustmentsTable,
+  coinPurchases as coinPurchasesTable,
+  crateOpens as crateOpensTable,
+  equippedItems as equippedItemsTable,
+  powerUpUses as powerUpUsesTable,
+  shopItems as shopItemsTable,
   peoplesChoiceVotes as peoplesChoiceVotesTable,
   players as playersTable,
   pollOptions as pollOptionsTable,
@@ -37,6 +43,18 @@ import {
 import { derivePredictionBonusRows, mapPredictions } from "./predictions";
 import { mapChangelog, mapRecaps } from "./editorial";
 import { createSeasonDirectory, mapSeasons, rowsForSeason } from "./seasons";
+import {
+  deriveSabotageBonusRows,
+  mapAdjustments,
+  mapCrateOpens,
+  mapEntries,
+  mapEquipped,
+  mapHints,
+  mapPowerUpUses,
+  mapPurchases,
+  mapShopItems,
+  powerUpKeys,
+} from "./coins";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
 import { cachedJson, purgeCached } from "../lib/edge-cache";
@@ -90,6 +108,13 @@ async function fetchCompetitionRows() {
     predictionRows,
     recapRows,
     changelogRows,
+    shopItemRows,
+    coinPurchaseRows,
+    powerUpUseRows,
+    equippedRows,
+    coinAdjustmentRows,
+    entryRows,
+    crateOpenRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -130,6 +155,23 @@ async function fetchCompetitionRows() {
       .select()
       .from(changelogTable)
       .orderBy(desc(changelogTable.date), desc(changelogTable.createdAt)),
+    db.select().from(shopItemsTable),
+    db.select().from(coinPurchasesTable).orderBy(asc(coinPurchasesTable.id)),
+    db.select().from(powerUpUsesTable).orderBy(asc(powerUpUsesTable.id)),
+    db.select().from(equippedItemsTable),
+    db
+      .select()
+      .from(coinAdjustmentsTable)
+      .orderBy(asc(coinAdjustmentsTable.id)),
+    // Who entered which week (visible entries only), for the entry payout.
+    db
+      .selectDistinct({
+        taskId: taskSubmissionsTable.taskId,
+        playerId: taskSubmissionsTable.playerId,
+      })
+      .from(taskSubmissionsTable)
+      .where(isNull(taskSubmissionsTable.hiddenAt)),
+    db.select().from(crateOpensTable).orderBy(asc(crateOpensTable.id)),
   ]);
   return {
     seasonRows,
@@ -147,6 +189,13 @@ async function fetchCompetitionRows() {
     predictionRows,
     recapRows,
     changelogRows,
+    shopItemRows,
+    coinPurchaseRows,
+    powerUpUseRows,
+    equippedRows,
+    coinAdjustmentRows,
+    entryRows,
+    crateOpenRows,
   };
 }
 
@@ -169,6 +218,25 @@ export async function loadCompetitionRows(
         ROWS_CACHE_TTL_SECONDS,
         fetchCompetitionRows,
       );
+}
+
+/**
+ * The snapshot of the season `playerId` is in, built from rows read straight
+ * from the database (skipping the edge cache), or `undefined` for an
+ * unknown player. For checks guarding a write that mustn't act on stale
+ * rows, e.g. a Clim Coin balance before a purchase.
+ */
+export async function loadFreshPlayerCompetition(
+  playerId: string,
+): Promise<CompetitionData | undefined> {
+  const rows = await fetchCompetitionRows();
+  const season = buildSeasonDirectory(rows).seasonOfPlayer(playerId);
+  if (!season) return undefined;
+  return buildCompetition(
+    rows,
+    { mode: "public", revealTokens: new Map() },
+    season,
+  );
 }
 
 /** The seasons, and which season each player, squad and week is in. */
@@ -213,6 +281,13 @@ async function buildSeasonCompetition(
     predictionRows,
     recapRows,
     changelogRows,
+    shopItemRows,
+    coinPurchaseRows,
+    powerUpUseRows,
+    equippedRows,
+    coinAdjustmentRows,
+    entryRows,
+    crateOpenRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -257,7 +332,16 @@ async function buildSeasonCompetition(
     taskScores: published(taskScoreRows),
     teamScores: published(teamScoreRows),
   };
-  const context = { players, teams, tasks, publishedAt };
+  // Clim Coin power-ups: Golden Week boosts task points before ranking,
+  // Double Down raises a correct call's bonus and Sabotage is a deduction.
+  const uses = mapPowerUpUses(powerUpUseRows);
+  const context = {
+    players,
+    teams,
+    tasks,
+    publishedAt,
+    goldenWeekKeys: powerUpKeys(uses, "golden_week"),
+  };
   // Recorded bonuses first, then the ones earned by voting in polls and in
   // People's Choice. A held week's bonuses count as given when its results
   // were published, so their notifications arrive after the show.
@@ -275,6 +359,7 @@ async function buildSeasonCompetition(
       players.some((p) => p.id === row.playerId),
     ),
     ...derivePeoplesChoiceBonusRows(peoplesChoiceVotes, tasks, teams),
+    ...deriveSabotageBonusRows(uses, players),
   ];
   // Correct predictions depend on the week's finishing positions, so rank
   // once without them, then again with their bonuses added (bonuses never
@@ -285,6 +370,7 @@ async function buildSeasonCompetition(
     ranked,
     players,
     new Map(teams.map((t) => [t.id, t.name])),
+    powerUpKeys(uses, "double_down"),
   );
   const records =
     predictionBonuses.length === 0
@@ -305,5 +391,15 @@ async function buildSeasonCompetition(
     predictions,
     recaps: mapRecaps(recapRows),
     changelog: mapChangelog(changelogRows),
+    coins: {
+      items: mapShopItems(shopItemRows),
+      purchases: mapPurchases(coinPurchaseRows),
+      uses,
+      equipped: mapEquipped(equippedRows),
+      adjustments: mapAdjustments(coinAdjustmentRows),
+      entries: mapEntries(entryRows),
+      crateOpens: mapCrateOpens(crateOpenRows),
+      hints: mapHints(taskRows),
+    },
   };
 }

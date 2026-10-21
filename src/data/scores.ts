@@ -12,6 +12,7 @@ import type {
   teamScores as teamScoresTable,
 } from "../db/schema";
 import { timestamptzToIso } from "../lib/time";
+import { goldenWeekPoints } from "./coin-rules";
 
 export interface ScoreRows {
   taskScores: (typeof taskScoresTable.$inferSelect)[];
@@ -59,12 +60,19 @@ export function buildScoreRecords(
     teams,
     tasks,
     publishedAt = {},
+    goldenWeekKeys = new Set(),
   }: {
     players: Player[];
     teams: Team[];
     tasks: Task[];
     /** When held results were published (timestamptz), keyed by task id. */
     publishedAt?: Record<string, string>;
+    /**
+     * `${taskId}:${playerId}` of every Golden Week used. The player's task
+     * points are boosted before positions are decided (on team tasks only
+     * their own credit is, so the squad's result is unchanged).
+     */
+    goldenWeekKeys?: ReadonlySet<string>;
   },
 ): ScoreRecords {
   /** Groups rows into `{ [taskId]: T[] }`, preserving row order. */
@@ -217,11 +225,15 @@ export function buildScoreRecords(
         )) {
           const memberIds = membersByTeamId.get(teamScore.teamId) ?? [];
           for (const playerId of memberIds) {
+            const golden = goldenWeekKeys.has(`${task.id}:${playerId}`);
             result.push({
               taskId: task.id,
               playerId,
               position: teamScore.position,
-              points: teamScore.points,
+              points: golden
+                ? goldenWeekPoints(teamScore.points)
+                : teamScore.points,
+              ...(golden && { goldenWeek: true }),
             });
           }
         }
@@ -234,19 +246,23 @@ export function buildScoreRecords(
       const ranked = rankByPoints(
         Object.entries(weekScores).map(([playerId, points]) => ({
           id: playerId,
-          points,
+          points: goldenWeekKeys.has(`${task.id}:${playerId}`)
+            ? goldenWeekPoints(points)
+            : points,
         })),
         rosterIndex,
       );
 
       for (const entry of ranked) {
         const comment = scoreComments.get(`${task.id}:${entry.id}`);
+        const golden = goldenWeekKeys.has(`${task.id}:${entry.id}`);
         result.push({
           taskId: task.id,
           playerId: entry.id,
           position: entry.position,
           points: entry.points,
           ...(comment !== undefined && { comment }),
+          ...(golden && { goldenWeek: true }),
         });
       }
     }

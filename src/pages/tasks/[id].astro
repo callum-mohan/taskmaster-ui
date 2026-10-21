@@ -18,6 +18,7 @@ import SubmissionPanel from "../../components/SubmissionPanel.astro";
 import SubmissionGallery from "../../components/SubmissionGallery.astro";
 import PeoplesChoiceBar from "../../components/PeoplesChoiceBar.astro";
 import PredictionPanel from "../../components/PredictionPanel.astro";
+import PowerUpFeed from "../../components/PowerUpFeed.astro";
 import Pagination from "../../components/Pagination.astro";
 import {
   GALLERY_PAGE_SIZE,
@@ -63,6 +64,9 @@ const {
   getSocialGallery,
   getPeoplesChoice,
   getPredictionPanel,
+  getPowerUpFeed,
+  getUnlockedHint,
+  getPowerUpWeek,
   teams,
 } = scope.queries;
 
@@ -270,6 +274,11 @@ const formatStamp = (iso: string) => {
 
 // Standard competition rules shown on every brief (presentational content,
 // identical for all tasks — not per-task entity data).
+// Clim Coin: power-ups are public as soon as they're used; the hint only
+// shows to a player who used Hint on this week.
+const powerUpFeed = getPowerUpFeed(task.id);
+const hint = getUnlockedHint(task.id, viewer?.playerId);
+const powerUpsOpen = getPowerUpWeek()?.id === task.id;
 const { max: maxEntries, kinds: entryKinds } = task.submissions;
 const rules = [
   maxEntries > 0
@@ -617,6 +626,45 @@ const medal = (position: number) =>
               isTeam={isTeam}
               outcome={predictionOutcome}
             />
+          </TerminalWindow>
+        </section>
+      )
+    }
+
+    <!-- Clim Coin power-ups used on this week, and the viewer's own hint -->
+    {
+      (powerUpFeed.length > 0 || hint || powerUpsOpen) && (
+        <section id="power-ups" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            power-ups --week
+          </h2>
+          <TerminalWindow
+            title={`~/tasks/${task.id}/power-ups`}
+            meta={`${powerUpFeed.length} used`}
+          >
+            {hint && (
+              <div class="mb-4 rounded-md border border-acid-dim bg-acid/5 p-3">
+                <p class="text-[10px] uppercase tracking-[0.25em] text-acid">
+                  taskmaster's hint · for your eyes only
+                </p>
+                <p class="mt-1 whitespace-pre-line text-sm text-ink">{hint}</p>
+              </div>
+            )}
+            {powerUpFeed.length > 0 ? (
+              <PowerUpFeed entries={powerUpFeed} />
+            ) : (
+              <p class="text-sm text-ink-dim">
+                <span class="text-amber">&gt;</span> No power-ups used yet.
+              </p>
+            )}
+            {powerUpsOpen && viewer?.playerId && (
+              <a
+                href={withBase("/account#power-ups")}
+                class="mt-4 inline-block text-xs text-cyan hover:underline"
+              >
+                use one from your wallet →
+              </a>
+            )}
           </TerminalWindow>
         </section>
       )

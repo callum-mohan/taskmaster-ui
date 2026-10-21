@@ -1,0 +1,47 @@
+---
+// The power-ups used on a week, public as soon as they're used (so a
+// Sabotage always names its saboteur). Oldest first.
+import type { PowerUpFeedEntry, PowerUpKind } from "../types";
+import { withBase } from "../lib/url";
+
+interface Props {
+  entries: PowerUpFeedEntry[];
+  class?: string;
+}
+
+const { entries, class: className } = Astro.props;
+
+const effectStyle: Record<PowerUpKind, { glyph: string; class: string }> = {
+  double_down: { glyph: "×2", class: "text-cyan" },
+  hint: { glyph: "?", class: "text-acid" },
+  golden_week: { glyph: "★", class: "text-amber" },
+  sabotage: { glyph: "☠", class: "text-danger" },
+};
+---
+
+<ul class:list={["space-y-2 text-sm", className]}>
+  {
+    entries.map((entry) => (
+      <li class="flex items-baseline gap-2">
+        <span
+          aria-hidden="true"
+          class:list={[
+            "w-6 shrink-0 text-center font-extrabold",
+            effectStyle[entry.effect].class,
+          ]}
+        >
+          {effectStyle[entry.effect].glyph}
+        </span>
+        <span class="text-ink-dim">
+          <a
+            href={withBase(`/players/${entry.player.id}`)}
+            class="font-bold text-ink hover:text-acid"
+          >
+            {entry.player.name}
+          </a>{" "}
+          {entry.label}
+        </span>
+      </li>
+    ))
+  }
+</ul>

@@ -5,13 +5,14 @@ import Footer from "../components/Footer.astro";
 import CommandPalette from "../components/CommandPalette.astro";
 import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
+import WanderingPet from "../components/WanderingPet.astro";
 import { withBase } from "../lib/url";
 import { isSeasonPublic } from "../data/seasons";
 
 const [
   { getCommandPaletteItems, getWhatsNew, getNotifications },
   viewer,
-  { seasons },
+  { seasons, seasonOfPlayer },
 ] = await Promise.all([
   Astro.locals.getQueries(),
   Astro.locals.getViewer(),
@@ -50,6 +51,17 @@ const paletteItems = getCommandPaletteItems({
   seasons: viewer?.isAdmin ? seasons : seasons.filter(isSeasonPublic),
 });
 const whatsNew = getWhatsNew();
+// A signed-in player's Clim Coin balance and equipped pet, from their own
+// season (their wallet is per season).
+const playerId = viewer?.playerId;
+const playerSeason = playerId ? seasonOfPlayer(playerId) : undefined;
+const playerCoins =
+  playerId && playerSeason
+    ? await Astro.locals.getQueries(playerSeason.id).then((q) => ({
+        balance: q.getWallet(playerId).balance,
+        pet: q.getLoadout(playerId).pet,
+      }))
+    : undefined;
 // Only players get notifications: their read marker lives on the account.
 const notifications = viewer?.playerId
   ? getNotifications({
@@ -117,7 +129,11 @@ const notifications = viewer?.playerId
       class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[70] focus:bg-acid focus:text-term-bg focus:px-3 focus:py-1 focus:font-bold"
       >Skip to content</a
     >
-    <Navbar viewer={viewer} notifications={notifications} />
+    <Navbar
+      viewer={viewer}
+      notifications={notifications}
+      coinBalance={playerCoins?.balance}
+    />
     <WhatsNewBanner info={whatsNew} />
     <main id="main" class="flex-1">
       <slot />
@@ -125,5 +141,13 @@ const notifications = viewer?.playerId
     <Footer />
     <CommandPalette items={paletteItems} />
     <EasterEggs />
+    {
+      playerCoins?.pet?.imageUrl && (
+        <WanderingPet
+          name={playerCoins.pet.name}
+          imageUrl={playerCoins.pet.imageUrl}
+        />
+      )
+    }
   </body>
 </html>

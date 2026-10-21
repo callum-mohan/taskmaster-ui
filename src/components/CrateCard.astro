@@ -1,0 +1,157 @@
+---
+// An egg (a crate, i.e. a lootbox) in the shop: its price, the viewer's
+// personal odds per rarity tier and per item, and a crack button (a plain
+// POST to `/account/crates/<id>`) or why they can't crack it.
+import type { CrateView } from "../types";
+import CoinAmount from "./CoinAmount.astro";
+import RarityBadge from "./RarityBadge.astro";
+import ShopItemArt from "./ShopItemArt.astro";
+import { btnPrimary } from "./admin/styles";
+import { CRATE_BLOCK_LABEL, RARITY_INFO, formatChance } from "../lib/coin-ui";
+import { eggArt } from "../data/coin-rules";
+import { assetUrl, withBase } from "../lib/url";
+
+interface Props {
+  view: CrateView;
+  /** The odds are for this player (owned items left out), not a guest. */
+  personal: boolean;
+  class?: string;
+}
+
+const { view, personal, class: className } = Astro.props;
+const { crate, tiers, averageValue, blocked } = view;
+const action = withBase(`/account/crates/${encodeURIComponent(crate.id)}`);
+const loginHref = withBase(
+  `/login?${new URLSearchParams({ next: `/account/crates/${crate.id}` })}`,
+);
+const premium = crate.odds.common === undefined;
+const itemCount = tiers.reduce((n, t) => n + t.drops.length, 0);
+---
+
+<article
+  id={`crate-${crate.id}`}
+  class:list={[
+    "flex flex-col gap-4 rounded-xl border bg-term-panel/60 p-5",
+    premium
+      ? "border-amber/50 shadow-[0_0_40px_-20px_var(--color-amber)]"
+      : "border-grid",
+    className,
+  ]}
+>
+  <div class="flex items-start justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <img
+        src={assetUrl(eggArt(crate).whole)}
+        alt=""
+        aria-hidden="true"
+        width="64"
+        height="64"
+        class:list={[
+          "h-16 w-16 shrink-0 rounded-md border bg-term-bg [image-rendering:pixelated]",
+          premium ? "border-amber/60" : "border-cyan/50",
+        ]}
+      />
+      <div>
+        <h3 class="text-lg font-extrabold text-ink">{crate.name}</h3>
+        <CoinAmount amount={crate.price} class="text-base text-amber" />
+      </div>
+    </div>
+    {
+      blocked === "guest" ? (
+        <a href={loginHref} class="text-xs text-cyan hover:underline">
+          {CRATE_BLOCK_LABEL.guest} →
+        </a>
+      ) : blocked ? (
+        <span class="text-right text-[11px] font-bold uppercase tracking-widest text-ink-faint">
+          {CRATE_BLOCK_LABEL[blocked]}
+        </span>
+      ) : (
+        <form method="post" action={action}>
+          <button type="submit" class={btnPrimary}>
+            crack<span class="sr-only"> a {crate.name}</span>
+          </button>
+        </form>
+      )
+    }
+  </div>
+
+  <p class="text-xs leading-relaxed text-ink-dim">{crate.description}</p>
+
+  {
+    tiers.length > 0 ? (
+      <>
+        <table class="w-full text-xs">
+          <caption class="sr-only">
+            {crate.name} odds by rarity
+            {personal ? ", for you" : ""}
+          </caption>
+          <thead>
+            <tr class="text-left text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+              <th scope="col" class="pb-1 font-bold">
+                rarity
+              </th>
+              <th scope="col" class="pb-1 font-bold">
+                items
+              </th>
+              <th scope="col" class="pb-1 text-right font-bold">
+                chance
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {tiers.map((tier) => (
+              <tr class="border-t border-grid/60">
+                <td class="py-1.5">
+                  <RarityBadge rarity={tier.rarity} />
+                </td>
+                <td class="py-1.5 tabular-nums text-ink-dim">
+                  {tier.drops.length}
+                </td>
+                <td
+                  class:list={[
+                    "py-1.5 text-right font-bold tabular-nums",
+                    RARITY_INFO[tier.rarity].text,
+                  ]}
+                >
+                  {formatChance(tier.chance)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <details class="group">
+          <summary class="cursor-pointer text-xs text-cyan hover:underline">
+            every item's odds ({itemCount})
+          </summary>
+          <ul class="mt-3 space-y-1.5">
+            {tiers.flatMap((tier) =>
+              tier.drops.map(({ item, chance }) => (
+                <li class="flex items-center gap-2 text-xs">
+                  <ShopItemArt item={item} class="h-7 w-7" />
+                  <span class="min-w-0 flex-1 truncate text-ink-dim">
+                    {item.name}
+                  </span>
+                  <RarityBadge rarity={tier.rarity} />
+                  <span class="w-12 text-right tabular-nums text-ink">
+                    {formatChance(chance)}
+                  </span>
+                </li>
+              )),
+            )}
+          </ul>
+        </details>
+        <p class="text-[11px] text-ink-faint">
+          Average value ≈ {Math.round(averageValue)} coins of items.
+          {personal
+            ? " Your odds: anything you own can't hatch, and empty tiers share their chance out."
+            : " Shown for someone who owns nothing yet; items you own never hatch."}
+        </p>
+      </>
+    ) : (
+      <p class="text-xs text-ink-faint">
+        Nothing left in this egg for you. Everything it can hatch is already
+        yours.
+      </p>
+    )
+  }
+</article>

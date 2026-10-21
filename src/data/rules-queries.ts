@@ -9,6 +9,7 @@ import {
   PEOPLES_CHOICE_WINDOW_MS,
 } from "./peoples-choice";
 import { PREDICTION_BONUS_POINTS } from "./predictions";
+import { COIN_RULES } from "./coin-rules";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -38,6 +39,7 @@ export function createRulesQueries(data: CompetitionData) {
         maxTextChars: MAX_TEXT_LENGTH,
         maxCaptionChars: MAX_CAPTION_LENGTH,
       },
+      coins: COIN_RULES,
     };
   }
 

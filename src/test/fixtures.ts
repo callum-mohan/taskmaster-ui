@@ -9,10 +9,12 @@ import type {
   teamScores,
 } from "../db/schema";
 import type {
+  ClimCoinData,
   CompetitionData,
   Player,
   Poll,
   Season,
+  ShopItem,
   Task,
   Team,
 } from "../types";
@@ -59,6 +61,7 @@ export function taskRow(overrides: Partial<TaskRow> = {}): TaskRow {
     resultsHeldAt: null,
     resultsRevealCount: 0,
     resultsPublishedAt: null,
+    hint: null,
     ...overrides,
   };
 }
@@ -213,6 +216,36 @@ export function competitionData(
     predictions: [],
     recaps: {},
     changelog: [],
+    coins: coinData(),
+    ...overrides,
+  };
+}
+
+export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
+  return {
+    items: [],
+    purchases: [],
+    uses: [],
+    equipped: [],
+    adjustments: [],
+    entries: [],
+    crateOpens: [],
+    hints: {},
+    ...overrides,
+  };
+}
+
+export function shopItem(overrides: Partial<ShopItem> = {}): ShopItem {
+  return {
+    id: "rubber-duck",
+    name: "Rubber Duck",
+    description: "Quacks at bugs.",
+    category: "pet",
+    price: 10,
+    imageUrl: "/shop/pets/rubber-duck.svg",
+    available: true,
+    crateOnly: false,
+    sortOrder: 0,
     ...overrides,
   };
 }

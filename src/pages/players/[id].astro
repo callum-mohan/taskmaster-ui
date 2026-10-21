@@ -18,10 +18,11 @@ import {
   paginate,
   parsePage,
 } from "../../lib/pagination";
-import { withBase } from "../../lib/url";
+import { assetUrl, withBase } from "../../lib/url";
 import { recordScope } from "../../lib/season-scope";
 import { isWrappedLive } from "../../data/seasons";
 import SeasonArchiveBanner from "../../components/SeasonArchiveBanner.astro";
+import { NAME_COLOUR_CLASS, PROFILE_THEME_INFO } from "../../lib/coin-ui";
 
 const isAdmin = (await Astro.locals.getViewer())?.isAdmin ?? false;
 const scope = await recordScope(Astro.locals, "player", Astro.params.id, {
@@ -39,6 +40,7 @@ const {
   getPlayerProgressionChart,
   getPlayerBonusSummary,
   getPlayerStreakStats,
+  getLoadout,
 } = scope.queries;
 
 const { id } = Astro.params;
@@ -62,6 +64,8 @@ const achievements = getPlayerAchievements(player.id);
 const progressionChart = getPlayerProgressionChart(player.id);
 const bonusSummary = getPlayerBonusSummary(player.id);
 const streakStats = getPlayerStreakStats(player.id);
+// Clim Coin flair: the pet, avatar and cosmetics they're wearing.
+const loadout = getLoadout(player.id);
 const wrappedHref = isWrappedLive(season)
   ? withBase(`/seasons/${season.id}/wrapped/${player.id}`)
   : undefined;
@@ -139,23 +143,57 @@ const positionClasses = (position: number) => {
     </div>
 
     <!-- Header -->
-    <header class="mt-6">
+    <header
+      class:list={[
+        "mt-6",
+        loadout.theme && [
+          "rounded-xl border p-4 sm:p-5",
+          PROFILE_THEME_INFO[loadout.theme].class,
+        ],
+      ]}
+    >
       <p
         class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
       >
         cat ~/players/{player.id}.md
       </p>
       <div class="mt-4 flex items-center gap-4 sm:gap-5">
-        <PlayerAvatar
-          player={player}
-          class="h-16 w-16 rounded-lg sm:h-20 sm:w-20"
-        />
+        <div class="relative shrink-0">
+          <PlayerAvatar
+            player={player}
+            class="h-16 w-16 rounded-lg sm:h-20 sm:w-20"
+          />
+          {
+            loadout.pet?.imageUrl && (
+              <img
+                src={assetUrl(loadout.pet.imageUrl)}
+                alt={`Pet: ${loadout.pet.name}`}
+                title={loadout.pet.name}
+                width="32"
+                height="32"
+                class="absolute -bottom-2 -right-3 h-8 w-8 [image-rendering:pixelated] drop-shadow"
+              />
+            )
+          }
+        </div>
         <div class="min-w-0">
           <h1
-            class="truncate text-4xl font-extrabold tracking-tight text-ink text-glow sm:text-6xl"
+            class:list={[
+              "truncate text-4xl font-extrabold tracking-tight text-glow sm:text-6xl",
+              loadout.nameColour
+                ? NAME_COLOUR_CLASS[loadout.nameColour]
+                : "text-ink",
+            ]}
           >
             {player.name}
           </h1>
+          {
+            loadout.title && (
+              <p class="mt-1 text-sm font-bold italic text-magenta">
+                “{loadout.title}”
+              </p>
+            )
+          }
           <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span class="font-bold tracking-widest text-magenta">
               RANK #{rank}

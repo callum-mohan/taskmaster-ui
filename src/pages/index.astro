@@ -30,6 +30,7 @@ const {
   getRecentFeatures,
   getHomePolls,
   getLiveTask,
+  getPlayerFlairs,
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
@@ -422,7 +423,7 @@ const btnGhost =
           >
         </div>
 
-        <LeaderboardTable rows={topPlayers} />
+        <LeaderboardTable rows={topPlayers} flair={getPlayerFlairs()} />
       </section>
 
       <!-- Recent results -->

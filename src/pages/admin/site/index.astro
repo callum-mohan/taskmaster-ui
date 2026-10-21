@@ -10,7 +10,12 @@ import {
   tableCell,
   tableHead,
 } from "../../../components/admin/styles";
-import { listChangelog } from "../../../data/admin";
+import { listChangelog, listShopItems } from "../../../data/admin";
+import {
+  CATEGORY_INFO,
+  POWER_UP_INFO,
+  COSMETIC_KIND_LABELS,
+} from "../../../data/coins";
 import { withBase } from "../../../lib/url";
 import { ukDateFormat } from "../../../lib/time";
 import {
@@ -23,9 +28,10 @@ import {
 // Fail closed if the middleware guard is ever bypassed.
 if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
 
-const [{ getPollSummaries, players }, changelog] = await Promise.all([
+const [{ getPollSummaries, players }, changelog, shop] = await Promise.all([
   Astro.locals.getQueries(),
   listChangelog(),
+  listShopItems(),
 ]);
 const summaries = getPollSummaries();
 const changelogPage = paginate(
@@ -43,6 +49,19 @@ const categoryClass: Record<string, string> = {
   improved: "text-cyan",
   fixed: "text-amber",
 };
+const shopPage = paginate(
+  shop,
+  parsePage(Astro.url.searchParams.get("shop")),
+  LIST_PAGE_SIZE,
+);
+const shopHref = (page: number) =>
+  pageHref(Astro.url, "shop", page, { hash: "shop", drop: ["done", "name"] });
+const itemKind = (item: (typeof shop)[number]) =>
+  item.powerUp
+    ? POWER_UP_INFO[item.powerUp].label
+    : item.cosmeticKind
+      ? `${COSMETIC_KIND_LABELS[item.cosmeticKind]}: ${item.cosmeticValue}`
+      : CATEGORY_INFO[item.category].label;
 const done = Astro.url.searchParams.get("done");
 const subject = Astro.url.searchParams.get("name");
 
@@ -56,13 +75,13 @@ const stamp = ukDateFormat({
 const fmt = (iso: string) => stamp.format(new Date(iso));
 ---
 
-<AdminLayout title="Polls & changelog">
+<AdminLayout title="Polls, changelog & shop">
   <h1 class="text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> ls ~/site
   </h1>
   <p class="mt-1 max-w-prose text-sm text-ink-dim">
-    The extras on the homepage: polls for players to vote on, and the "what's
-    new" list.
+    The extras around the competition: polls for players to vote on, the "what's
+    new" list, and the Clim Coin shop.
   </p>
 
   {
@@ -260,6 +279,110 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
       href={changelogHref}
       label="Changelog pages"
       itemLabel="entries"
+      class="mt-3"
+    />
+  </section>
+
+  <section id="shop" aria-labelledby="shop-heading" class="mt-10 scroll-mt-24">
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2
+          id="shop-heading"
+          class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          clim coin shop ({shop.length})
+        </h2>
+        <p class="mt-1 text-xs text-ink-faint">
+          What players can spend Clim Coin on, site-wide. Pets, avatars and
+          cosmetics also hatch from mystery eggs (rarity follows the price).
+          Retired items stay with their owners and stop dropping; items nobody
+          owns can be deleted.
+        </p>
+      </div>
+      <a href={withBase("/admin/shop/new")} class={btnGhost}>+ new item</a>
+    </div>
+    <TerminalWindow title="~/site/shop" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class={tableHead}>item</th>
+              <th scope="col" class:list={[tableHead, "hidden md:table-cell"]}>
+                kind
+              </th>
+              <th scope="col" class={tableHead}>price</th>
+              <th scope="col" class={tableHead}>sold</th>
+              <th scope="col" class={tableHead}
+                ><span class="sr-only">actions</span></th
+              >
+            </tr>
+          </thead>
+          <tbody>
+            {
+              shopPage.items.map((item) => (
+                <tr class="transition-colors hover:bg-term-panel-2">
+                  <td class={tableCell}>
+                    <span class="text-ink">{item.name}</span>
+                    {!item.available && (
+                      <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-ink-faint">
+                        retired
+                      </span>
+                    )}
+                    {item.crateOnly && (
+                      <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-magenta">
+                        egg only
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    class:list={[
+                      tableCell,
+                      "hidden text-xs text-ink-dim md:table-cell",
+                    ]}
+                  >
+                    {itemKind(item)}
+                  </td>
+                  <td class:list={[tableCell, "tabular-nums text-amber"]}>
+                    {item.price}
+                  </td>
+                  <td class:list={[tableCell, "tabular-nums text-ink-dim"]}>
+                    {item.purchases}
+                  </td>
+                  <td class:list={[tableCell, "text-right whitespace-nowrap"]}>
+                    <a
+                      href={withBase(`/admin/shop/${item.id}`)}
+                      class="text-cyan hover:underline"
+                      aria-label={`Edit ${item.name}`}
+                    >
+                      edit
+                    </a>
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+        {
+          shop.length === 0 && (
+            <p class="p-6 text-sm text-ink-dim">
+              The shop is empty.{" "}
+              <a
+                href={withBase("/admin/shop/new")}
+                class="text-cyan hover:underline"
+              >
+                Add an item
+              </a>
+              .
+            </p>
+          )
+        }
+      </div>
+    </TerminalWindow>
+    <Pagination
+      info={shopPage}
+      href={shopHref}
+      label="Shop pages"
+      itemLabel="items"
       class="mt-3"
     />
   </section>

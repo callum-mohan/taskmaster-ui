@@ -3,6 +3,13 @@ import type { PollRecord } from "../data/admin";
 import { toWallClock } from "./time";
 import type { SubmissionOutcome } from "../types";
 import {
+  COSMETIC_KINDS,
+  NAME_COLOURS,
+  POWER_UP_KINDS,
+  PROFILE_THEMES,
+  SHOP_CATEGORIES,
+} from "../data/coin-rules";
+import {
   MAX_CAPTION_LENGTH,
   MAX_PHOTO_BYTES,
   MAX_SUBMISSIONS_PER_TASK,
@@ -278,6 +285,7 @@ const taskSchema = z
     deadline: localDateTime,
     format: z.enum(["individual", "team"], { error: "Pick a format." }),
     revealPassword: optionalText(60),
+    hint: optionalText(1000),
     maxSubmissions: z
       .string()
       .trim()
@@ -342,6 +350,7 @@ export function parseTaskForm(form: FormData): ParseResult<TaskInput> {
       deadline: values.deadline ?? "",
       format: values.format ?? "",
       revealPassword: values.revealPassword ?? "",
+      hint: values.hint ?? "",
       maxSubmissions: values.maxSubmissions ?? "0",
       submissionKinds,
     },
@@ -949,4 +958,145 @@ export function pollBonusWeeks(
     id: t.id,
     label: `week ${String(t.weekNumber).padStart(2, "0")}: ${t.title}`,
   }));
+}
+
+// ── Clim Coin ─────────────────────────────────────────────────────────
+
+const imagePath = optionalText(500).refine(
+  (v) => v === null || /^(https:\/\/|\/)\S+$/.test(v),
+  "Use an https:// URL or a site path starting with /, e.g. /shop/pets/duck.svg.",
+);
+
+const blankToNull = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : v));
+
+const shopItemSchema = z
+  .object({
+    id: slug,
+    name: requiredText(60),
+    description: z.string().trim().max(300, "Keep it under 300 characters."),
+    category: z.enum(SHOP_CATEGORIES, { error: "Pick a category." }),
+    price: z
+      .string()
+      .trim()
+      .min(1, "Required.")
+      .transform(Number)
+      .pipe(
+        z
+          .number({ error: "Enter a whole number." })
+          .int("Enter a whole number.")
+          .min(0, "Must be 0 or more.")
+          .max(10000, "Keep it to 10000 or less."),
+      ),
+    imageUrl: imagePath,
+    cosmeticKind: blankToNull,
+    cosmeticValue: blankToNull,
+    powerUp: blankToNull,
+    available: z.boolean(),
+    crateOnly: z.boolean(),
+    sortOrder: optionalOrder,
+  })
+  .superRefine((item, ctx) => {
+    const issue = (path: string, message: string) =>
+      ctx.addIssue({ code: "custom", path: [path], message });
+    if (item.crateOnly && item.category === "power_up") {
+      issue("crateOnly", "Eggs never hatch power-ups.");
+    }
+    if (
+      (item.category === "pet" || item.category === "avatar") &&
+      !item.imageUrl
+    ) {
+      issue("imageUrl", "Pets and avatars need an image.");
+    }
+    if (item.category === "power_up") {
+      if (!POWER_UP_KINDS.some((k) => k === item.powerUp)) {
+        issue("powerUp", "Pick what the power-up does.");
+      }
+    }
+    if (item.category === "cosmetic") {
+      const kind = COSMETIC_KINDS.find((k) => k === item.cosmeticKind);
+      const value = item.cosmeticValue;
+      if (!kind) {
+        issue("cosmeticKind", "Pick the kind of cosmetic.");
+      } else if (kind === "title") {
+        if (!value) issue("cosmeticValue", "Enter the title text.");
+        else if (value.length > 40) {
+          issue("cosmeticValue", "Keep titles under 40 characters.");
+        }
+      } else if (kind === "name_colour") {
+        if (!NAME_COLOURS.some((c) => c === value)) {
+          issue("cosmeticValue", `Use one of: ${NAME_COLOURS.join(", ")}.`);
+        }
+      } else if (!PROFILE_THEMES.some((t) => t === value)) {
+        issue("cosmeticValue", `Use one of: ${PROFILE_THEMES.join(", ")}.`);
+      }
+    }
+  })
+  .transform((item) => ({
+    ...item,
+    cosmeticKind:
+      item.category === "cosmetic"
+        ? (COSMETIC_KINDS.find((k) => k === item.cosmeticKind) ?? null)
+        : null,
+    cosmeticValue: item.category === "cosmetic" ? item.cosmeticValue : null,
+    powerUp:
+      item.category === "power_up"
+        ? (POWER_UP_KINDS.find((k) => k === item.powerUp) ?? null)
+        : null,
+  }));
+
+export type ShopItemInput = z.output<typeof shopItemSchema>;
+
+/**
+ * The shop item form. On edit the page passes the stored category, cosmetic
+ * kind and power-up back in: they're fixed once created, so owned items keep
+ * their slot and effect.
+ */
+export function parseShopItemForm(form: FormData): ParseResult<ShopItemInput> {
+  const values = formValues(form);
+  const available = form.get("available") === "on";
+  const crateOnly = form.get("crateOnly") === "on";
+  return parseWith(
+    shopItemSchema,
+    {
+      id: values.id ?? "",
+      name: values.name ?? "",
+      description: values.description ?? "",
+      category: values.category ?? "",
+      price: values.price ?? "",
+      imageUrl: values.imageUrl ?? "",
+      cosmeticKind: values.cosmeticKind ?? "",
+      cosmeticValue: values.cosmeticValue ?? "",
+      powerUp: values.powerUp ?? "",
+      available,
+      crateOnly,
+      sortOrder: values.sortOrder ?? "",
+    },
+    {
+      ...values,
+      available: available ? "on" : "",
+      crateOnly: crateOnly ? "on" : "",
+    },
+  );
+}
+
+const coinAdjustmentSchema = z.object({
+  amount: integer().refine((n) => n !== 0, "Use a non-zero amount."),
+  reason: requiredText(200),
+});
+
+export type CoinAdjustmentInput = z.output<typeof coinAdjustmentSchema>;
+
+/** An admin's Clim Coin grant (positive) or deduction (negative). */
+export function parseCoinAdjustmentForm(
+  form: FormData,
+): ParseResult<CoinAdjustmentInput> {
+  const values = formValues(form);
+  return parseWith(
+    coinAdjustmentSchema,
+    { amount: values.amount ?? "", reason: values.reason ?? "" },
+    values,
+  );
 }

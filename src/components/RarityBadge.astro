@@ -1,0 +1,24 @@
+---
+// An item's rarity as a small labelled badge (the name is always shown, so
+// the colour is never the only signal).
+import type { Rarity } from "../types";
+import { RARITY_INFO } from "../lib/coin-ui";
+
+interface Props {
+  rarity: Rarity;
+  class?: string;
+}
+
+const { rarity, class: className } = Astro.props;
+const { label, badge } = RARITY_INFO[rarity];
+---
+
+<span
+  class:list={[
+    "inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.15em]",
+    badge,
+    className,
+  ]}
+>
+  {label}
+</span>

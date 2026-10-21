@@ -2,6 +2,7 @@
 // Site navigation styled as a terminal window title bar.
 import NotificationBell from "./NotificationBell.astro";
 import NotificationPanel from "./NotificationPanel.astro";
+import CoinBalanceChip from "./CoinBalanceChip.astro";
 import { withBase } from "../lib/url";
 import type { NotificationFeed, Viewer } from "../types";
 
@@ -10,9 +11,11 @@ interface Props {
   viewer?: Viewer;
   /** Signed-in players' feed; the bell only shows when this is set. */
   notifications?: NotificationFeed;
+  /** Signed-in players' Clim Coin balance; the wallet chip shows when set. */
+  coinBalance?: number;
 }
 
-const { viewer, notifications } = Astro.props;
+const { viewer, notifications, coinBalance } = Astro.props;
 
 interface NavItem {
   href: string;
@@ -34,6 +37,7 @@ const navGroups: NavGroup[] = [
       { href: "/recaps", label: "recaps" },
       { href: "/live", label: "live" },
       { href: "/rules", label: "rules" },
+      { href: "/shop", label: "shop" },
     ],
   },
   {
@@ -57,7 +61,11 @@ const navGroups: NavGroup[] = [
 const path = Astro.url.pathname;
 const isActive = (href: string) => {
   const full = withBase(href);
-  return href === "/" ? path === full : path.startsWith(full);
+  // The profile page sits above the other account pages (e.g. the
+  // password), so it only matches itself.
+  return href === "/" || href === "/account"
+    ? path.replace(/\/$/, "") === full.replace(/\/$/, "")
+    : path.startsWith(full);
 };
 const isGroupActive = (group: NavGroup) =>
   group.children.some((child) => isActive(child.href));
@@ -327,6 +335,12 @@ const isAccountActive = accountLinks.some((link) => isActive(link.href));
         </button>
       </li>
     </ul>
+
+    {
+      coinBalance !== undefined && (
+        <CoinBalanceChip balance={coinBalance} class="hidden sm:inline-flex" />
+      )
+    }
 
     {
       notifications && (

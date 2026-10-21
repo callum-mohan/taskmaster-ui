@@ -21,7 +21,7 @@ const scope = await recordScope(Astro.locals, "task", Astro.params.id, {
 if (!scope) return Astro.rewrite("/404");
 const { season } = scope;
 
-const { getWeekRecap, getRecapTaskIds } = scope.queries;
+const { getWeekRecap, getRecapTaskIds, getPlayerFlairs } = scope.queries;
 
 const { id } = Astro.params;
 // Only completed, scored weeks have a recap; anything else (including a live
@@ -300,7 +300,7 @@ const medal = (position: number) =>
         meta={`after ${weekLabel}`}
         bodyClass="p-0 sm:p-0"
       >
-        <StandingsTable rows={standings} />
+        <StandingsTable rows={standings} flair={getPlayerFlairs()} />
       </TerminalWindow>
     </section>
 

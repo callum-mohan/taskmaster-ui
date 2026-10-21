@@ -52,6 +52,30 @@ export const featureCategory = pgEnum("feature_category", [
   "improved",
   "fixed",
 ]);
+export const shopCategory = pgEnum("shop_category", [
+  "pet",
+  "avatar",
+  "cosmetic",
+  "power_up",
+]);
+export const cosmeticKind = pgEnum("cosmetic_kind", [
+  "title",
+  "name_colour",
+  "theme",
+]);
+export const powerUpKind = pgEnum("power_up_kind", [
+  "double_down",
+  "hint",
+  "golden_week",
+  "sabotage",
+]);
+export const loadoutSlot = pgEnum("loadout_slot", [
+  "pet",
+  "avatar",
+  "title",
+  "name_colour",
+  "theme",
+]);
 
 // When a score or bonus was first recorded and last changed. Real instants
 // (unlike the UK wall-clock task dates), so they carry a time zone. Notifications
@@ -193,6 +217,9 @@ export const tasks = pgTable(
     resultsRevealCount: integer().notNull().default(0),
     // When held results were published, so notifications date from then.
     resultsPublishedAt: timestamp({ withTimezone: true, mode: "string" }),
+    // The Taskmaster's Hint: only players who use the Hint power-up on this
+    // week ever see it (see `power_up_uses`).
+    hint: text(),
   },
   (t) => [
     unique("tasks_season_id_week_number_unique").on(t.seasonId, t.weekNumber),
@@ -596,4 +623,223 @@ export const changelogEntries = pgTable(
     ...recordedTimestamps(),
   },
   (t) => [index("changelog_entries_date_idx").on(t.date)],
+);
+
+// ── Clim Coin ─────────────────────────────────────────────────────────
+// A per-season wallet. Earnings (placements, entries, votes, predictions)
+// are derived from the competition records in `src/data/coins.ts`, never
+// stored; only what players spend, equip and use, and what admins grant or
+// deduct, is written here.
+
+/**
+ * The shop catalogue (site-wide, managed in `/admin/shop`). Category, cosmetic
+ * kind and power-up are fixed once created so owned items keep their slot
+ * and effect. Items someone bought can't be deleted, only retired.
+ */
+export const shopItems = pgTable(
+  "shop_items",
+  {
+    id: text().primaryKey(),
+    name: text().notNull(),
+    description: text().notNull().default(""),
+    category: shopCategory().notNull(),
+    price: integer().notNull(),
+    // A `/shop/...` path or https URL; required for pets and avatars.
+    imageUrl: text(),
+    cosmeticKind: cosmeticKind(),
+    // The title text, name colour token or profile theme id.
+    cosmeticValue: text(),
+    powerUp: powerUpKind(),
+    // Retired items stay with their owners but can't be bought.
+    available: boolean().notNull().default(true),
+    // Crate exclusives only drop from crates; they're never sold directly.
+    crateOnly: boolean().notNull().default(false),
+    sortOrder: integer().notNull().default(0),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    check("shop_items_price_range", sql`${t.price} between 0 and 10000`),
+    check(
+      "shop_items_image_when_visual",
+      sql`${t.category} not in ('pet', 'avatar') or ${t.imageUrl} is not null`,
+    ),
+    check(
+      "shop_items_cosmetic_fields",
+      sql`(${t.category} = 'cosmetic') = (${t.cosmeticKind} is not null and ${t.cosmeticValue} is not null)`,
+    ),
+    check(
+      "shop_items_power_up_field",
+      sql`(${t.category} = 'power_up') = (${t.powerUp} is not null)`,
+    ),
+    // Crates never drop power-ups, so a power-up can't be crate-only.
+    check(
+      "shop_items_crate_only_droppable",
+      sql`not (${t.crateOnly} and ${t.category} = 'power_up')`,
+    ),
+  ],
+);
+
+/**
+ * A purchase, at the price paid then (later price changes never rewrite a
+ * wallet). Every item is bought at most once a season (players are per
+ * season); a power-up purchase is its single charge, spent by a
+ * `power_up_uses` row.
+ */
+export const coinPurchases = pgTable(
+  "coin_purchases",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "restrict" }),
+    price: integer().notNull(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("coin_purchases_price_positive", sql`${t.price} >= 0`),
+    index("coin_purchases_player_id_idx").on(t.playerId),
+    index("coin_purchases_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * A power-up charge spent on a live week: each power-up once per player a
+ * season, at most one per player per week, and a player can be sabotaged at
+ * most once per week. The effect is copied
+ * from the item so it can't change after use. Effects (Golden Week, Double
+ * Down, Sabotage) are applied when the snapshot is derived.
+ */
+export const powerUpUses = pgTable(
+  "power_up_uses",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    purchaseId: integer()
+      .notNull()
+      .unique("power_up_uses_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    taskId: text()
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    effect: powerUpKind().notNull(),
+    targetPlayerId: text().references(() => players.id, {
+      onDelete: "cascade",
+    }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("power_up_uses_player_id_task_id_unique").on(t.playerId, t.taskId),
+    unique("power_up_uses_player_id_effect_unique").on(t.playerId, t.effect),
+    uniqueIndex("power_up_uses_one_sabotage_per_target_idx")
+      .on(t.taskId, t.targetPlayerId)
+      .where(sql`${t.effect} = 'sabotage'`),
+    check(
+      "power_up_uses_target_when_sabotage",
+      sql`(${t.effect} = 'sabotage') = (${t.targetPlayerId} is not null)`,
+    ),
+    check(
+      "power_up_uses_not_self",
+      sql`${t.targetPlayerId} is distinct from ${t.playerId}`,
+    ),
+    index("power_up_uses_task_id_idx").on(t.taskId),
+    index("power_up_uses_target_player_id_idx").on(t.targetPlayerId),
+  ],
+);
+
+/** What a player has equipped, one item per slot (owned items only). */
+export const equippedItems = pgTable(
+  "equipped_items",
+  {
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    slot: loadoutSlot().notNull(),
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "cascade" }),
+    updatedAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => sql`now()`),
+  },
+  (t) => [
+    primaryKey({ columns: [t.playerId, t.slot] }),
+    index("equipped_items_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * Admin grants (positive) and deductions (negative) of Clim Coin. The actor's
+ * name is copied in, like `score_audit_log`.
+ */
+export const coinAdjustments = pgTable(
+  "coin_adjustments",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    amount: integer().notNull(),
+    reason: text().notNull(),
+    actorId: text().notNull(),
+    actorName: text().notNull(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check(
+      "coin_adjustments_amount_range",
+      sql`${t.amount} <> 0 and ${t.amount} between -10000 and 10000`,
+    ),
+    index("coin_adjustments_player_id_idx").on(t.playerId),
+  ],
+);
+
+/**
+ * A crate (lootbox) a player opened. The crates themselves are defined in
+ * code (`src/data/coin-rules.ts`); `crateId` names one. The item won is
+ * owned through `purchaseId`, a zero-price `coin_purchases` row written in
+ * the same statement, so ownership works exactly like buying. `price` is
+ * what the crate cost then, and `rarity` the tier it rolled.
+ */
+export const crateOpens = pgTable(
+  "crate_opens",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    crateId: text().notNull(),
+    price: integer().notNull(),
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "restrict" }),
+    rarity: text().notNull(),
+    purchaseId: integer()
+      .notNull()
+      .unique("crate_opens_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("crate_opens_price_positive", sql`${t.price} >= 0`),
+    check(
+      "crate_opens_rarity_known",
+      sql`${t.rarity} in ('common', 'rare', 'epic', 'legendary')`,
+    ),
+    index("crate_opens_player_id_idx").on(t.playerId),
+    index("crate_opens_item_id_idx").on(t.itemId),
+  ],
 );

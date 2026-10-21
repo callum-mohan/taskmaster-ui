@@ -46,6 +46,7 @@ try {
           ? await insert(schema.bonusPoints, data.bonusPoints)
           : 0,
       recaps: await insert(schema.recaps, data.recaps),
+      shop_items: await insert(schema.shopItems, data.shopItems),
     };
   });
   console.log("Rows inserted (existing rows are left untouched):");

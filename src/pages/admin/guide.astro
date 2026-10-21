@@ -25,7 +25,7 @@ const contents = [
   { id: "markers", label: "reading the progress markers" },
   { id: "seasons", label: "seasons and the Hall of Fame" },
   { id: "roster", label: "players, accounts and squads" },
-  { id: "site", label: "polls and the changelog" },
+  { id: "site", label: "polls, changelog and the shop" },
   { id: "good-to-know", label: "good to know" },
 ];
 
@@ -444,10 +444,10 @@ const link = "text-cyan hover:underline";
 
   <section id="site" aria-labelledby="site-heading" class="mt-12 scroll-mt-24">
     <h2 id="site-heading" class={h2}>
-      <span class="text-acid">#</span> polls and the changelog
+      <span class="text-acid">#</span> polls, changelog and the shop
     </h2>
     <p class={lead}>
-      Both in <a href={withBase(ADMIN_SITE)} class={link}>site</a>.
+      All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>.
     </p>
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
       <TerminalWindow title="~/guide/polls">
@@ -481,6 +481,42 @@ const link = "text-cyan hover:underline";
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Visitors see a
             dot on the what's new button until they've opened the newest entry.
+          </li>
+        </ul>
+      </TerminalWindow>
+      <TerminalWindow title="~/guide/clim-coin" class="lg:col-span-2">
+        <ul class="space-y-2 text-sm text-ink-dim">
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Players earn Clim
+            Coin automatically from placings and taking part (the amounts are on <a
+              href={withBase("/rules#clim-coin")}
+              class={link}>/rules</a
+            >). Nothing to record: it follows the scores, entries and votes.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span>
+            <span class="text-ink">+ new item</span> adds a pet, avatar, cosmetic
+            or power-up. Commit pet and avatar images under
+            <code class="text-ink">public/shop</code> and enter their path. The category
+            and effect are fixed once created; untick
+            <span class="text-ink">for sale</span> to retire an item (owners keep
+            it, and it stops hatching from eggs). Tick
+            <span class="text-ink">egg exclusive</span> for a pet, avatar or cosmetic
+            that should only hatch from mystery eggs; its price still sets its rarity.
+            Only items nobody owns can be deleted.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Grant or deduct
+            coins on a player's page in the
+            <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a> (with a reason
+            they'll see).
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Power-ups used
+            on a week are listed in its judge tab, where you can revoke one (its effect
+            goes and the player gets that power-up back to use again; they can't buy
+            a second one). Write the week's
+            <span class="text-ink">taskmaster's hint</span> on its brief tab.
           </li>
         </ul>
       </TerminalWindow>

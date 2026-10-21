@@ -33,10 +33,11 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   {
     href: ADMIN_SITE,
     label: "site",
-    title: "Polls & changelog",
-    hint: "homepage polls and the what's new list",
-    keywords: "polls votes questions changelog whats new release notes",
-    match: ["/admin/polls", "/admin/changelog"],
+    title: "Polls, changelog & shop",
+    hint: "homepage polls, the what's new list and the Clim Coin shop",
+    keywords:
+      "polls votes questions changelog whats new release notes clim coin shop pets avatars cosmetics power-ups items prices",
+    match: ["/admin/polls", "/admin/changelog", "/admin/shop"],
   },
   {
     href: ADMIN_GUIDE,
@@ -96,6 +97,7 @@ const LEGACY_ROUTES: [RegExp, (id?: string) => string][] = [
   [/^\/admin\/teams$/, () => `${ADMIN_ROSTER}#squads`],
   [/^\/admin\/polls$/, () => ADMIN_SITE],
   [/^\/admin\/changelog$/, () => `${ADMIN_SITE}#changelog`],
+  [/^\/admin\/shop$/, () => `${ADMIN_SITE}#shop`],
 ];
 
 /**

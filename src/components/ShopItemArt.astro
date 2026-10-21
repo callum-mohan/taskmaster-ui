@@ -1,0 +1,101 @@
+---
+// The picture for a shop item: the pixel image for pets and avatars, and a
+// preview for cosmetics and power-ups. Decorative: the item's name is always
+// shown alongside it.
+import type { NameColour, PowerUpKind, ProfileTheme, ShopItem } from "../types";
+import { NAME_COLOURS, PROFILE_THEMES } from "../data/coin-rules";
+import { NAME_COLOUR_CLASS, PROFILE_THEME_INFO } from "../lib/coin-ui";
+import { assetUrl } from "../lib/url";
+
+interface Props {
+  item: ShopItem;
+  /** Sizing utilities for the square frame. */
+  class?: string;
+}
+
+const { item, class: className = "h-16 w-16" } = Astro.props;
+
+const powerUpGlyph: Record<PowerUpKind, { glyph: string; class: string }> = {
+  double_down: { glyph: "×2", class: "text-cyan" },
+  hint: { glyph: "?", class: "text-acid" },
+  golden_week: { glyph: "★", class: "text-amber" },
+  sabotage: { glyph: "☠", class: "text-danger" },
+};
+
+const value = item.cosmetic?.value;
+const nameColour: NameColour | undefined = NAME_COLOURS.find(
+  (c) => item.cosmetic?.kind === "name_colour" && c === value,
+);
+const theme: ProfileTheme | undefined = PROFILE_THEMES.find(
+  (t) => item.cosmetic?.kind === "theme" && t === value,
+);
+const frame =
+  "flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-grid bg-term-bg";
+---
+
+{
+  item.imageUrl && (item.category === "pet" || item.category === "avatar") ? (
+    <img
+      src={assetUrl(item.imageUrl)}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      decoding="async"
+      width="64"
+      height="64"
+      class:list={[
+        frame,
+        "object-contain p-1 [image-rendering:pixelated]",
+        className,
+      ]}
+    />
+  ) : item.powerUp ? (
+    <span
+      aria-hidden="true"
+      class:list={[
+        frame,
+        "text-2xl font-extrabold",
+        powerUpGlyph[item.powerUp].class,
+        className,
+      ]}
+    >
+      {powerUpGlyph[item.powerUp].glyph}
+    </span>
+  ) : nameColour ? (
+    <span
+      aria-hidden="true"
+      class:list={[
+        frame,
+        "text-xl font-extrabold",
+        NAME_COLOUR_CLASS[nameColour],
+        className,
+      ]}
+    >
+      Aa
+    </span>
+  ) : theme ? (
+    <span aria-hidden="true" class:list={[frame, "p-2", className]}>
+      <span
+        class:list={[
+          "flex h-full w-full items-center justify-center rounded border-2 text-xs font-bold",
+          PROFILE_THEME_INFO[theme].swatch,
+        ]}
+      >
+        &gt;_
+      </span>
+    </span>
+  ) : (
+    <span
+      aria-hidden="true"
+      class:list={[
+        frame,
+        "px-1 text-center text-[9px] font-bold leading-tight text-magenta",
+        className,
+      ]}
+    >
+      <span class="line-clamp-3 [overflow-wrap:anywhere]">
+        “{value ?? item.name}”
+      </span>
+    </span>
+  )
+}

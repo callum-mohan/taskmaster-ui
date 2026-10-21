@@ -12,12 +12,16 @@ import {
   btnPrimary,
 } from "../../../components/admin/styles";
 import {
+  addCoinAdjustment,
+  deleteCoinAdjustment,
   deletePlayer,
   describeWriteError,
   getPlayer,
   getPlayerDeleteImpact,
+  listCoinAdjustments,
   updatePlayer,
 } from "../../../data/admin";
+import CoinAmount from "../../../components/CoinAmount.astro";
 import {
   accountStatus,
   getPlayerAccount,
@@ -26,8 +30,10 @@ import {
 } from "../../../data/accounts";
 import { resetUserPassword, temporaryPassword } from "../../../lib/auth";
 import {
+  parseCoinAdjustmentForm,
   parsePlayerEmailForm,
   parsePlayerForm,
+  parseRowId,
   type FieldErrors,
   type FormValues,
 } from "../../../lib/admin-forms";
@@ -35,7 +41,8 @@ import { withBase } from "../../../lib/url";
 import { withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
 
 const id = Astro.params.id!;
 const player = await getPlayer(id);
@@ -59,6 +66,10 @@ let accountEmail = account?.email ?? "";
 let accountError: string | undefined;
 // Shown once, in this response only: never put it in a redirect URL.
 let resetPassword: { password: string; signedOut: boolean } | undefined;
+let coinValues: FormValues = {};
+let coinErrors: FieldErrors = {};
+const coinsDone = (done: string) =>
+  Astro.redirect(withBase(`/admin/players/${id}?done=${done}#coins`));
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -68,7 +79,20 @@ if (Astro.request.method === "POST") {
     const query = new URLSearchParams({ done: "deleted", name: player.name });
     return Astro.redirect(rosterHref(`?${query}`));
   }
-  if (intent === "reset-password") {
+  if (intent === "coins-grant") {
+    const parsed = parseCoinAdjustmentForm(form);
+    coinValues = parsed.values;
+    if (!parsed.ok) {
+      coinErrors = parsed.errors;
+    } else {
+      await addCoinAdjustment(id, parsed.data, admin);
+      return coinsDone("coins");
+    }
+  } else if (intent === "coins-delete") {
+    const rowId = parseRowId(form);
+    if (rowId !== undefined) await deleteCoinAdjustment(id, rowId);
+    return coinsDone("coins-deleted");
+  } else if (intent === "reset-password") {
     if (!account?.userId) {
       accountError = "This player has no sign-in account to reset yet.";
     } else {
@@ -130,7 +154,16 @@ if (Astro.request.method === "POST") {
   }
 }
 
-const impact = await getPlayerDeleteImpact(id);
+const [impact, adjustments, { getWallet }] = await Promise.all([
+  getPlayerDeleteImpact(id),
+  listCoinAdjustments(id),
+  Astro.locals.getQueries(player.seasonId),
+]);
+const wallet = getWallet(id);
+const coinNotice = {
+  coins: "Clim Coin adjustment saved.",
+  "coins-deleted": "Clim Coin adjustment removed.",
+}[Astro.url.searchParams.get("done") ?? ""];
 const status = accountStatus(account);
 const linked = Boolean(account?.userId);
 const accountSaved = Astro.url.searchParams.get("done") === "account";
@@ -274,6 +307,97 @@ const statusHelp: Record<typeof status, string> = {
           <Notice tone="error" class="mt-5">
             {accountError}
           </Notice>
+        )
+      }
+    </TerminalWindow>
+  </section>
+  <section id="coins" aria-labelledby="coins-heading" class="mt-8">
+    <h2
+      id="coins-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      clim coin
+    </h2>
+    <TerminalWindow title={`~/players/${player.id}/wallet`}>
+      {
+        coinNotice && (
+          <Notice tone="success" class="mb-5">
+            {coinNotice}
+          </Notice>
+        )
+      }
+      <div class="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+        <CoinAmount
+          amount={wallet.balance}
+          class:list={[
+            "text-3xl",
+            wallet.balance < 0 ? "text-danger" : "text-amber",
+          ]}
+        />
+        <p class="text-xs text-ink-faint">
+          earned {wallet.earned} · grants {wallet.adjusted} · spent {
+            wallet.spent
+          }
+        </p>
+      </div>
+      <p class="mt-2 text-xs text-ink-faint">
+        Earnings are worked out from results and activity (held results count
+        here, but not in the player's own wallet until they're published).
+      </p>
+      <form
+        method="post"
+        class="mt-5 grid gap-4 sm:grid-cols-[8rem_1fr_auto] sm:items-start"
+        novalidate
+      >
+        <input type="hidden" name="intent" value="coins-grant" />
+        <AdminField
+          label="amount"
+          name="amount"
+          type="number"
+          value={coinValues.amount}
+          error={coinErrors.amount}
+          required
+          hint="Negative deducts."
+        />
+        <AdminField
+          label="reason"
+          name="reason"
+          value={coinValues.reason}
+          error={coinErrors.reason}
+          required
+          hint="Shown in the player's wallet."
+        />
+        <button type="submit" class:list={[btnPrimary, "sm:mt-6"]}>
+          grant / deduct
+        </button>
+      </form>
+      {
+        adjustments.length > 0 && (
+          <ul class="mt-5 divide-y divide-grid/60 rounded-md border border-grid text-sm">
+            {adjustments.map((row) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                <span class="min-w-0 text-ink-dim">
+                  {row.reason}
+                  <span class="block text-[11px] text-ink-faint">
+                    by {row.actorName}
+                  </span>
+                </span>
+                <span class="flex items-center gap-3">
+                  <CoinAmount
+                    amount={row.amount}
+                    signed
+                    class:list={[row.amount < 0 ? "text-danger" : "text-amber"]}
+                  />
+                  <ConfirmDelete
+                    subject={`the ${row.amount > 0 ? "grant" : "deduction"} "${row.reason}"`}
+                    intent="coins-delete"
+                    fields={{ rowId: row.id }}
+                    label="remove"
+                  />
+                </span>
+              </li>
+            ))}
+          </ul>
         )
       }
     </TerminalWindow>

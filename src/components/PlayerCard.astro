@@ -1,14 +1,17 @@
 ---
-import type { LeaderboardRow } from "../types";
+import type { LeaderboardRow, PlayerFlair } from "../types";
 import { withBase } from "../lib/url";
 import PlayerAvatar from "./PlayerAvatar.astro";
+import PlayerFlairName from "./PlayerFlairName.astro";
 
 interface Props {
   row: LeaderboardRow;
+  /** The player's Clim Coin flair (name colour, pet, title). */
+  flair?: PlayerFlair;
   class?: string;
 }
 
-const { row, class: className = "" } = Astro.props;
+const { row, flair, class: className = "" } = Astro.props;
 const { player, rank } = row;
 
 const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
@@ -57,11 +60,20 @@ const frame =
     <PlayerAvatar player={player} class="h-11 w-11 rounded" />
 
     <span class="min-w-0 flex-1">
-      <span
-        class="block truncate text-base font-extrabold text-ink group-hover:text-acid"
-      >
-        {player.name}
+      <span class="flex items-center gap-1.5">
+        <PlayerFlairName
+          name={player.name}
+          flair={flair}
+          class="text-base font-extrabold group-hover:text-acid"
+        />
       </span>
+      {
+        flair?.title && (
+          <span class="block truncate text-[11px] italic text-magenta">
+            “{flair.title}”
+          </span>
+        )
+      }
       <span class="block text-[11px] text-ink-faint">
         {row.wins}{" "}
         {row.wins === 1 ? "win" : "wins"} &middot; {row.tasksCompleted} played

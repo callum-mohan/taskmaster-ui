@@ -4,10 +4,19 @@ import TerminalWindow from "../../components/TerminalWindow.astro";
 import AdminField from "../../components/admin/AdminField.astro";
 import Notice from "../../components/admin/Notice.astro";
 import PlayerAvatar from "../../components/PlayerAvatar.astro";
+import WalletSection from "../../components/WalletSection.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
 import { updateOwnProfile } from "../../data/accounts";
-import { parseProfileForm } from "../../lib/account-forms";
+import { runWalletAction } from "../../data/wallet-actions";
+import { parseProfileForm, parseWalletAction } from "../../lib/account-forms";
 import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import { COIN_OUTCOME_NOTICE, parseCoinOutcome } from "../../lib/coin-ui";
+import {
+  LIST_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../lib/pagination";
 import { withBase } from "../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -22,8 +31,25 @@ let values: FormValues = {
 };
 let errors: FieldErrors = {};
 
+// The player's wallet is per season: the season their roster row is in.
+const season = (await Astro.locals.getSeasons()).seasonOfPlayer(
+  player.playerId,
+);
+
 if (Astro.request.method === "POST") {
-  const parsed = parseProfileForm(await Astro.request.formData());
+  const form = await Astro.request.formData();
+  // Wallet forms carry an `intent`; the profile form doesn't.
+  if (form.has("intent")) {
+    const action = parseWalletAction(form);
+    const outcome =
+      action && season
+        ? await runWalletAction(player.playerId, season, action, (id) =>
+            Astro.locals.getQueries(id),
+          )
+        : "invalid";
+    return Astro.redirect(withBase(`/account?coins=${outcome}#wallet`), 303);
+  }
+  const parsed = parseProfileForm(form);
   values = parsed.values;
   if (!parsed.ok) {
     errors = parsed.errors;
@@ -32,6 +58,33 @@ if (Astro.request.method === "POST") {
     return Astro.redirect(withBase("/account?done=saved"));
   }
 }
+
+const walletView = season
+  ? await Astro.locals.getQueries(season.id).then((q) => {
+      const wallet = q.getWallet(player.playerId);
+      const panel = q.getPowerUpPanel(player.playerId);
+      return {
+        wallet,
+        panel,
+        inventory: q.getInventory(player.playerId),
+        hint: panel.task
+          ? q.getUnlockedHint(panel.task.id, player.playerId)
+          : undefined,
+        ledgerPage: paginate(
+          wallet.ledger,
+          parsePage(Astro.url.searchParams.get("history")),
+          LIST_PAGE_SIZE,
+        ),
+      };
+    })
+  : undefined;
+const ledgerHref = (page: number) =>
+  pageHref(Astro.url, "history", page, {
+    hash: "history",
+    drop: ["coins", "done"],
+  });
+const coinOutcome = parseCoinOutcome(Astro.url.searchParams.get("coins"));
+const coinNotice = coinOutcome ? COIN_OUTCOME_NOTICE[coinOutcome] : undefined;
 
 const done = Astro.url.searchParams.get("done");
 const notices: Record<string, string> = {
@@ -47,7 +100,7 @@ const avatarPreview = {
 ---
 
 <Layout title="Your account">
-  <div class="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
+  <div class="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
     <header class="flex flex-wrap items-end justify-between gap-4">
       <div class="flex items-center gap-4">
         <PlayerAvatar player={avatarPreview} class="h-14 w-14 rounded-md" />
@@ -106,7 +159,20 @@ const avatarPreview = {
       </form>
     </TerminalWindow>
 
-    <section aria-labelledby="security-heading" class="mt-10">
+    {
+      walletView && season && (
+        <WalletSection
+          {...walletView}
+          seasonName={season.name}
+          seasonClosed={season.status === "closed"}
+          ledgerHref={ledgerHref}
+          notice={coinNotice}
+          class="mt-12"
+        />
+      )
+    }
+
+    <section aria-labelledby="security-heading" class="mt-12">
       <h2
         id="security-heading"
         class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"

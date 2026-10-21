@@ -4,6 +4,8 @@ import TerminalWindow from "../components/TerminalWindow.astro";
 import StatCard from "../components/StatCard.astro";
 import RulesSection from "../components/RulesSection.astro";
 import RuleItem from "../components/RuleItem.astro";
+import { CRATES as crates, RARITIES } from "../data/coin-rules";
+import { RARITY_INFO, formatChance } from "../lib/coin-ui";
 import { withBase } from "../lib/url";
 
 const { getGameRules } = await Astro.locals.getQueries();
@@ -42,6 +44,7 @@ const contents: ContentsItem[] = [
   { id: "peoples-choice", label: "people's choice" },
   { id: "predictions", label: "predictions" },
   { id: "results-night", label: "results night" },
+  { id: "clim-coin", label: "clim coin" },
   { id: "account", label: "your account" },
   { id: "the-prize", label: "the prize" },
 ];
@@ -548,6 +551,107 @@ const bonusRows: BonusRow[] = [
           <RuleItem>
             Once the show ends the results go out everywhere, and each week gets
             a <a href={withBase("/recaps")} class={link}>recap</a>.
+          </RuleItem>
+        </ul>
+      </RulesSection>
+
+      <RulesSection
+        id="clim-coin"
+        command="rules --clim-coin"
+        title="Clim Coin"
+        file="~/rules/clim-coin.md"
+        meta="per season"
+      >
+        <ul class="space-y-3">
+          <RuleItem accent="amber">
+            Clim Coin is the season's currency. Every player starts each season
+            with an empty wallet; coins don't carry over.
+          </RuleItem>
+          <RuleItem>
+            <span class="font-bold text-ink">Placing pays</span> once a week's results
+            are out: 1st {rules.coins.placement.first}, 2nd {
+              rules.coins.placement.second
+            }, 3rd {rules.coins.placement.third}, and {
+              rules.coins.placement.scored
+            } for everyone else who was scored.
+          </RuleItem>
+          <RuleItem>
+            <span class="font-bold text-ink">Taking part pays</span> once it locks
+            in: {rules.coins.entry} for entering a week (at its deadline),
+            {rules.coins.prediction} for calling a winner (at the deadline), {
+              rules.coins.peoplesChoiceVote
+            } for a People's Choice vote (when voting closes) and {
+              rules.coins.pollVote
+            } for each poll you vote in (when it closes). The Taskmaster can also
+            grant or take coins.
+          </RuleItem>
+          <RuleItem>
+            Spend coins in the <a href={withBase("/shop")} class={link}>shop</a> on
+            pets (one can follow you around the site), avatars, titles, name colours
+            and profile themes. Everyone can see what you wear; your balance and inventory
+            stay private in the wallet on your <a
+              href={withBase("/account#wallet")}
+              class={link}>profile</a
+            >.
+          </RuleItem>
+          <RuleItem accent="cyan">
+            <span class="font-bold text-ink">Mystery eggs</span> crack open to hatch
+            a random pet, avatar or cosmetic you don't own yet (never a power-up).
+            Rarity follows the shop price: Common up to 15, Rare 16–29, Epic 30–39,
+            Legendary 40+.
+            {
+              crates
+                .map(
+                  (crate) =>
+                    `${crate.name} (${crate.price} coins): ${RARITIES.filter(
+                      (r) => crate.odds[r],
+                    )
+                      .map(
+                        (r) =>
+                          `${RARITY_INFO[r].label} ${formatChance(crate.odds[r] ?? 0)}`,
+                      )
+                      .join(", ")}.`,
+                )
+                .join(" ")
+            } If a tier has nothing left for you, its chance is shared among the others;
+            the shop shows your exact odds for every item. Some items are egg exclusives
+            and can't be bought.
+          </RuleItem>
+          <RuleItem accent="magenta">
+            <span class="font-bold text-ink">Power-ups</span> are
+            <span class="font-bold text-ink">single use</span>: you can buy each
+            one
+            <span class="font-bold text-ink">once a season</span> and use it from
+            your wallet on the live week, one power-up per week. They're public the
+            moment you use them:
+            <span class="mt-2 block space-y-1">
+              <span class="block">
+                <span class="text-amber">★ Golden Week</span>: your task score ×{
+                  rules.coins.goldenWeekMultiplier
+                }, rounded up, before positions are decided (on team tasks, only
+                your own points).
+              </span>
+              <span class="block">
+                <span class="text-cyan">×2 Double Down</span>: a correct winner
+                call pays +{rules.coins.doubleDownPoints} instead of +{
+                  rules.predictionBonusPoints
+                }. Call first.
+              </span>
+              <span class="block">
+                <span class="text-acid">? Taskmaster's Hint</span>: a private
+                hint about the week's task, if the Taskmaster left one.
+              </span>
+              <span class="block">
+                <span class="text-danger">☠ Sabotage</span>: take {
+                  rules.coins.sabotagePoints
+                } points from any other player that week (squad-mates included). Each
+                player can only be sabotaged once a week.
+              </span>
+            </span>
+          </RuleItem>
+          <RuleItem>
+            If a result is corrected after you've spent, your balance can dip
+            below zero; earn it back before buying again.
           </RuleItem>
         </ul>
       </RulesSection>

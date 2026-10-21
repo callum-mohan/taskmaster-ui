@@ -352,4 +352,47 @@ describe("buildScoreRecords", () => {
       expect(resultsPostedAt).toEqual({});
     });
   });
+
+  describe("Golden Week", () => {
+    const golden = (keys: string[], rows: Partial<ScoreRows>) =>
+      buildScoreRecords(
+        { taskScores: [], teamScores: [], bonusPoints: [], ...rows },
+        { players, teams, tasks, goldenWeekKeys: new Set(keys) },
+      );
+
+    it("boosts the player's points ×1.5 (rounded up) before ranking", () => {
+      const { scores } = golden(["week-01:alice"], {
+        taskScores: [
+          taskScoreRow("week-01", "alice", 7),
+          taskScoreRow("week-01", "bob", 10),
+        ],
+      });
+      expect(scores).toEqual([
+        {
+          taskId: "week-01",
+          playerId: "alice",
+          points: 11,
+          position: 1,
+          goldenWeek: true,
+        },
+        { taskId: "week-01", playerId: "bob", points: 10, position: 2 },
+      ]);
+    });
+
+    it("only boosts a member's own credit on team tasks", () => {
+      const { scores, teamScores } = golden(["week-02:alice"], {
+        teamScores: [
+          teamScoreRow("week-02", "red", 6),
+          teamScoreRow("week-02", "blue", 8),
+        ],
+      });
+      expect(teamScores.map((t) => [t.teamId, t.points, t.position])).toEqual([
+        ["blue", 8, 1],
+        ["red", 6, 2],
+      ]);
+      const of = (id: string) => scores.find((s) => s.playerId === id);
+      expect(of("alice")).toMatchObject({ points: 9, position: 2 });
+      expect(of("bob")).toMatchObject({ points: 6, position: 2 });
+    });
+  });
 });

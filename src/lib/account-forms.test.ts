@@ -6,6 +6,7 @@ import {
   parseBallot,
   parsePasswordForm,
   parseProfileForm,
+  parseWalletAction,
   VOTE_OUTCOMES,
   type VoteOutcome,
 } from "./account-forms";
@@ -285,5 +286,49 @@ describe("describeVoteOutcome", () => {
     for (const outcome of VOTE_OUTCOMES) {
       expect(describeVoteOutcome(outcome, poll).message).not.toBe("");
     }
+  });
+});
+
+describe("parseWalletAction", () => {
+  const parse = (fields: Record<string, string>) =>
+    parseWalletAction(formData(fields));
+
+  it("parses equip and unequip", () => {
+    expect(parse({ intent: "equip", itemId: "duck" })).toEqual({
+      intent: "equip",
+      itemId: "duck",
+    });
+    expect(parse({ intent: "unequip", slot: "pet" })).toEqual({
+      intent: "unequip",
+      slot: "pet",
+    });
+    expect(parse({ intent: "unequip", slot: "hat" })).toBeUndefined();
+  });
+
+  it("needs a target for Sabotage and none for anything else", () => {
+    const use = { intent: "use", taskId: "w2" };
+    expect(
+      parse({ ...use, effect: "sabotage", targetPlayerId: "bob" }),
+    ).toEqual({
+      intent: "use",
+      effect: "sabotage",
+      taskId: "w2",
+      targetPlayerId: "bob",
+    });
+    expect(parse({ ...use, effect: "sabotage" })).toBeUndefined();
+    expect(
+      parse({ ...use, effect: "hint", targetPlayerId: "bob" }),
+    ).toBeUndefined();
+    expect(parse({ ...use, effect: "hint" })).toMatchObject({
+      effect: "hint",
+      targetPlayerId: null,
+    });
+  });
+
+  it("rejects unknown intents and effects", () => {
+    expect(parse({ intent: "steal" })).toBeUndefined();
+    expect(
+      parse({ intent: "use", taskId: "w2", effect: "nuke" }),
+    ).toBeUndefined();
   });
 });

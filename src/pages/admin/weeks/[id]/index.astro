@@ -53,6 +53,7 @@ let values: FormValues = {
   deadline: toDateTimeLocal(task.deadline),
   format: task.format,
   revealPassword: task.revealPassword ?? "",
+  hint: task.hint ?? "",
   maxSubmissions: String(task.maxSubmissions),
   submissionKinds: task.submissionKinds.join(","),
 };

@@ -132,6 +132,8 @@ export interface Score {
   /** Finishing position for the task (1 = winner). */
   position: number;
   comment?: string;
+  /** The player used Golden Week on this task (their points are boosted). */
+  goldenWeek?: boolean;
 }
 
 /**
@@ -278,6 +280,8 @@ export interface CompetitionData {
   recaps: Record<string, WeekRecapContent>;
   /** The site changelog, newest first. */
   changelog: FeatureUpdate[];
+  /** Clim Coin: the shop, and the season's purchases, uses and grants. */
+  coins: ClimCoinData;
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────
@@ -1057,7 +1061,8 @@ export type NotificationKind =
   | "results-posted"
   | "rank-up"
   | "bonus-awarded"
-  | "points-deducted";
+  | "points-deducted"
+  | "sabotaged";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
@@ -1449,6 +1454,7 @@ export interface GameRules {
     maxTextChars: number;
     maxCaptionChars: number;
   };
+  coins: CoinRules;
 }
 
 // ── Seasons & Hall of Fame ───────────────────────────────────────────
@@ -1521,3 +1527,319 @@ export interface Page<T> extends PageInfo {
 
 /** A slot in a pagination control: a page number, or a gap ("…"). */
 export type PageLinkSlot = number | "gap";
+
+// ── Clim Coin ─────────────────────────────────────────────────────────
+
+export type ShopCategory = "pet" | "avatar" | "cosmetic" | "power_up";
+export type CosmeticKind = "title" | "name_colour" | "theme";
+export type PowerUpKind = "double_down" | "hint" | "golden_week" | "sabotage";
+/** Where an owned item is worn: one item per slot. */
+export type LoadoutSlot = "pet" | "avatar" | "title" | "name_colour" | "theme";
+/** Accent tokens a name colour cosmetic may use. */
+export type NameColour = "acid" | "amber" | "magenta" | "cyan";
+/** Profile terminal themes a theme cosmetic may use. */
+export type ProfileTheme = "phosphor" | "amber" | "synthwave" | "ice";
+
+/** An item in the (site-wide, admin-managed) shop catalogue. */
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  category: ShopCategory;
+  price: number;
+  /** Root-relative path or https URL. Always set for pets and avatars. */
+  imageUrl?: string;
+  /** Cosmetics only. */
+  cosmetic?: { kind: CosmeticKind; value: string };
+  /** Power-ups only. */
+  powerUp?: PowerUpKind;
+  /** Retired items stay with their owners but can't be bought. */
+  available: boolean;
+  /** Crate exclusive: only drops from crates, never sold directly. */
+  crateOnly: boolean;
+  sortOrder: number;
+}
+
+/** How rare an item is, derived from its price (see `coin-rules.ts`). */
+export type Rarity = "common" | "rare" | "epic" | "legendary";
+
+/** A lootbox: what it costs and the chance of each rarity tier. */
+export interface Crate {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  /** Chance of each tier, out of 1 (tiers left out never drop). */
+  odds: Partial<Record<Rarity, number>>;
+}
+
+/** A crate a player opened, and what it gave them. */
+export interface CrateOpen {
+  id: number;
+  /** The zero-price purchase that makes the player own the item. */
+  purchaseId: number;
+  playerId: string;
+  crateId: string;
+  price: number;
+  itemId: string;
+  rarity: Rarity;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** One item's chance of dropping from a crate, for one viewer. */
+export interface CrateDrop {
+  item: ShopItem;
+  /** Out of 1. */
+  chance: number;
+}
+
+/** A rarity tier's share of a crate, and the items in it. */
+export interface CrateTier {
+  rarity: Rarity;
+  /** Out of 1, after empty tiers are shared out. */
+  chance: number;
+  drops: CrateDrop[];
+}
+
+/** Why a viewer can't open a crate right now. */
+export type CrateBlock = "guest" | "empty" | "unaffordable" | "season-closed";
+
+/** A crate as one viewer sees it in the shop: their personal odds. */
+export interface CrateView {
+  crate: Crate;
+  tiers: CrateTier[];
+  /** Average shop value of one roll, in coins. */
+  averageValue: number;
+  blocked?: CrateBlock;
+}
+
+/** A crate opening, as the public "recent pulls" feed shows it. */
+export interface CratePull {
+  id: number;
+  player: Player;
+  crate: Crate;
+  item: ShopItem;
+  rarity: Rarity;
+  at: string;
+}
+
+/** A purchase, at the price paid then. */
+export interface CoinPurchase {
+  id: number;
+  playerId: string;
+  itemId: string;
+  price: number;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A power-up charge spent on a week. */
+export interface PowerUpUse {
+  id: number;
+  purchaseId: number;
+  playerId: string;
+  taskId: string;
+  effect: PowerUpKind;
+  /** Sabotage only: who lost the point. */
+  targetPlayerId?: string;
+  /** ISO 8601. */
+  at: string;
+}
+
+export interface EquippedItem {
+  playerId: string;
+  slot: LoadoutSlot;
+  itemId: string;
+}
+
+/** An admin grant (positive) or deduction (negative) of coins. */
+export interface CoinAdjustment {
+  id: number;
+  playerId: string;
+  amount: number;
+  reason: string;
+  actorName: string;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A player's first visible entry on a task (earns the entry payout). */
+export interface EntryActivity {
+  taskId: string;
+  playerId: string;
+}
+
+/** Clim Coin records for one season's snapshot. */
+export interface ClimCoinData {
+  /** The whole catalogue, in display order (retired items included). */
+  items: ShopItem[];
+  purchases: CoinPurchase[];
+  uses: PowerUpUse[];
+  equipped: EquippedItem[];
+  adjustments: CoinAdjustment[];
+  entries: EntryActivity[];
+  /** Crates opened, oldest first. */
+  crateOpens: CrateOpen[];
+  /** Taskmaster's Hints by task id; only shown to players who used Hint. */
+  hints: Record<string, string>;
+}
+
+/** The payout table, as `/rules` and the shop explain it. */
+export interface CoinRules {
+  placement: { first: number; second: number; third: number; scored: number };
+  entry: number;
+  pollVote: number;
+  peoplesChoiceVote: number;
+  prediction: number;
+  goldenWeekMultiplier: number;
+  doubleDownPoints: number;
+  sabotagePoints: number;
+}
+
+export type CoinLedgerKind =
+  | "placement"
+  | "entry"
+  | "poll-vote"
+  | "peoples-choice-vote"
+  | "prediction"
+  | "adjustment"
+  | "purchase"
+  | "crate";
+
+/** One line in a wallet's history. */
+export interface CoinLedgerEntry {
+  kind: CoinLedgerKind;
+  /** Coins in (positive) or out (negative). */
+  amount: number;
+  label: string;
+  /** When the coins landed (ISO 8601). */
+  at: string;
+  taskId?: string;
+}
+
+/** A player's Clim Coin balance and history. */
+export interface Wallet {
+  playerId: string;
+  balance: number;
+  earned: number;
+  adjusted: number;
+  spent: number;
+  /** Newest first. */
+  ledger: CoinLedgerEntry[];
+}
+
+/** What a player is wearing (only items they still own). */
+export interface PlayerLoadout {
+  pet?: ShopItem;
+  avatar?: ShopItem;
+  title?: string;
+  nameColour?: NameColour;
+  theme?: ProfileTheme;
+}
+
+/** An owned item in a player's inventory. */
+export interface InventoryItem {
+  item: ShopItem;
+  /** Unset for power-ups, which are used rather than equipped. */
+  slot?: LoadoutSlot;
+  equipped: boolean;
+  /** Power-ups: unused charges. */
+  charges: number;
+}
+
+/** Why a shop item can't be bought right now. */
+export type PurchaseBlock =
+  | "guest"
+  | "owned"
+  /** Power-ups: bought and already used this season. */
+  | "used"
+  /** Crate exclusives: never sold directly. */
+  | "crate-only"
+  | "unaffordable"
+  | "unavailable"
+  | "season-closed";
+
+/** A catalogue item as one viewer sees it in the shop. */
+export interface ShopListing {
+  item: ShopItem;
+  /** Already bought (power-ups: this season, used or not). */
+  owned: boolean;
+  /** Power-ups: unused charges held. */
+  charges: number;
+  /** Why it can't be bought; unset when it can. */
+  blocked?: PurchaseBlock;
+}
+
+export interface ShopSection {
+  category: ShopCategory;
+  label: string;
+  command: string;
+  listings: ShopListing[];
+}
+
+/** A power-up used on a week, as the task page's feed shows it. */
+export interface PowerUpFeedEntry {
+  id: number;
+  taskId: string;
+  effect: PowerUpKind;
+  label: string;
+  player: Player;
+  target?: Player;
+  at: string;
+}
+
+/** Why a player can't use a power-up on a week right now. */
+export type PowerUpBlock =
+  | "no-charge"
+  | "not-live"
+  | "already-used"
+  | "no-prediction"
+  | "no-hint"
+  | "season-closed";
+
+/** A power-up a player could use on the live week. */
+export interface PowerUpOption {
+  effect: PowerUpKind;
+  label: string;
+  description: string;
+  charges: number;
+  blocked?: PowerUpBlock;
+}
+
+/** The wallet page's "use a power-up" panel for the live week. */
+export interface PowerUpPanel {
+  task?: Task;
+  /** The power-up already used on `task`, if any. */
+  used?: PowerUpFeedEntry;
+  options: PowerUpOption[];
+  /** Sabotage targets: everyone else on the roster not yet sabotaged. */
+  targets: Player[];
+}
+
+/** Outcome of a wallet action, shown after the redirect. */
+export type CoinOutcome =
+  | "bought"
+  | "opened"
+  | "crate-empty"
+  | "owned"
+  | "unaffordable"
+  | "unavailable"
+  | "season-closed"
+  | "equipped"
+  | "unequipped"
+  | "used"
+  | "invalid"
+  | "already-used"
+  | "already-sabotaged"
+  | "no-prediction"
+  | "no-hint"
+  | "not-live"
+  | "no-charge";
+
+/** A player's cosmetics as public lists show them. */
+export interface PlayerFlair {
+  pet?: { name: string; imageUrl: string };
+  title?: string;
+  nameColour?: NameColour;
+}

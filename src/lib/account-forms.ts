@@ -7,6 +7,7 @@ import {
   type ParseResult,
 } from "./admin-forms";
 import type { PollSettings } from "../types";
+import { LOADOUT_SLOTS, POWER_UP_KINDS } from "../data/coin-rules";
 
 // Validation for the player self-service forms under `/account`. Players can
 // only touch their bio and avatar; everything else stays admin-only.
@@ -169,4 +170,51 @@ export function describeVoteOutcome(
     },
   };
   return messages[outcome];
+}
+
+// ── Clim Coin wallet ──────────────────────────────────────────────────
+
+const walletId = z.string().trim().min(1).max(120);
+
+const walletActionSchema = z.discriminatedUnion("intent", [
+  z.object({ intent: z.literal("equip"), itemId: walletId }),
+  z.object({ intent: z.literal("unequip"), slot: z.enum(LOADOUT_SLOTS) }),
+  z.object({
+    intent: z.literal("use"),
+    effect: z.enum(POWER_UP_KINDS),
+    taskId: walletId,
+    // Sabotage only: blank for every other power-up.
+    targetPlayerId: z
+      .string()
+      .trim()
+      .max(120)
+      .transform((v) => (v === "" ? null : v)),
+  }),
+]);
+
+export type WalletAction = z.output<typeof walletActionSchema>;
+
+/**
+ * A wallet page action (equip, unequip or use a power-up), or `undefined`
+ * for a malformed post. Sabotage must name a target; nothing else may.
+ */
+export function parseWalletAction(form: FormData): WalletAction | undefined {
+  const values = formValues(form);
+  const parsed = walletActionSchema.safeParse({
+    intent: values.intent ?? "",
+    itemId: values.itemId ?? "",
+    slot: values.slot ?? "",
+    effect: values.effect ?? "",
+    taskId: values.taskId ?? "",
+    targetPlayerId: values.targetPlayerId ?? "",
+  });
+  if (!parsed.success) return undefined;
+  const action = parsed.data;
+  if (
+    action.intent === "use" &&
+    (action.effect === "sabotage") !== (action.targetPlayerId !== null)
+  ) {
+    return undefined;
+  }
+  return action;
 }

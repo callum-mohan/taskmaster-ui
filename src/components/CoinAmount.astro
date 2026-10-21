@@ -1,0 +1,24 @@
+---
+// A Clim Coin amount: the coin glyph plus a tabular number. The glyph is
+// decorative; the amount always reads as "<n> Clim Coin" to screen readers.
+interface Props {
+  amount: number;
+  /** Prefix positive amounts with "+" (ledger lines). */
+  signed?: boolean;
+  class?: string;
+}
+
+const { amount, signed = false, class: className } = Astro.props;
+const text = `${signed && amount > 0 ? "+" : ""}${amount}`;
+---
+
+<span
+  class:list={[
+    "inline-flex items-baseline gap-1 font-bold tabular-nums",
+    className,
+  ]}
+>
+  <span aria-hidden="true">◎</span>
+  <span aria-hidden="true">{text}</span>
+  <span class="sr-only">{text} Clim Coin</span>
+</span>

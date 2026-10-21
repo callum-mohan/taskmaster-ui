@@ -15,6 +15,11 @@ import { getDb } from "../db";
 import {
   bonusPoints,
   changelogEntries,
+  coinAdjustments,
+  coinPurchases,
+  crateOpens,
+  powerUpUses,
+  shopItems,
   playerAccounts,
   players,
   pollOptions,
@@ -50,10 +55,12 @@ import type {
   AddEntryInput,
   BonusInput,
   ChangelogInput,
+  CoinAdjustmentInput,
   PlayerInput,
   PollInput,
   RecapInput,
   SeasonInput,
+  ShopItemInput,
   TaskInput,
   TaskScoreInput,
   TeamInput,
@@ -70,6 +77,7 @@ export type TaskRecord = typeof tasks.$inferSelect;
 export type BonusRecord = typeof bonusPoints.$inferSelect;
 export type RecapRecord = typeof recaps.$inferSelect;
 export type ChangelogRecord = typeof changelogEntries.$inferSelect;
+export type ShopItemRecord = typeof shopItems.$inferSelect;
 export type PollRecord = typeof polls.$inferSelect & {
   options: (typeof pollOptions.$inferSelect)[];
 };
@@ -194,39 +202,52 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a], [e], [p], [v], [r]] = await db.batch([
-    db
-      .select({ n: count() })
-      .from(taskScores)
-      .where(eq(taskScores.playerId, id)),
-    db
-      .select({ n: count() })
-      .from(bonusPoints)
-      .where(eq(bonusPoints.playerId, id)),
-    db
-      .select({ n: count() })
-      .from(teamMembers)
-      .where(eq(teamMembers.playerId, id)),
-    db
-      .select({ n: count() })
-      .from(playerAccounts)
-      .where(eq(playerAccounts.playerId, id)),
-    countSubmissions(eq(taskSubmissions.playerId, id)),
-    db
-      .select({ n: count() })
-      .from(predictions)
-      .where(
-        or(eq(predictions.playerId, id), eq(predictions.pickedPlayerId, id)),
-      ),
-    db
-      .select({ n: count() })
-      .from(peoplesChoiceVotes)
-      .where(eq(peoplesChoiceVotes.playerId, id)),
-    db
-      .select({ n: count() })
-      .from(submissionReactions)
-      .where(eq(submissionReactions.playerId, id)),
-  ]);
+  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o]] =
+    await db.batch([
+      db
+        .select({ n: count() })
+        .from(taskScores)
+        .where(eq(taskScores.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(bonusPoints)
+        .where(eq(bonusPoints.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(teamMembers)
+        .where(eq(teamMembers.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(playerAccounts)
+        .where(eq(playerAccounts.playerId, id)),
+      countSubmissions(eq(taskSubmissions.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(predictions)
+        .where(
+          or(eq(predictions.playerId, id), eq(predictions.pickedPlayerId, id)),
+        ),
+      db
+        .select({ n: count() })
+        .from(peoplesChoiceVotes)
+        .where(eq(peoplesChoiceVotes.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(submissionReactions)
+        .where(eq(submissionReactions.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(coinPurchases)
+        .where(eq(coinPurchases.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(coinAdjustments)
+        .where(eq(coinAdjustments.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(crateOpens)
+        .where(eq(crateOpens.playerId, id)),
+    ]);
   return [
     { label: "individual score", count: s.n },
     { label: "bonus / deduction", count: b.n },
@@ -236,6 +257,9 @@ export async function getPlayerDeleteImpact(
     { label: "winner prediction", count: p.n },
     { label: "People's Choice vote", count: v.n },
     { label: "reaction", count: r.n },
+    { label: "Clim Coin purchase", count: c.n },
+    { label: "Clim Coin grant / deduction", count: g.n },
+    { label: "mystery egg cracked", count: o.n },
   ];
 }
 
@@ -450,6 +474,7 @@ const taskValues = (input: TaskInput) => ({
   deadline: input.deadline,
   format: input.format,
   revealPassword: input.revealPassword,
+  hint: input.hint,
   maxSubmissions: input.maxSubmissions,
   submissionKinds: input.submissionKinds,
 });
@@ -1311,6 +1336,129 @@ export async function deleteChangelogEntry(id: string): Promise<void> {
   await getDb().delete(changelogEntries).where(eq(changelogEntries.id, id));
 }
 
+// ── Clim Coin ─────────────────────────────────────────────────────────
+
+/** The catalogue in display order, with how many times each was bought. */
+export async function listShopItems(): Promise<
+  (ShopItemRecord & { purchases: number })[]
+> {
+  const db = getDb();
+  const [items, counts] = await db.batch([
+    db
+      .select()
+      .from(shopItems)
+      .orderBy(
+        asc(shopItems.category),
+        asc(shopItems.sortOrder),
+        asc(shopItems.name),
+      ),
+    db
+      .select({ itemId: coinPurchases.itemId, n: count() })
+      .from(coinPurchases)
+      .groupBy(coinPurchases.itemId),
+  ]);
+  const bought = new Map(counts.map((c) => [c.itemId, c.n]));
+  return items.map((item) => ({
+    ...item,
+    purchases: bought.get(item.id) ?? 0,
+  }));
+}
+
+export async function getShopItem(
+  id: string,
+): Promise<ShopItemRecord | undefined> {
+  const [row] = await getDb()
+    .select()
+    .from(shopItems)
+    .where(eq(shopItems.id, id));
+  return row;
+}
+
+export async function createShopItem(input: ShopItemInput): Promise<void> {
+  await getDb()
+    .insert(shopItems)
+    .values({ ...input, sortOrder: input.sortOrder ?? 0 });
+}
+
+/**
+ * Saves an item's editable fields. Its id, category, cosmetic kind and
+ * power-up are fixed once created, so owned items keep their slot and effect.
+ */
+export async function updateShopItem(
+  id: string,
+  input: ShopItemInput,
+): Promise<void> {
+  await getDb()
+    .update(shopItems)
+    .set({
+      name: input.name,
+      description: input.description,
+      price: input.price,
+      imageUrl: input.imageUrl,
+      cosmeticValue: input.cosmeticValue,
+      available: input.available,
+      crateOnly: input.crateOnly,
+      ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
+    })
+    .where(eq(shopItems.id, id));
+}
+
+export async function getShopItemPurchaseCount(id: string): Promise<number> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(coinPurchases)
+    .where(eq(coinPurchases.itemId, id));
+  return row?.n ?? 0;
+}
+
+/** Deletes an item nobody bought (owned items can only be retired). */
+export async function deleteShopItem(id: string): Promise<void> {
+  await getDb().delete(shopItems).where(eq(shopItems.id, id));
+}
+
+/** A player's Clim Coin grants and deductions, newest first. */
+export async function listCoinAdjustments(playerId: string) {
+  return getDb()
+    .select()
+    .from(coinAdjustments)
+    .where(eq(coinAdjustments.playerId, playerId))
+    .orderBy(desc(coinAdjustments.id));
+}
+
+export async function addCoinAdjustment(
+  playerId: string,
+  input: CoinAdjustmentInput,
+  actor: AdminUser,
+): Promise<void> {
+  await getDb()
+    .insert(coinAdjustments)
+    .values({ playerId, ...input, ...actorFields(actor) });
+}
+
+export async function deleteCoinAdjustment(
+  playerId: string,
+  id: number,
+): Promise<void> {
+  await getDb()
+    .delete(coinAdjustments)
+    .where(
+      and(eq(coinAdjustments.id, id), eq(coinAdjustments.playerId, playerId)),
+    );
+}
+
+/**
+ * Cancels a power-up used on a week: its effect goes and the charge returns
+ * to the player's wallet, unused.
+ */
+export async function revokePowerUpUse(
+  taskId: string,
+  id: number,
+): Promise<void> {
+  await getDb()
+    .delete(powerUpUses)
+    .where(and(eq(powerUpUses.id, id), eq(powerUpUses.taskId, taskId)));
+}
+
 // ── Errors ────────────────────────────────────────────────────────────
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
@@ -1340,17 +1488,18 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   polls_bonus_task_id_tasks_id_fk: "That bonus week no longer exists.",
   changelog_entries_pkey: "A changelog entry with that id already exists.",
   recaps_moment_player_id_players_id_fk: "That player no longer exists.",
+  shop_items_pkey: "A shop item with that id already exists.",
+  shop_items_price_range: "Price must be between 0 and 10000.",
+  shop_items_image_when_visual: "Pets and avatars need an image.",
+  coin_purchases_item_id_shop_items_id_fk:
+    "Players own this item, so it can't be deleted. Retire it instead.",
+  coin_adjustments_amount_range: "Use a non-zero amount up to 10000.",
+  shop_items_crate_only_droppable: "Eggs never hatch power-ups.",
+  crate_opens_item_id_shop_items_id_fk:
+    "Players hatched this item from an egg, so it can't be deleted. Retire it instead.",
 };
 
-/** The name of the Postgres constraint a write violated, if any. */
-export function violatedConstraint(error: unknown): string | undefined {
-  for (let e: unknown = error; e && typeof e === "object";) {
-    const { constraint } = e as { constraint?: string };
-    if (constraint) return constraint;
-    e = (e as { cause?: unknown }).cause;
-  }
-  return undefined;
-}
+export { violatedConstraint } from "./db-errors";
 
 /**
  * Turns a Postgres constraint violation into a message an admin can act on.

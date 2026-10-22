@@ -584,9 +584,10 @@ feature ships disabled. Flags load with the rest of the competition rows
 is purged and the change shows straight away. Read them from
 `getQueries().features`.
 
-| Flag        | Off (default)                                                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------- |
-| `shop_eggs` | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened. |
+| Flag         | Off (default)                                                                                                                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `shop_eggs`  | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened.                                                                                                                                                              |
+| `storm_mode` | Clear skies. On: the public site (not `/admin`) is hit by a hurricane — rain, lightning, gusts, shake and "A Storm Is Brewing" blown across the screen. Pure CSS (`StormMode.astro` + `:root[data-storm]` in `global.css`), click-through, and still for reduced motion. |
 
 ## 🔔 Notifications
 

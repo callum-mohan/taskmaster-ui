@@ -6,11 +6,12 @@ import CommandPalette from "../components/CommandPalette.astro";
 import EasterEggs from "../components/EasterEggs.astro";
 import WhatsNewBanner from "../components/WhatsNewBanner.astro";
 import WanderingPet from "../components/WanderingPet.astro";
+import StormMode from "../components/StormMode.astro";
 import { withBase } from "../lib/url";
 import { isSeasonPublic } from "../data/seasons";
 
 const [
-  { getCommandPaletteItems, getWhatsNew, getNotifications },
+  { getCommandPaletteItems, getWhatsNew, getNotifications, features },
   viewer,
   { seasons, seasonOfPlayer },
 ] = await Promise.all([
@@ -27,6 +28,8 @@ interface Props {
   image?: string;
   /** Keep the page out of search engines (e.g. the admin panel). */
   noindex?: boolean;
+  /** Keep storm mode off this page (the admin area stays workable). */
+  calm?: boolean;
 }
 
 const SITE_NAME = "EAYL Taskmaster";
@@ -36,7 +39,10 @@ const {
   description = "16 weeks. 25 players. One winner. The EAYL Academy Taskmaster challenge.",
   image = "/og.png",
   noindex = false,
+  calm = false,
 } = Astro.props;
+
+const storm = features.storm_mode && !calm;
 
 // Page-specific titles read "<page> · EAYL Taskmaster"; the home page (no
 // title prop) just uses the site name on its own.
@@ -72,7 +78,7 @@ const notifications = viewer?.playerId
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-storm={storm ? "" : undefined}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -141,6 +147,7 @@ const notifications = viewer?.playerId
     <Footer />
     <CommandPalette items={paletteItems} />
     <EasterEggs />
+    {storm && <StormMode />}
     {
       playerCoins?.pet?.imageUrl && (
         <WanderingPet

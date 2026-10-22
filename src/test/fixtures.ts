@@ -218,7 +218,7 @@ export function competitionData(
     changelog: [],
     coins: coinData(),
     // Every flag off, as on a fresh site.
-    features: { shop_eggs: false },
+    features: { shop_eggs: false, storm_mode: false },
     ...overrides,
   };
 }

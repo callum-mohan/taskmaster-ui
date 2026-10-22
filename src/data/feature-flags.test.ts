@@ -11,16 +11,19 @@ const row = (key: string, enabled: boolean) => ({
 
 describe("mapFeatureFlags", () => {
   it("is off without a row, so new features ship disabled", () => {
-    expect(mapFeatureFlags([])).toEqual({ shop_eggs: false });
+    expect(mapFeatureFlags([])).toEqual({
+      shop_eggs: false,
+      storm_mode: false,
+    });
   });
 
   it("reads each known flag and ignores unknown ones", () => {
     expect(
       mapFeatureFlags([row("shop_eggs", true), row("nope", true)]),
-    ).toEqual({ shop_eggs: true });
-    expect(mapFeatureFlags([row("shop_eggs", false)])).toEqual({
-      shop_eggs: false,
-    });
+    ).toEqual({ shop_eggs: true, storm_mode: false });
+    expect(
+      mapFeatureFlags([row("shop_eggs", false), row("storm_mode", true)]),
+    ).toEqual({ shop_eggs: false, storm_mode: true });
   });
 });
 
@@ -28,6 +31,7 @@ describe("featureFlagViews", () => {
   it("lists every flag with who last changed it", () => {
     expect(featureFlagViews([])).toEqual([
       expect.objectContaining({ key: "shop_eggs", enabled: false }),
+      expect.objectContaining({ key: "storm_mode", enabled: false }),
     ]);
     expect(featureFlagViews([])[0].changedBy).toBeUndefined();
     expect(featureFlagViews([row("shop_eggs", true)])[0]).toMatchObject({

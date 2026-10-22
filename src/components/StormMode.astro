@@ -1,0 +1,251 @@
+---
+// Storm mode (the `storm_mode` feature flag): a decorative hurricane laid
+// over the page. Pure CSS, so it needs no JS and renders identical HTML for
+// every visitor (safe for the signed-out page cache). The overlay ignores
+// pointer events, and the shake/sway on page content lives in global.css
+// under `:root[data-storm]`, which `Layout.astro` sets alongside this.
+
+interface Props {
+  /** The words blown across the screen. */
+  message?: string;
+  class?: string;
+}
+
+const { message = "A Storm Is Brewing", class: className } = Astro.props;
+
+interface Debris {
+  glyph: string;
+  /** Vertical position (vh), size (rem), flight time (s), start offset (s). */
+  y: number;
+  size: number;
+  duration: number;
+  delay: number;
+  /** Total spin over one flight (deg) and how far it drops (vh). */
+  spin: number;
+  drop: number;
+  tone: "ink" | "dim" | "acid" | "amber";
+}
+
+// Code shrapnel torn off the terminal. Fixed values (not random) so every
+// render is the same.
+const DEBRIS: Debris[] = [
+  {
+    glyph: "{",
+    y: 12,
+    size: 2.2,
+    duration: 2.6,
+    delay: 0,
+    spin: 720,
+    drop: 18,
+    tone: "ink",
+  },
+  {
+    glyph: ";",
+    y: 28,
+    size: 1.6,
+    duration: 1.9,
+    delay: 0.8,
+    spin: -540,
+    drop: 10,
+    tone: "dim",
+  },
+  {
+    glyph: "</>",
+    y: 46,
+    size: 1.8,
+    duration: 3.1,
+    delay: 1.7,
+    spin: 900,
+    drop: 22,
+    tone: "acid",
+  },
+  {
+    glyph: "}",
+    y: 64,
+    size: 2.6,
+    duration: 2.3,
+    delay: 0.4,
+    spin: -720,
+    drop: 8,
+    tone: "ink",
+  },
+  {
+    glyph: "$",
+    y: 82,
+    size: 1.4,
+    duration: 2.0,
+    delay: 2.4,
+    spin: 600,
+    drop: -14,
+    tone: "amber",
+  },
+  {
+    glyph: "//",
+    y: 6,
+    size: 1.3,
+    duration: 3.4,
+    delay: 3.1,
+    spin: 360,
+    drop: 30,
+    tone: "dim",
+  },
+  {
+    glyph: "#",
+    y: 38,
+    size: 2.0,
+    duration: 2.8,
+    delay: 4.2,
+    spin: -1080,
+    drop: 16,
+    tone: "ink",
+  },
+  {
+    glyph: "0",
+    y: 55,
+    size: 1.5,
+    duration: 1.7,
+    delay: 1.2,
+    spin: 540,
+    drop: -12,
+    tone: "acid",
+  },
+  {
+    glyph: "1",
+    y: 73,
+    size: 1.5,
+    duration: 2.1,
+    delay: 3.6,
+    spin: -480,
+    drop: 12,
+    tone: "acid",
+  },
+  {
+    glyph: "=>",
+    y: 20,
+    size: 1.7,
+    duration: 2.4,
+    delay: 5.0,
+    spin: 810,
+    drop: 24,
+    tone: "dim",
+  },
+  {
+    glyph: "&&",
+    y: 90,
+    size: 1.3,
+    duration: 3.0,
+    delay: 2.0,
+    spin: -630,
+    drop: -20,
+    tone: "dim",
+  },
+  {
+    glyph: "[ ]",
+    y: 33,
+    size: 1.9,
+    duration: 3.3,
+    delay: 5.8,
+    spin: 450,
+    drop: 14,
+    tone: "ink",
+  },
+  {
+    glyph: "*",
+    y: 68,
+    size: 2.4,
+    duration: 2.5,
+    delay: 6.5,
+    spin: -900,
+    drop: -10,
+    tone: "amber",
+  },
+  {
+    glyph: "( )",
+    y: 50,
+    size: 1.6,
+    duration: 2.9,
+    delay: 7.3,
+    spin: 720,
+    drop: 18,
+    tone: "dim",
+  },
+  {
+    glyph: "~",
+    y: 15,
+    size: 2.1,
+    duration: 2.2,
+    delay: 8.1,
+    spin: -360,
+    drop: 26,
+    tone: "ink",
+  },
+  {
+    glyph: "!",
+    y: 86,
+    size: 1.8,
+    duration: 1.8,
+    delay: 4.7,
+    spin: 540,
+    drop: -24,
+    tone: "acid",
+  },
+];
+
+const toneClass: Record<Debris["tone"], string> = {
+  ink: "text-ink",
+  dim: "text-ink-dim",
+  acid: "text-acid",
+  amber: "text-amber",
+};
+---
+
+<div class:list={["storm", className]} aria-hidden="true">
+  <div class="storm-sky"></div>
+  <div class="storm-rain-wrap">
+    <div class="storm-rain storm-rain--far"></div>
+    <div class="storm-rain storm-rain--mid"></div>
+    <div class="storm-rain storm-rain--near"></div>
+  </div>
+  <div class="storm-debris">
+    {
+      DEBRIS.map((d) => (
+        <span
+          class:list={["storm-debris-bit font-extrabold", toneClass[d.tone]]}
+          style={`--y: ${d.y}vh; --size: ${d.size}rem; --dur: ${d.duration}s; --delay: -${d.delay}s; --spin: ${d.spin}deg; --drop: ${d.drop}vh;`}
+        >
+          {d.glyph}
+        </span>
+      ))
+    }
+  </div>
+  <svg
+    class="storm-bolt storm-bolt--right"
+    viewBox="0 0 60 220"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="3"
+    stroke-linejoin="round"
+  >
+    <polyline points="34,0 20,70 38,78 14,150 30,156 6,220"></polyline>
+    <polyline points="20,70 4,104" stroke-width="2"></polyline>
+    <polyline points="14,150 40,182" stroke-width="2"></polyline>
+  </svg>
+  <svg
+    class="storm-bolt storm-bolt--left"
+    viewBox="0 0 60 220"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="3"
+    stroke-linejoin="round"
+  >
+    <polyline points="22,0 40,64 22,74 46,140 28,148 50,220"></polyline>
+    <polyline points="40,64 56,96" stroke-width="2"></polyline>
+  </svg>
+  <p class="storm-banner">
+    <span class="storm-banner-text font-extrabold tracking-tight">
+      {message}
+    </span>
+  </p>
+  <div class="storm-flash"></div>
+</div>
+<p class="sr-only">Storm warning: {message.toLowerCase()}.</p>

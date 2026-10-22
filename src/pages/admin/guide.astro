@@ -447,7 +447,12 @@ const link = "text-cyan hover:underline";
       <span class="text-acid">#</span> polls, changelog and the shop
     </h2>
     <p class={lead}>
-      All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>.
+      All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>. Its
+      <a href={withBase("/admin/site#flags")} class={link}>feature flags</a>
+      switch features on or off for everyone at once. Turn on
+      <span class="text-ink">storm mode</span> to put the public site in the middle
+      of a hurricane (&ldquo;A Storm Is Brewing&rdquo;); admin pages stay calm, and
+      turning it off clears the weather straight away.
     </p>
     <div class="mt-4 grid gap-4 lg:grid-cols-2">
       <TerminalWindow title="~/guide/polls">

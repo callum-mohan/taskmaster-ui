@@ -15,6 +15,11 @@ export const FEATURE_FLAGS: Record<
     description:
       "Shows the egg crates in the shop and lets players crack them. Off: the eggs, recent hatches and egg-exclusive items are hidden, and nobody can open one.",
   },
+  storm_mode: {
+    label: "Storm mode",
+    description:
+      "Puts the public site in the middle of a hurricane: driving rain, lightning, gusts, flying debris and “A Storm Is Brewing” blown across the screen. Everything stays clickable, admin pages stay calm, and visitors who ask for reduced motion get a still version. Off: the weather clears.",
+  },
 };
 
 export const FEATURE_FLAG_KEYS = Object.keys(FEATURE_FLAGS) as FeatureFlagKey[];

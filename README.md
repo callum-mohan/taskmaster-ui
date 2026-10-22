@@ -593,6 +593,44 @@ Effects are applied when the snapshot is derived (`competition.ts`), so
 revoking a use from the week's judge tab undoes it and returns the charge.
 Starter items and their pixel art (`public/shop`) are in `db/seed-data.ts`.
 
+**Skill trees** (`/skills`, behind the `skill_trees` [feature flag](#-feature-flags))
+let a player commit to one pathway a season and unlock it with Clim Coin. The
+five pathways (Stormbrewer, Elite Hacker, Friendkeeper, Overachiever and
+Elephant Cartographer, nods to storm mode and the squads) are defined in code
+in `src/data/skill-trees.ts`. Each has a root (5), two branches (8 each, root
+first) and a capstone (15, both branches first). Perks only ever touch Clim
+Coin, never points:
+
+- coin bonuses on entries, placings, calls, votes or power-ups used;
+- discounts on power-ups, eggs and wearables (pets, avatars and cosmetics);
+- luckier egg odds;
+- a higher weekly gift cap.
+
+The pathways are balanced on one value model: about 10 of each weekly event
+in a season, 5 poll votes, 4 power-ups used and about 5 discounted purchases
+of a kind. On that model every pathway's root is worth ~14 coins, its perk
+branch ~16, its title branch ~10 and its capstone ~24, so a full 36-coin tree
+pays back about 64. Each node's perks are listed on its card, generated from
+the data. A test in `skill-trees.test.ts` fails if a retune breaks the balance.
+
+Earning perks are derived in `deriveEarnings` and only pay on coins that land
+after the node was unlocked, so they never pay out retroactively. Discounts
+are applied when a player buys, and the price paid is stored. The gift cap and
+egg odds come from current unlocks.
+
+The first unlock writes a `skill_paths` row (one per player, no respec). Each
+unlock is a `skill_unlocks` row at the price paid, and its composite key keeps
+every unlock in that pathway. `unlockSkillNode` writes in one statement under
+the wallet lock and re-checks the budget, prerequisites and pathway.
+
+Title and name-colour rewards are `shop_items` with `skill_only` set. They're
+never sold or hatched, are seeded by the `0027_skill_trees` migration and
+`db/seed-data.ts`, and are owned through a zero-price `coin_purchases` row
+(`skill_unlocks.purchase_id`), like crate wins.
+
+Turning the flag off hides the page, its links and the pathway sigils. Anything
+already unlocked keeps working.
+
 ## 🚩 Feature flags
 
 Site-wide switches an admin flips in `/admin/site#flags`, with no deploy.
@@ -603,10 +641,11 @@ feature ships disabled. Flags load with the rest of the competition rows
 is purged and the change shows straight away. Read them from
 `getQueries().features`.
 
-| Flag         | Off (default)                                                                                                                                                                                                                                                            |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `shop_eggs`  | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened.                                                                                                                                                              |
-| `storm_mode` | Clear skies. On: the public site (not `/admin`) is hit by a hurricane — rain, lightning, gusts, shake and "A Storm Is Brewing" blown across the screen. Pure CSS (`StormMode.astro` + `:root[data-storm]` in `global.css`), click-through, and still for reduced motion. |
+| Flag          | Off (default)                                                                                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `shop_eggs`   | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened.                                                                                                                                                              |
+| `storm_mode`  | Clear skies. On: the public site (not `/admin`) is hit by a hurricane — rain, lightning, gusts, shake and "A Storm Is Brewing" blown across the screen. Pure CSS (`StormMode.astro` + `:root[data-storm]` in `global.css`), click-through, and still for reduced motion. |
+| `skill_trees` | Hides `/skills`, its nav, shop and wallet links, the rules section and pathway sigils; nobody can unlock. Perks and rewards already unlocked keep working.                                                                                                               |
 
 ## 🔔 Notifications
 

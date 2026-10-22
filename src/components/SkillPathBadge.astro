@@ -1,0 +1,49 @@
+---
+// A player's skill pathway on their profile: its sigil and name, how far
+// they've got, and the skills they've unlocked. Links to the tree.
+import type { PlayerSkills } from "../types";
+import SkillSigil from "./SkillSigil.astro";
+import { SKILL_ACCENT_CLASS } from "../lib/skill-ui";
+import { withBase } from "../lib/url";
+
+interface Props {
+  skills: PlayerSkills;
+  class?: string;
+}
+
+const { skills, class: className } = Astro.props;
+const { path, unlocked, total } = skills;
+const accent = SKILL_ACCENT_CLASS[path.accent];
+---
+
+<p
+  class:list={[
+    "flex flex-wrap items-center gap-x-2 gap-y-1 text-xs",
+    className,
+  ]}
+>
+  <a
+    href={withBase(`/skills#path-${path.id}`)}
+    class:list={[
+      "inline-flex items-center gap-1.5 rounded border px-2 py-0.5 font-bold tracking-widest uppercase transition-colors hover:bg-term-panel-2",
+      accent.border,
+      accent.text,
+    ]}
+  >
+    <SkillSigil pathId={path.id} class="h-3.5 w-3.5" />
+    {path.name}
+  </a>
+  <span class="text-ink-faint tabular-nums">
+    {unlocked.length}/{total} skills
+  </span>
+  {
+    unlocked.length > 0 && (
+      <span class="text-ink-dim">
+        <span class="text-ink-faint" aria-hidden="true">
+          ·{" "}
+        </span>
+        {unlocked.map((n) => n.name).join(", ")}
+      </span>
+    )
+  }
+</p>

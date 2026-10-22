@@ -14,16 +14,17 @@ describe("mapFeatureFlags", () => {
     expect(mapFeatureFlags([])).toEqual({
       shop_eggs: false,
       storm_mode: false,
+      skill_trees: false,
     });
   });
 
   it("reads each known flag and ignores unknown ones", () => {
     expect(
       mapFeatureFlags([row("shop_eggs", true), row("nope", true)]),
-    ).toEqual({ shop_eggs: true, storm_mode: false });
+    ).toEqual({ shop_eggs: true, storm_mode: false, skill_trees: false });
     expect(
       mapFeatureFlags([row("shop_eggs", false), row("storm_mode", true)]),
-    ).toEqual({ shop_eggs: false, storm_mode: true });
+    ).toEqual({ shop_eggs: false, storm_mode: true, skill_trees: false });
   });
 });
 
@@ -32,6 +33,7 @@ describe("featureFlagViews", () => {
     expect(featureFlagViews([])).toEqual([
       expect.objectContaining({ key: "shop_eggs", enabled: false }),
       expect.objectContaining({ key: "storm_mode", enabled: false }),
+      expect.objectContaining({ key: "skill_trees", enabled: false }),
     ]);
     expect(featureFlagViews([])[0].changedBy).toBeUndefined();
     expect(featureFlagViews([row("shop_eggs", true)])[0]).toMatchObject({

@@ -54,6 +54,7 @@ export async function runWalletAction(
       action.amount,
       action.message,
       getWallet(playerId).earned,
+      panel.cap,
     );
     return sent ? "gifted" : "invalid";
   }

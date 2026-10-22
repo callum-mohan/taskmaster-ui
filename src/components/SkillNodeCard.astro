@@ -1,0 +1,143 @@
+---
+// One skill node: what it does, its price and reward, and for the viewer
+// an unlock button (a plain POST to `/account/skills/<id>`) or why they
+// can't unlock it yet.
+import type { NameColour, SkillNodeView, SkillPath } from "../types";
+import CoinAmount from "./CoinAmount.astro";
+import { NAME_COLOURS } from "../data/coin-rules";
+import { NAME_COLOUR_CLASS } from "../lib/coin-ui";
+import {
+  SKILL_ACCENT_CLASS,
+  SKILL_BLOCK_LABEL,
+  describePerk,
+} from "../lib/skill-ui";
+import { btnPrimary } from "./admin/styles";
+import { withBase } from "../lib/url";
+
+interface Props {
+  view: SkillNodeView;
+  path: SkillPath;
+  /** Unlocking this node would commit the viewer to `path` for good. */
+  commits: boolean;
+  class?: string;
+}
+
+const { view, path, commits, class: className } = Astro.props;
+const { node, unlocked, blocked, missing, reward } = view;
+const accent = SKILL_ACCENT_CLASS[path.accent];
+const action = withBase(`/account/skills/${encodeURIComponent(node.id)}`);
+const loginHref = withBase(
+  `/login?${new URLSearchParams({ next: `/account/skills/${node.id}` })}`,
+);
+const TIER_LABEL = { 1: "root", 2: "branch", 3: "capstone" } as const;
+const rewardColour: NameColour | undefined =
+  reward?.cosmetic?.kind === "name_colour"
+    ? NAME_COLOURS.find((c) => c === reward.cosmetic?.value)
+    : undefined;
+const rewardTitle =
+  reward?.cosmetic?.kind === "title" ? reward.cosmetic.value : undefined;
+---
+
+<article
+  id={`node-${node.id}`}
+  class:list={[
+    "flex h-full min-w-0 scroll-mt-24 flex-col gap-2 rounded-lg border p-3 transition-colors",
+    unlocked
+      ? [accent.border, accent.fill]
+      : blocked === "locked" || blocked === "other-path"
+        ? "border-grid bg-term-bg/40 opacity-80"
+        : "border-grid bg-term-panel/60 hover:border-ink-faint",
+    className,
+  ]}
+>
+  <div class="flex items-start justify-between gap-2">
+    <div class="min-w-0">
+      <p class="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        tier {node.tier} · {TIER_LABEL[node.tier]}
+      </p>
+      <h4
+        class:list={[
+          "mt-0.5 text-sm font-extrabold",
+          unlocked ? accent.text : "text-ink",
+        ]}
+      >
+        {node.name}
+      </h4>
+    </div>
+    <CoinAmount amount={node.price} class="shrink-0 text-sm text-amber" />
+  </div>
+
+  <p class="text-[11px] italic text-ink-faint">{node.description}</p>
+  {
+    node.perks.length > 0 && (
+      <ul class="space-y-0.5 text-xs leading-relaxed text-ink-dim">
+        {node.perks.map((perk) => (
+          <li class="flex gap-1.5">
+            <span class={accent.text} aria-hidden="true">
+              +
+            </span>
+            <span>{describePerk(perk)}</span>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
+  {
+    (rewardTitle || rewardColour) && (
+      <p class="text-[11px] text-ink-faint">
+        <span class="uppercase tracking-[0.15em]">reward:</span>{" "}
+        {rewardTitle ? (
+          <span class="text-magenta">“{rewardTitle}”</span>
+        ) : (
+          rewardColour && (
+            <span class={NAME_COLOUR_CLASS[rewardColour]}>
+              {reward?.name ?? "name colour"}
+            </span>
+          )
+        )}
+      </p>
+    )
+  }
+
+  <div class="mt-auto pt-1">
+    {
+      unlocked ? (
+        <p
+          class:list={[
+            "text-[11px] font-bold uppercase tracking-widest",
+            accent.text,
+          ]}
+        >
+          {SKILL_BLOCK_LABEL.unlocked}
+        </p>
+      ) : blocked === "guest" ? (
+        <a href={loginHref} class="text-xs text-cyan hover:underline">
+          {SKILL_BLOCK_LABEL.guest} →
+        </a>
+      ) : blocked ? (
+        <p class="text-[11px] font-bold uppercase tracking-widest text-ink-faint">
+          {SKILL_BLOCK_LABEL[blocked]}
+          {blocked === "locked" && missing.length > 0 && (
+            <span class="block font-normal normal-case tracking-normal">
+              needs {missing.map((n) => n.name).join(" + ")}
+            </span>
+          )}
+        </p>
+      ) : (
+        <form method="post" action={action} class="flex flex-col gap-1.5">
+          {commits && (
+            <p class="text-[11px] leading-snug text-amber">
+              This commits you to {path.name} for the rest of the season. No
+              take-backs.
+            </p>
+          )}
+          <button type="submit" class={btnPrimary}>
+            {commits ? "commit & unlock" : "unlock"}
+            <span class="sr-only"> {node.name}</span>
+          </button>
+        </form>
+      )
+    }
+  </div>
+</article>

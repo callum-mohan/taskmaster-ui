@@ -87,7 +87,8 @@ export const LOADOUT_SLOTS = [
   "theme",
 ] as const satisfies readonly LoadoutSlot[];
 
-export const NAME_COLOURS = [
+/** Name colours an admin can sell in the shop. */
+export const SHOP_NAME_COLOURS = [
   "acid",
   "amber",
   "magenta",
@@ -96,6 +97,21 @@ export const NAME_COLOURS = [
   "pumpkin",
   "glitch",
   "rainbow",
+] as const satisfies readonly NameColour[];
+
+/** Name colours only skill tree capstones grant (see `skill-trees.ts`). */
+export const SKILL_NAME_COLOURS = [
+  "storm",
+  "hacker",
+  "friendship",
+  "platinum",
+  "cartographer",
+] as const satisfies readonly NameColour[];
+
+/** Every name colour a player can wear. */
+export const NAME_COLOURS = [
+  ...SHOP_NAME_COLOURS,
+  ...SKILL_NAME_COLOURS,
 ] as const satisfies readonly NameColour[];
 
 export const PROFILE_THEMES = [

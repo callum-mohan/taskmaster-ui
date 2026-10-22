@@ -20,6 +20,8 @@ import {
   wishes as wishesTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
+  skillPaths as skillPathsTable,
+  skillUnlocks as skillUnlocksTable,
   peoplesChoiceVotes as peoplesChoiceVotesTable,
   players as playersTable,
   pollOptions as pollOptionsTable,
@@ -60,6 +62,8 @@ import {
   mapPowerUpUses,
   mapPurchases,
   mapShopItems,
+  mapSkillPaths,
+  mapSkillUnlocks,
   powerUpKeys,
   resolveSabotages,
 } from "./coins";
@@ -152,6 +156,8 @@ async function fetchCompetitionRows() {
     featureFlagRows,
     itemGiftRows,
     wishRows,
+    skillPathRows,
+    skillUnlockRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -213,6 +219,8 @@ async function fetchCompetitionRows() {
     db.select().from(featureFlagsTable),
     db.select().from(itemGiftsTable).orderBy(asc(itemGiftsTable.id)),
     db.select().from(wishesTable).orderBy(asc(wishesTable.id)),
+    db.select().from(skillPathsTable),
+    db.select().from(skillUnlocksTable).orderBy(asc(skillUnlocksTable.id)),
   ]);
   return {
     seasonRows,
@@ -241,6 +249,8 @@ async function fetchCompetitionRows() {
     featureFlagRows,
     itemGiftRows,
     wishRows,
+    skillPathRows,
+    skillUnlockRows,
   };
 }
 
@@ -337,6 +347,8 @@ async function buildSeasonCompetition(
     featureFlagRows,
     itemGiftRows,
     wishRows,
+    skillPathRows,
+    skillUnlockRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -461,6 +473,8 @@ async function buildSeasonCompetition(
       itemGifts: mapItemGifts(itemGiftRows),
       wishes: mapWishes(wishRows),
       hints: mapHints(taskRows),
+      skillPaths: mapSkillPaths(skillPathRows),
+      skillUnlocks: mapSkillUnlocks(skillUnlockRows),
     },
     features: mapFeatureFlags(featureFlagRows),
   };

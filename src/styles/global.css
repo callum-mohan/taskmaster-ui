@@ -801,9 +801,75 @@ a[data-me-row].is-me {
     background-position: 200% 0;
   }
 }
+/* Skill tree capstone name colours (never sold in the shop). */
+.name-storm {
+  color: var(--color-cyan);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--color-cyan) 40%, transparent);
+  animation: name-storm 5s steps(1) infinite;
+}
+@keyframes name-storm {
+  0%,
+  90%,
+  94%,
+  100% {
+    color: var(--color-cyan);
+    text-shadow: 0 0 8px color-mix(in srgb, var(--color-cyan) 40%, transparent);
+  }
+  91%,
+  95% {
+    color: var(--color-ink);
+    text-shadow:
+      0 0 4px var(--color-cyan),
+      0 0 14px var(--color-cyan);
+  }
+}
+.name-hacker {
+  color: var(--color-acid);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--color-acid) 55%, transparent);
+  background-color: color-mix(in srgb, var(--color-acid) 12%, transparent);
+  padding: 0 0.2em;
+  border-radius: 2px;
+}
+.name-friendship {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-magenta),
+    var(--color-amber),
+    var(--color-magenta)
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  animation: name-rainbow 8s linear infinite;
+}
+.name-platinum {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-ink-dim) 30%,
+    var(--color-ink) 50%,
+    var(--color-ink-dim) 70%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: none;
+  animation: name-rainbow 4s linear infinite;
+}
+.name-cartographer {
+  color: var(--color-gold);
+  text-decoration: underline dashed var(--color-amber);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
 @media (prefers-reduced-motion: reduce) {
   .name-glitch,
-  .name-rainbow {
+  .name-rainbow,
+  .name-storm,
+  .name-friendship,
+  .name-platinum {
     animation: none;
   }
 }

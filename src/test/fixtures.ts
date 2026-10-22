@@ -218,7 +218,7 @@ export function competitionData(
     changelog: [],
     coins: coinData(),
     // Every flag off, as on a fresh site.
-    features: { shop_eggs: false, storm_mode: false },
+    features: { shop_eggs: false, storm_mode: false, skill_trees: false },
     ...overrides,
   };
 }
@@ -236,6 +236,8 @@ export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
     itemGifts: [],
     wishes: [],
     hints: {},
+    skillPaths: [],
+    skillUnlocks: [],
     ...overrides,
   };
 }
@@ -250,6 +252,7 @@ export function shopItem(overrides: Partial<ShopItem> = {}): ShopItem {
     imageUrl: "/shop/pets/rubber-duck.svg",
     available: true,
     crateOnly: false,
+    skillOnly: false,
     sortOrder: 0,
     ...overrides,
   };

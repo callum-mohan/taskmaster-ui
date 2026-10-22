@@ -20,6 +20,7 @@ import type {
   PurchaseBlock,
   ShopItem,
   ShopSection,
+  SkillPerks,
   Task,
   Wallet,
   WishPanel,
@@ -46,6 +47,13 @@ import {
   getCrate,
   inSaleWindow,
 } from "./coin-rules";
+import {
+  discountedPrice,
+  eggPrice,
+  getSkillPath,
+  luckyCrate,
+  skillPerksFor,
+} from "./skill-trees";
 
 /** What a viewer of the shop is: a signed-in player (by id) or a guest. */
 export interface ShopViewer {
@@ -62,6 +70,7 @@ export function createCoinQueries(data: CompetitionData) {
   const { players, tasks, coins, predictions, season, features } = data;
   // The mystery eggs feature flag: off hides every crate and what they drop.
   const eggsOn = features.shop_eggs;
+  const skillTreesOn = features.skill_trees;
   const itemById = new Map(coins.items.map((i) => [i.id, i]));
   const playerById = new Map(players.map((p) => [p.id, p]));
   const seasonClosed = season.status === "closed";
@@ -93,6 +102,18 @@ export function createCoinQueries(data: CompetitionData) {
 
   function getWallet(playerId: string, now: number = Date.now()): Wallet {
     return deriveWallet(data, playerId, now);
+  }
+
+  /** A player's skill tree perks, added up. */
+  function getSkillPerks(playerId: string): SkillPerks {
+    return skillPerksFor(coins.skillUnlocks, playerId);
+  }
+
+  /** What `item` costs `playerId` now, after their skill tree discounts. */
+  function getItemPrice(item: ShopItem, playerId: string | undefined): number {
+    return playerId
+      ? discountedPrice(item, getSkillPerks(playerId))
+      : item.price;
   }
 
   /** Ids of the pets, avatars and cosmetics a player owns. */
@@ -171,12 +192,20 @@ export function createCoinQueries(data: CompetitionData) {
   /** The cosmetics public lists (leaderboard, player cards) show. */
   function getPlayerFlair(playerId: string): PlayerFlair {
     const { pet, title, nameColour } = getLoadout(playerId);
+    // The pathway sigil goes with the skill trees flag.
+    const pick = skillTreesOn
+      ? coins.skillPaths.find((p) => p.playerId === playerId)
+      : undefined;
+    const path = pick && getSkillPath(pick.pathId);
     return {
       ...(pet?.imageUrl && {
         pet: { name: pet.name, imageUrl: pet.imageUrl },
       }),
       ...(title && { title }),
       ...(nameColour && { nameColour }),
+      ...(path && {
+        skillPath: { id: path.id, name: path.name, accent: path.accent },
+      }),
     };
   }
 
@@ -268,9 +297,13 @@ export function createCoinQueries(data: CompetitionData) {
       return chargesFor(viewer.playerId, item.powerUp) > 0 ? "owned" : "used";
     }
     if (ownedItemIds(viewer.playerId).has(item.id)) return "owned";
+    if (item.skillOnly) return "skill-only";
     if (!isOnSale(item, now)) return "unavailable";
     if (item.crateOnly) return "crate-only";
-    if (getWallet(viewer.playerId, now).balance < item.price) {
+    if (
+      getWallet(viewer.playerId, now).balance <
+      getItemPrice(item, viewer.playerId)
+    ) {
       return "unaffordable";
     }
     return undefined;
@@ -281,7 +314,7 @@ export function createCoinQueries(data: CompetitionData) {
    * only while eggs are on, and a seasonal egg's only while that egg is.
    */
   function isListed(item: ShopItem, now: number): boolean {
-    if (!isOnSale(item, now)) return false;
+    if (!isOnSale(item, now) || item.skillOnly) return false;
     // Egg exclusives can't be got any other way, so they go with the eggs.
     if (item.crateOnly && !eggsOn) return false;
     if (!item.crateId) return true;
@@ -309,6 +342,7 @@ export function createCoinQueries(data: CompetitionData) {
       const blocked = getPurchaseBlock(item, { playerId }, now);
       return {
         item,
+        price: getItemPrice(item, playerId),
         owned: item.powerUp ? effects.has(item.powerUp) : owned.has(item.id),
         charges: charges.get(item.id) ?? 0,
         ...(blocked && { blocked }),
@@ -504,10 +538,16 @@ export function createCoinQueries(data: CompetitionData) {
     };
   }
 
+  /** The most `playerId` can gift in any 7 days (skill trees raise it). */
+  function getGiftCap(playerId: string): number {
+    return GIFT_WEEKLY_CAP + getSkillPerks(playerId).giftCap;
+  }
+
   /** The wallet's "send coins" form for `playerId`. */
   function getGiftPanel(playerId: string, now: number = Date.now()): GiftPanel {
     const recipients = players.filter((p) => p.id !== playerId);
-    const allowance = giftAllowance(coins.gifts, playerId, now);
+    const cap = getGiftCap(playerId);
+    const allowance = giftAllowance(coins.gifts, playerId, now, cap);
     const balance = getWallet(playerId, now).balance;
     const max = Math.max(0, Math.min(allowance, balance));
     const blocked: GiftPanel["blocked"] = seasonClosed
@@ -521,7 +561,7 @@ export function createCoinQueries(data: CompetitionData) {
             : undefined;
     return {
       recipients,
-      cap: GIFT_WEEKLY_CAP,
+      cap,
       allowance,
       max,
       ...(blocked && { blocked }),
@@ -559,7 +599,11 @@ export function createCoinQueries(data: CompetitionData) {
     // Power-ups are once a season by effect, bought or hatched.
     const effects = playerId ? boughtEffects(playerId) : new Set<PowerUpKind>();
     const balance = playerId ? getWallet(playerId, now).balance : 0;
-    return cratesOnSale(now).map((crate) => {
+    const perks = playerId ? getSkillPerks(playerId) : undefined;
+    return cratesOnSale(now).map((base) => {
+      // Skill tree egg luck shifts the odds; the crate shown is the lucky one.
+      const crate = perks ? luckyCrate(base, perks.eggLuck) : base;
+      const price = perks ? eggPrice(crate, perks) : crate.price;
       const tiers = crateOdds(crate, coins.items, owned, now, effects);
       const blocked: CrateView["blocked"] = !playerId
         ? "guest"
@@ -567,11 +611,12 @@ export function createCoinQueries(data: CompetitionData) {
           ? "season-closed"
           : tiers.length === 0
             ? "empty"
-            : balance < crate.price
+            : balance < price
               ? "unaffordable"
               : undefined;
       return {
         crate,
+        price,
         tiers,
         averageValue: crateAverageValue(tiers),
         ...(blocked && { blocked }),
@@ -621,6 +666,9 @@ export function createCoinQueries(data: CompetitionData) {
     getCratePull,
     getShopItemById,
     getWallet,
+    getSkillPerks,
+    getItemPrice,
+    getGiftCap,
     getInventory,
     getGiftableItems,
     getItemGifts,

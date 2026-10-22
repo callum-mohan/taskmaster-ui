@@ -686,6 +686,9 @@ export const shopItems = pgTable(
     // A seasonal egg's exclusive (a crate id from `coin-rules.ts`): it only
     // drops from that egg, and no other egg drops it.
     crateId: text(),
+    // A skill tree reward (see `src/data/skill-trees.ts`): never sold or
+    // dropped by eggs, only granted by unlocking its skill node.
+    skillOnly: boolean().notNull().default(false),
     // Limited-time stock: on sale (and droppable) only between these UK
     // wall-clock times (Europe/London, no zone, like task dates). Unset = open.
     availableFrom: timestamp({ mode: "string" }),
@@ -698,6 +701,10 @@ export const shopItems = pgTable(
     check(
       "shop_items_crate_id_crate_only",
       sql`${t.crateId} is null or ${t.crateOnly}`,
+    ),
+    check(
+      "shop_items_skill_only_not_crate_only",
+      sql`not (${t.skillOnly} and ${t.crateOnly})`,
     ),
     check(
       "shop_items_sale_window_order",
@@ -1011,5 +1018,58 @@ export const crateOpens = pgTable(
     ),
     index("crate_opens_player_id_idx").on(t.playerId),
     index("crate_opens_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * The skill pathway a player committed to: one per player (players are per
+ * season), written with their first unlock and never changed (no respec).
+ * The pathways are defined in code (`src/data/skill-trees.ts`).
+ */
+export const skillPaths = pgTable(
+  "skill_paths",
+  {
+    playerId: text()
+      .primaryKey()
+      .references(() => players.id, { onDelete: "cascade" }),
+    pathId: text().notNull(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    unique("skill_paths_player_id_path_id_unique").on(t.playerId, t.pathId),
+  ],
+);
+
+/**
+ * A skill node a player unlocked, at the price paid then. The composite key
+ * keeps every unlock in the player's one pathway. A node that grants a
+ * cosmetic owns it through `purchaseId`, a zero-price `coin_purchases` row
+ * written in the same statement, like crate wins.
+ */
+export const skillUnlocks = pgTable(
+  "skill_unlocks",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text().notNull(),
+    pathId: text().notNull(),
+    nodeId: text().notNull(),
+    price: integer().notNull(),
+    purchaseId: integer()
+      .unique("skill_unlocks_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "skill_unlocks_player_path_fk",
+      columns: [t.playerId, t.pathId],
+      foreignColumns: [skillPaths.playerId, skillPaths.pathId],
+    }).onDelete("cascade"),
+    unique("skill_unlocks_player_id_node_id_unique").on(t.playerId, t.nodeId),
+    check("skill_unlocks_price_positive", sql`${t.price} >= 0`),
   ],
 );

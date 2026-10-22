@@ -142,6 +142,8 @@ describe("rowsForSeason", () => {
     featureFlagRows: [],
     itemGiftRows: [],
     wishRows: [],
+    skillPathRows: [],
+    skillUnlockRows: [],
   };
   const player = (id: string, seasonId: string) => ({
     id,
@@ -230,6 +232,7 @@ describe("rowsForSeason", () => {
         available: true,
         crateOnly: false,
         crateId: null,
+        skillOnly: false,
         availableFrom: null,
         availableUntil: null,
         sortOrder: 0,

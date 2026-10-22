@@ -226,6 +226,13 @@ const notice = outcome && !pull ? COIN_OUTCOME_NOTICE[outcome] : undefined;
         how to earn coins
       </a>
       {
+        features.skill_trees && (
+          <a href={withBase("/skills")} class={btnGhost}>
+            skill trees
+          </a>
+        )
+      }
+      {
         wallet && (
           <a href={withBase("/account#wallet")} class={btnGhost}>
             your wallet

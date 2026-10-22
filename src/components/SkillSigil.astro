@@ -1,0 +1,85 @@
+---
+// A skill pathway's pixel-art sigil, drawn in the current text colour. It's
+// decorative unless given a `label` (then it's an image with that name).
+import type { SkillPathId } from "../types";
+
+interface Props {
+  pathId: SkillPathId;
+  /** Accessible name; omit when the pathway is named in nearby text. */
+  label?: string;
+  class?: string;
+}
+
+const { pathId, label, class: className } = Astro.props;
+
+// 8×8 pixel maps: "#" is a lit pixel.
+const SIGILS: Record<SkillPathId, string[]> = {
+  stormbrewer: [
+    "....##..",
+    "...##...",
+    "..##....",
+    ".######.",
+    "....##..",
+    "...##...",
+    "..##....",
+    ".##.....",
+  ],
+  "elite-hacker": [
+    "........",
+    "##......",
+    ".##.....",
+    "..##....",
+    ".##.....",
+    "##..####",
+    "........",
+    "........",
+  ],
+  friendkeeper: [
+    "........",
+    ".##..##.",
+    "########",
+    "########",
+    ".######.",
+    "..####..",
+    "...##...",
+    "........",
+  ],
+  overachiever: [
+    "...##...",
+    "...##...",
+    "########",
+    ".######.",
+    "..####..",
+    ".######.",
+    ".##..##.",
+    ".#....#.",
+  ],
+  "elephant-cartographer": [
+    "...####.",
+    "..######",
+    ".#######",
+    ".##.####",
+    ".#.#####",
+    ".#.##.##",
+    ".#.##.##",
+    "##......",
+  ],
+};
+
+const pixels = SIGILS[pathId].flatMap((row, y) =>
+  [...row].flatMap((cell, x) => (cell === "#" ? [{ x, y }] : [])),
+);
+---
+
+<svg
+  viewBox="0 0 8 8"
+  fill="currentColor"
+  shape-rendering="crispEdges"
+  class:list={["inline-block shrink-0", className]}
+  {...label
+    ? { role: "img", "aria-label": label }
+    : { "aria-hidden": "true", focusable: "false" }}
+>
+  {label && <title>{label}</title>}
+  {pixels.map(({ x, y }) => <rect x={x} y={y} width="1" height="1" />)}
+</svg>

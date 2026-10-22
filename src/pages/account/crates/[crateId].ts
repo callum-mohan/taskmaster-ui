@@ -66,9 +66,10 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
 
     const roll = rollCrate(view.tiers, secureRandom());
     if (!roll) return reply("crate-empty");
+    // The player's skill tree discount is what they pay.
     const openedId = await openCrate(
       player.playerId,
-      crate,
+      { ...view.crate, price: view.price },
       roll.item.id,
       roll.rarity,
       getWallet(player.playerId).earned,

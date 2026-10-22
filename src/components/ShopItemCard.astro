@@ -4,7 +4,7 @@
 // Limited-time stock says when it leaves.
 import type { ShopListing } from "../types";
 import ShopItemArt from "./ShopItemArt.astro";
-import CoinAmount from "./CoinAmount.astro";
+import CoinPrice from "./CoinPrice.astro";
 import RarityBadge from "./RarityBadge.astro";
 import { getCrate, rarityOf } from "../data/coin-rules";
 import { COSMETIC_KIND_LABELS, POWER_UP_INFO } from "../data/coins";
@@ -19,7 +19,7 @@ interface Props {
 }
 
 const { listing, class: className } = Astro.props;
-const { item, owned, charges, blocked } = listing;
+const { item, price, owned, charges, blocked } = listing;
 const action = withBase(`/account/shop/${encodeURIComponent(item.id)}`);
 const loginHref = withBase(
   `/login?${new URLSearchParams({ next: `/account/shop/${item.id}` })}`,
@@ -83,7 +83,7 @@ const status =
               {exclusiveLabel}
             </span>
           ) : (
-            <CoinAmount amount={item.price} class="text-sm text-amber" />
+            <CoinPrice price={price} listPrice={item.price} class="text-sm" />
           )
         }
         {rarity && <RarityBadge rarity={rarity} />}

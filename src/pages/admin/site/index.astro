@@ -424,6 +424,11 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
                         retired
                       </span>
                     )}
+                    {item.skillOnly && (
+                      <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-cyan">
+                        skill reward
+                      </span>
+                    )}
                     {item.crateOnly && (
                       <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-magenta">
                         {item.crateId ? `${item.crateId} only` : "egg only"}

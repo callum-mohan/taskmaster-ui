@@ -3,6 +3,7 @@ import type {
   CoinAdjustment,
   CoinGift,
   CoinLedgerEntry,
+  CoinLedgerKind,
   CoinPurchase,
   CompetitionData,
   Crate,
@@ -20,6 +21,9 @@ import type {
   SabotageResolution,
   ShopCategory,
   ShopItem,
+  SkillEarnSource,
+  SkillPathPick,
+  SkillUnlock,
   Wallet,
   Wish,
 } from "../types";
@@ -32,6 +36,8 @@ import type {
   itemGifts as itemGiftsTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
+  skillPaths as skillPathsTable,
+  skillUnlocks as skillUnlocksTable,
   tasks as tasksTable,
   wishes as wishesTable,
 } from "../db/schema";
@@ -58,6 +64,12 @@ import {
   isActivePowerUp,
   rarityOf,
 } from "./coin-rules";
+import {
+  getSkillNode,
+  getSkillPath,
+  isSkillPathId,
+  unlockedNodes,
+} from "./skill-trees";
 
 export {
   ACTIVE_POWER_UP_KINDS,
@@ -260,6 +272,8 @@ type GiftRow = typeof coinGiftsTable.$inferSelect;
 type ItemGiftRow = typeof itemGiftsTable.$inferSelect;
 type WishRow = typeof wishesTable.$inferSelect;
 type TaskRow = typeof tasksTable.$inferSelect;
+type SkillPathRow = typeof skillPathsTable.$inferSelect;
+type SkillUnlockRow = typeof skillUnlocksTable.$inferSelect;
 
 export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
   return [...rows]
@@ -279,6 +293,7 @@ export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
       available: row.available,
       crateOnly: row.crateOnly,
       ...(row.crateId !== null && { crateId: row.crateId }),
+      skillOnly: row.skillOnly,
       ...(row.availableFrom !== null && {
         availableFrom: wallClockToIso(row.availableFrom),
       }),
@@ -402,6 +417,42 @@ export function mapWishes(rows: WishRow[]): Wish[] {
       }),
       at: timestamptzToIso(row.createdAt),
     }));
+}
+
+/** Pathway picks for pathways that still exist in the catalogue. */
+export function mapSkillPaths(rows: SkillPathRow[]): SkillPathPick[] {
+  return rows.flatMap((row): SkillPathPick[] =>
+    isSkillPathId(row.pathId)
+      ? [
+          {
+            playerId: row.playerId,
+            pathId: row.pathId,
+            at: timestamptzToIso(row.createdAt),
+          },
+        ]
+      : [],
+  );
+}
+
+/** Unlocks of nodes that still exist in the catalogue, oldest first. */
+export function mapSkillUnlocks(rows: SkillUnlockRow[]): SkillUnlock[] {
+  return [...rows]
+    .sort((a, b) => a.id - b.id)
+    .flatMap((row): SkillUnlock[] =>
+      isSkillPathId(row.pathId) && getSkillNode(row.nodeId)
+        ? [
+            {
+              id: row.id,
+              playerId: row.playerId,
+              pathId: row.pathId,
+              nodeId: row.nodeId,
+              price: row.price,
+              ...(row.purchaseId !== null && { purchaseId: row.purchaseId }),
+              at: timestamptzToIso(row.createdAt),
+            },
+          ]
+        : [],
+    );
 }
 
 export function mapEntries(rows: EntryActivity[]): EntryActivity[] {
@@ -570,7 +621,68 @@ export function deriveEarnings(
     });
   }
 
-  return entries;
+  return [...entries, ...skillPerkEarnings(data, playerId, entries)];
+}
+
+const SKILL_EARN_SOURCE: Partial<Record<CoinLedgerKind, SkillEarnSource>> = {
+  placement: "placement",
+  entry: "entry",
+  prediction: "prediction",
+  "poll-vote": "poll-vote",
+  "peoples-choice-vote": "peoples-choice-vote",
+};
+
+/**
+ * The extra coins a player's skill tree earning perks pay on `earnings`
+ * (and, for Lightning Rod, on power-ups they used on finished weeks). A
+ * perk only pays on coins that landed after its node was unlocked.
+ */
+function skillPerkEarnings(
+  data: WalletData,
+  playerId: string,
+  earnings: readonly CoinLedgerEntry[],
+): CoinLedgerEntry[] {
+  const unlocks = data.coins.skillUnlocks;
+  if (!unlocks.some((u) => u.playerId === playerId)) return [];
+  const perkLines = (
+    source: SkillEarnSource,
+    earning: Pick<CoinLedgerEntry, "label" | "at" | "taskId">,
+  ): CoinLedgerEntry[] =>
+    unlockedNodes(unlocks, playerId, instant(earning.at)).flatMap((node) =>
+      node.perks.flatMap((perk): CoinLedgerEntry[] =>
+        perk.kind === "earn_bonus" && perk.source === source
+          ? [
+              {
+                kind: "skill-perk",
+                amount: perk.amount,
+                label: `${node.name}: ${earning.label}`,
+                at: earning.at,
+                ...(earning.taskId && { taskId: earning.taskId }),
+              },
+            ]
+          : [],
+      ),
+    );
+
+  const taskById = new Map(data.tasks.map((t) => [t.id, t]));
+  const powerUpUses = data.coins.uses.flatMap((use) => {
+    const task = taskById.get(use.taskId);
+    if (use.playerId !== playerId || task?.status !== "completed") return [];
+    return [
+      {
+        label: `${weekLabel(task.weekNumber)}: used ${POWER_UP_INFO[use.effect].label}`,
+        at: task.deadline,
+        taskId: task.id,
+      },
+    ];
+  });
+  return [
+    ...earnings.flatMap((earning) => {
+      const source = SKILL_EARN_SOURCE[earning.kind];
+      return source ? perkLines(source, earning) : [];
+    }),
+    ...powerUpUses.flatMap((use) => perkLines("power-up-use", use)),
+  ];
 }
 
 /** A player's balance and full history (earnings, grants and spending). */
@@ -594,6 +706,7 @@ export function deriveWallet(
   const freeItems = new Set([
     ...data.coins.crateOpens.map((o) => o.purchaseId),
     ...data.coins.itemGifts.map((g) => g.purchaseId),
+    ...data.coins.skillUnlocks.flatMap((u) => u.purchaseId ?? []),
   ]);
   const purchases: CoinLedgerEntry[] = [
     ...data.coins.purchases
@@ -614,6 +727,21 @@ export function deriveWallet(
         } (${o.rarity === "power_up" ? "power-up" : o.rarity})`,
         at: o.at,
       })),
+    ...data.coins.skillUnlocks
+      .filter((u) => u.playerId === playerId)
+      .map((u): CoinLedgerEntry => {
+        const node = getSkillNode(u.nodeId);
+        const path = getSkillPath(u.pathId);
+        const reward = node?.rewardItemId
+          ? ` → ${itemNames.get(node.rewardItemId) ?? node.rewardItemId}`
+          : "";
+        return {
+          kind: "skill",
+          amount: -u.price,
+          label: `Unlocked ${node?.name ?? u.nodeId} (${path?.name ?? u.pathId})${reward}`,
+          at: u.at,
+        };
+      }),
   ];
   const names = new Map(data.players.map((p) => [p.id, p.name]));
   const quoted = (message?: string) => (message ? `: "${message}"` : "");
@@ -681,6 +809,7 @@ export function giftAllowance(
   gifts: readonly CoinGift[],
   playerId: string,
   now: number = Date.now(),
+  cap: number = GIFT_WEEKLY_CAP,
 ): number {
   const sent = gifts
     .filter(
@@ -688,7 +817,7 @@ export function giftAllowance(
         g.fromPlayerId === playerId && now - instant(g.at) < GIFT_WINDOW_MS,
     )
     .reduce((total, g) => total + g.amount, 0);
-  return Math.max(0, GIFT_WEEKLY_CAP - sent);
+  return Math.max(0, cap - sent);
 }
 
 // ── Crates ────────────────────────────────────────────────────────────
@@ -721,6 +850,7 @@ export function crateOdds(
   const pool = items.filter(
     (item) =>
       isOnSale(item, now) &&
+      !item.skillOnly &&
       CRATE_CATEGORIES.some((c) => c === item.category) &&
       (crate.exclusive ? item.crateId === crate.id : !item.crateId) &&
       !ownedItemIds.has(item.id),
@@ -734,6 +864,7 @@ export function crateOdds(
   const powerUps = items.filter(
     (item) =>
       item.powerUp !== undefined &&
+      !item.skillOnly &&
       isOnSale(item, now) &&
       !ownedEffects.has(item.powerUp),
   );

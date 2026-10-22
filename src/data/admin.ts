@@ -40,6 +40,7 @@ import {
   teamMembers,
   teamScores,
   teams,
+  skillUnlocks,
   wishes,
 } from "../db/schema";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -213,7 +214,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o], [i]] =
+  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o], [i], [k]] =
     await db.batch([
       db
         .select({ n: count() })
@@ -262,6 +263,10 @@ export async function getPlayerDeleteImpact(
         .select({ n: count() })
         .from(itemGifts)
         .where(eq(itemGifts.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(skillUnlocks)
+        .where(eq(skillUnlocks.playerId, id)),
     ]);
   return [
     { label: "individual score", count: s.n },
@@ -276,6 +281,7 @@ export async function getPlayerDeleteImpact(
     { label: "Clim Coin grant / deduction", count: g.n },
     { label: "mystery egg cracked", count: o.n },
     { label: "gifted item", count: i.n },
+    { label: "skill tree unlock", count: k.n },
   ];
 }
 
@@ -1706,6 +1712,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   item_gifts_item_id_shop_items_id_fk:
     "Players were gifted this item, so it can't be deleted. Retire it instead.",
   shop_items_crate_only_droppable: "Power-ups can't be egg exclusives.",
+  shop_items_skill_only_not_crate_only:
+    "Skill tree rewards can't be egg exclusives.",
   crate_opens_item_id_shop_items_id_fk:
     "Players hatched this item from an egg, so it can't be deleted. Retire it instead.",
 };

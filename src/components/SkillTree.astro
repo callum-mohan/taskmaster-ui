@@ -1,0 +1,121 @@
+---
+// One skill pathway as a tree: its sigil and pitch, then its nodes tier by
+// tier (root → branches → capstone), joined by decorative connectors.
+import type { SkillPathView } from "../types";
+import SkillNodeCard from "./SkillNodeCard.astro";
+import SkillSigil from "./SkillSigil.astro";
+import CoinAmount from "./CoinAmount.astro";
+import { SKILL_ACCENT_CLASS } from "../lib/skill-ui";
+
+interface Props {
+  view: SkillPathView;
+  /** The viewer is a player who hasn't committed to a pathway yet. */
+  uncommitted: boolean;
+  class?: string;
+}
+
+const { view, uncommitted, class: className } = Astro.props;
+const { path, chosen, tiers, unlockedCount, totalCost } = view;
+const accent = SKILL_ACCENT_CLASS[path.accent];
+const headingId = `path-${path.id}-heading`;
+---
+
+<section
+  id={`path-${path.id}`}
+  aria-labelledby={headingId}
+  class:list={[
+    "flex min-w-0 scroll-mt-24 flex-col rounded-xl border bg-term-panel/60 p-4 sm:p-5",
+    chosen
+      ? [accent.border, "shadow-[0_0_40px_-20px_currentColor]", accent.text]
+      : "border-grid",
+    className,
+  ]}
+>
+  <header class="flex items-start gap-4 text-ink">
+    <span
+      class:list={[
+        "flex h-14 w-14 shrink-0 items-center justify-center rounded-md border bg-term-bg",
+        accent.border,
+        accent.text,
+      ]}
+    >
+      <SkillSigil pathId={path.id} class="h-9 w-9" />
+    </span>
+    <div class="min-w-0 flex-1">
+      <p class="text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        a nod to {path.inspiredBy}
+      </p>
+      <h3
+        id={headingId}
+        class:list={[
+          "mt-0.5 text-xl font-extrabold tracking-tight",
+          accent.text,
+        ]}
+      >
+        {path.name}
+      </h3>
+      <p class="text-[11px] text-ink-faint">
+        <span class="text-acid">//</span>{" "}
+        {path.motto}
+      </p>
+    </div>
+    <div class="shrink-0 text-right">
+      {
+        chosen && (
+          <p
+            class:list={[
+              "text-[10px] font-bold uppercase tracking-widest",
+              accent.text,
+            ]}
+          >
+            your pathway
+          </p>
+        )
+      }
+      <p class="text-xs tabular-nums text-ink-dim">
+        {unlockedCount}/{path.nodes.length}
+        <span class="sr-only">skills unlocked</span>
+      </p>
+    </div>
+  </header>
+
+  <p class="mt-3 text-xs leading-relaxed text-ink-dim">{path.description}</p>
+  <p class="mt-1 text-[11px] text-ink-faint">
+    full tree: <CoinAmount amount={totalCost} class="text-amber" />
+  </p>
+
+  <ol class="mt-4 flex flex-col text-ink" aria-label={`${path.name} skills`}>
+    {
+      tiers.map((tier, index) => (
+        <li class="flex flex-col items-stretch">
+          {index > 0 && (
+            <span
+              aria-hidden="true"
+              class:list={[
+                "mx-auto h-4 w-px",
+                tier.some((n) => n.unlocked) ? "bg-current" : "bg-grid",
+                accent.text,
+              ]}
+            />
+          )}
+          <ul
+            class:list={[
+              "grid gap-3",
+              tier.length > 1 ? "sm:grid-cols-2" : "mx-auto w-full sm:w-2/3",
+            ]}
+          >
+            {tier.map((node) => (
+              <li>
+                <SkillNodeCard
+                  view={node}
+                  path={path}
+                  commits={uncommitted && node.node.tier === 1}
+                />
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ol>
+</section>

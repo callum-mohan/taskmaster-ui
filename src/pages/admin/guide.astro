@@ -520,6 +520,22 @@ const link = "text-cyan hover:underline";
             owned.
           </li>
           <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Skill trees (<a
+              href={withBase("/skills")}
+              class={link}>/skills</a
+            >) are behind the
+            <span class="text-ink">skill trees</span> flag. Players commit to one
+            pathway a season and unlock its four skills with Clim Coin for coin perks,
+            a title and a name colour; it never changes points. There's nothing to
+            manage: the pathways live in code (<code class="text-ink"
+              >src/data/skill-trees.ts</code
+            >), their rewards are listed in the shop editor as
+            <span class="text-ink">skill reward</span> (never for sale), and each
+            player's pathway shows on their edit page. Choices are final for the season;
+            turning the flag off hides the page and sigils, but perks and rewards
+            already unlocked keep working.
+          </li>
+          <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Set
             <span class="text-ink">on sale from / until</span> (UK time) for limited-time
             stock: it shows on the shop's limited-time shelf and disappears (and stops

@@ -190,6 +190,20 @@
       "when": 1792661542265,
       "tag": "0026_one_wish_willow",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792686578234,
+      "tag": "0027_skill_trees",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792689290585,
+      "tag": "0028_whats_new_clim_coin",
+      "breakpoints": true
     }
   ]
 }

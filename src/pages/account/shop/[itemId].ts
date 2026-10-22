@@ -16,6 +16,7 @@ const BLOCK_OUTCOME: Record<PurchaseBlock, CoinOutcome> = {
   owned: "owned",
   used: "owned",
   "crate-only": "unavailable",
+  "skill-only": "unavailable",
   unaffordable: "unaffordable",
   unavailable: "unavailable",
   "season-closed": "season-closed",
@@ -41,7 +42,8 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
 
   const data = await loadFreshPlayerCompetition(player.playerId);
   if (!data) return reply("invalid");
-  const { getShopItemById, getPurchaseBlock, getWallet } = createQueries(data);
+  const { getShopItemById, getPurchaseBlock, getWallet, getItemPrice } =
+    createQueries(data);
   const item = getShopItemById(itemId);
   if (!item) return reply("unavailable");
   const blocked = getPurchaseBlock(item, { playerId: player.playerId });
@@ -51,6 +53,7 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
     player.playerId,
     item.id,
     getWallet(player.playerId).earned,
+    item.price - getItemPrice(item, player.playerId),
   );
   return reply(bought ? "bought" : "unaffordable");
 };

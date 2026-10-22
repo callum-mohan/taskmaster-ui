@@ -1,0 +1,203 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SkillTree from "../components/SkillTree.astro";
+import SkillSigil from "../components/SkillSigil.astro";
+import CoinAmount from "../components/CoinAmount.astro";
+import Notice from "../components/admin/Notice.astro";
+import { btnGhost } from "../components/admin/styles";
+import {
+  SKILL_ACCENT_CLASS,
+  SKILL_OUTCOME_NOTICE,
+  describePerks,
+  parseSkillOutcome,
+} from "../lib/skill-ui";
+import { withBase } from "../lib/url";
+
+const [queries, viewer] = await Promise.all([
+  Astro.locals.getQueries(),
+  Astro.locals.getViewer(),
+]);
+const { season, skillTreesOn, getSkillTrees, getPlayerById } = queries;
+
+// Behind the skill trees feature flag (/admin/site#flags).
+if (!skillTreesOn) return Astro.rewrite("/404");
+
+// Skill trees are per season: only this season's players unlock here.
+const playerId =
+  viewer?.playerId && getPlayerById(viewer.playerId)
+    ? viewer.playerId
+    : undefined;
+const { paths, chosen, balance, perks } = getSkillTrees({ playerId });
+const perkLines = perks ? describePerks(perks) : [];
+const seasonClosed = season.status === "closed";
+
+const outcome = parseSkillOutcome(Astro.url.searchParams.get("skills"));
+const notice = outcome ? SKILL_OUTCOME_NOTICE[outcome] : undefined;
+---
+
+<Layout
+  title="Skill trees"
+  description="Commit to a pathway and spend Clim Coin on skill trees: coin perks, titles and name colours."
+>
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <header class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <p
+          class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim"
+        >
+          ./skills --tree
+        </p>
+        <h1
+          class="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+        >
+          SKILL <span class="text-acid text-glow">TREES</span>
+        </h1>
+        <p class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim">
+          <span class="text-acid">//</span> Pick one pathway for {season.name}{
+            " "
+          }
+          and spend Clim Coin unlocking it: the root first, then either branch, then
+          the capstone. Perks only touch coins (never leaderboard points), and your
+          choice is final until the season ends.
+        </p>
+      </div>
+      {
+        balance !== undefined ? (
+          <div class="rounded-lg border border-amber/40 bg-amber/5 px-5 py-4">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+              your balance
+            </p>
+            <CoinAmount
+              amount={balance}
+              class:list={[
+                "mt-1 text-3xl",
+                balance < 0 ? "text-danger" : "text-amber",
+              ]}
+            />
+            <a
+              href={withBase("/shop")}
+              class="mt-2 block text-xs text-cyan hover:underline"
+            >
+              visit the shop →
+            </a>
+          </div>
+        ) : (
+          <div class="w-full rounded-lg border border-grid bg-term-panel/60 px-5 py-4 sm:w-auto sm:max-w-xs">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+              your balance
+            </p>
+            <p class="mt-1 text-sm leading-relaxed text-ink-dim">
+              {viewer
+                ? `Only ${season.name} players have a skill tree here.`
+                : "Sign in as a player to pick a pathway and unlock skills."}
+            </p>
+            {!viewer && (
+              <a
+                href={withBase(
+                  `/login?${new URLSearchParams({ next: "/skills" })}`,
+                )}
+                class="mt-2 block text-xs text-cyan hover:underline"
+              >
+                sign in →
+              </a>
+            )}
+          </div>
+        )
+      }
+    </header>
+
+    {
+      notice && (
+        <Notice tone={notice.tone} class="mt-6">
+          {notice.message}
+        </Notice>
+      )
+    }
+
+    {
+      seasonClosed && (
+        <p class="mt-6 rounded-md border border-grid bg-term-panel/60 px-4 py-3 text-sm text-ink-dim">
+          <span class="text-amber">&gt;</span> {season.name} is closed, so its
+          skill trees are frozen.
+        </p>
+      )
+    }
+
+    {
+      playerId && (
+        <section
+          aria-labelledby="your-pathway"
+          class="mt-8 rounded-lg border border-grid bg-term-panel/40 px-4 py-4 sm:px-5"
+        >
+          <h2
+            id="your-pathway"
+            class="text-[10px] font-bold uppercase tracking-[0.25em] text-ink-faint"
+          >
+            your pathway
+          </h2>
+          {chosen ? (
+            <div class="mt-2 flex flex-wrap items-start gap-x-6 gap-y-3">
+              <a
+                href={`#path-${chosen.id}`}
+                class:list={[
+                  "inline-flex items-center gap-2 text-lg font-extrabold hover:underline",
+                  SKILL_ACCENT_CLASS[chosen.accent].text,
+                ]}
+              >
+                <SkillSigil pathId={chosen.id} class="h-5 w-5" />
+                {chosen.name}
+              </a>
+              {perkLines.length > 0 ? (
+                <ul class="flex flex-wrap gap-2 text-xs text-ink-dim">
+                  {perkLines.map((line) => (
+                    <li class="rounded border border-grid bg-term-bg px-2 py-1">
+                      <span class="text-acid">+</span> {line}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p class="text-xs text-ink-dim">
+                  No coin perks yet. Unlock a branch to start earning them.
+                </p>
+              )}
+            </div>
+          ) : (
+            <p class="mt-2 text-sm text-ink-dim">
+              <span class="text-amber">&gt;</span> You haven't picked one yet.
+              Unlocking any pathway's root skill commits you to it for the
+              season.
+            </p>
+          )}
+        </section>
+      )
+    }
+
+    <div class="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {
+        paths.map((view) => (
+          <SkillTree
+            view={view}
+            uncommitted={playerId !== undefined && !chosen}
+            class:list={[view.chosen && "lg:col-span-2"]}
+          />
+        ))
+      }
+    </div>
+
+    <div class="mt-14 flex flex-wrap gap-3">
+      <a href={withBase("/rules#skill-trees")} class={btnGhost}>
+        skill tree rules
+      </a>
+      <a href={withBase("/rules#clim-coin")} class={btnGhost}>
+        how to earn coins
+      </a>
+      {
+        playerId && (
+          <a href={withBase("/account#wallet")} class={btnGhost}>
+            your wallet
+          </a>
+        )
+      }
+    </div>
+  </div>
+</Layout>

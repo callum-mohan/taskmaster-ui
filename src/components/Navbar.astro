@@ -14,9 +14,11 @@ interface Props {
   notifications?: NotificationFeed;
   /** Signed-in players' Clim Coin balance; the wallet chip shows when set. */
   coinBalance?: number;
+  /** The skill trees feature flag: links `/skills` when on. */
+  skillTrees?: boolean;
 }
 
-const { viewer, notifications, coinBalance } = Astro.props;
+const { viewer, notifications, coinBalance, skillTrees = false } = Astro.props;
 
 interface NavItem {
   href: string;
@@ -43,6 +45,7 @@ const moreGroups: NavGroup[] = [
     children: [
       { href: "/live", label: "live" },
       { href: "/recaps", label: "recaps" },
+      ...(skillTrees ? [{ href: "/skills", label: "skill trees" }] : []),
       { href: "/rules", label: "rules" },
     ],
   },

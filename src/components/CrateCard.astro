@@ -4,7 +4,7 @@
 // POST to `/account/crates/<id>`) or why they can't crack it. Seasonal
 // eggs say when they leave.
 import type { CrateView } from "../types";
-import CoinAmount from "./CoinAmount.astro";
+import CoinPrice from "./CoinPrice.astro";
 import RarityBadge from "./RarityBadge.astro";
 import ShopItemArt from "./ShopItemArt.astro";
 import { btnPrimary } from "./admin/styles";
@@ -26,7 +26,7 @@ interface Props {
 }
 
 const { view, personal, class: className } = Astro.props;
-const { crate, tiers, averageValue, blocked } = view;
+const { crate, price, tiers, averageValue, blocked } = view;
 const action = withBase(`/account/crates/${encodeURIComponent(crate.id)}`);
 const loginHref = withBase(
   `/login?${new URLSearchParams({ next: `/account/crates/${crate.id}` })}`,
@@ -73,7 +73,7 @@ const untilFmt = ukDateFormat({
       />
       <div>
         <h3 class="text-lg font-extrabold text-ink">{crate.name}</h3>
-        <CoinAmount amount={crate.price} class="text-base text-amber" />
+        <CoinPrice price={price} listPrice={crate.price} class="text-base" />
       </div>
     </div>
     {

@@ -6,6 +6,8 @@ import RulesSection from "../components/RulesSection.astro";
 import RuleItem from "../components/RuleItem.astro";
 import { RARITIES, cratesOnSale } from "../data/coin-rules";
 import { RARITY_INFO, formatChance } from "../lib/coin-ui";
+import { SKILL_PATHS, SKILL_TIER_PRICES, pathCost } from "../data/skill-trees";
+import { SKILL_ACCENT_CLASS } from "../lib/skill-ui";
 import { withBase } from "../lib/url";
 
 // Seasonal eggs are only listed while they're on sale.
@@ -47,6 +49,9 @@ const contents: ContentsItem[] = [
   { id: "predictions", label: "predictions" },
   { id: "results-night", label: "results night" },
   { id: "clim-coin", label: "clim coin" },
+  ...(features.skill_trees
+    ? [{ id: "skill-trees", label: "skill trees" }]
+    : []),
   { id: "account", label: "your account" },
   { id: "the-prize", label: "the prize" },
 ];
@@ -715,6 +720,62 @@ const bonusRows: BonusRow[] = [
           </RuleItem>
         </ul>
       </RulesSection>
+
+      {
+        features.skill_trees && (
+          <RulesSection
+            id="skill-trees"
+            command="rules --skill-trees"
+            title="Skill trees"
+            file="~/rules/skill-trees.md"
+            meta="per season"
+          >
+            <ul class="space-y-3">
+              <RuleItem accent="amber">
+                Commit to <span class="font-bold text-ink">one pathway</span> a
+                season on the{" "}
+                <a href={withBase("/skills")} class={link}>
+                  skill trees
+                </a>{" "}
+                page and unlock its skills with Clim Coin. Unlocking any
+                pathway's root commits you to it; there's no switching until the
+                next season.
+              </RuleItem>
+              <RuleItem>
+                Each tree has a root ({SKILL_TIER_PRICES[1]} coins), two
+                branches ({SKILL_TIER_PRICES[2]} each, root first) and a
+                capstone ({SKILL_TIER_PRICES[3]}, both branches first):{" "}
+                {pathCost(SKILL_PATHS[0])} coins for the lot.
+              </RuleItem>
+              <RuleItem accent="cyan">
+                Perks only ever touch Clim Coin:{" "}
+                <span class="font-bold text-ink">never leaderboard points</span>
+                . Earning perks pay on coins that land after you unlock them,
+                not on past weeks, and discounts apply from your next purchase.
+                Titles and name colours from a tree are yours to equip in your
+                wallet and can't be bought in the shop.
+              </RuleItem>
+              <RuleItem>
+                <span class="mt-1 block space-y-1">
+                  {SKILL_PATHS.map((path) => (
+                    <span class="block">
+                      <span
+                        class:list={[
+                          "font-bold",
+                          SKILL_ACCENT_CLASS[path.accent].text,
+                        ]}
+                      >
+                        {path.name}
+                      </span>
+                      : {path.description}
+                    </span>
+                  ))}
+                </span>
+              </RuleItem>
+            </ul>
+          </RulesSection>
+        )
+      }
 
       <RulesSection
         id="account"

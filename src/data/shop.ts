@@ -16,6 +16,7 @@ import {
   players,
   powerUpUses,
   shopItems,
+  skillUnlocks,
   wishes,
 } from "../db/schema";
 import { violatedConstraint } from "./db-errors";
@@ -27,13 +28,15 @@ import { GIFT_WEEKLY_CAP } from "./coin-rules";
 // the stored facts so a double-submit or a race can't overspend or cheat.
 
 /** The coins a player has left to spend, given their derived `earned`. */
-const budget = (playerId: string, earned: number) => sql`
+export const budget = (playerId: string, earned: number) => sql`
   ${earned}::integer
     + coalesce((select sum(amount) from ${coinAdjustments}
         where player_id = ${playerId}), 0)
     - coalesce((select sum(price) from ${coinPurchases}
         where player_id = ${playerId}), 0)
     - coalesce((select sum(price) from ${crateOpens}
+        where player_id = ${playerId}), 0)
+    - coalesce((select sum(price) from ${skillUnlocks}
         where player_id = ${playerId}), 0)
     + coalesce((select sum(amount) from ${coinGifts}
         where to_player_id = ${playerId}), 0)
@@ -59,8 +62,10 @@ export const lockWallet = (playerId: string) =>
   sql`select pg_advisory_xact_lock(hashtext(${`clim-coin:${playerId}`}))`;
 
 /**
- * Buys `itemId` at its current price if the player can afford it and hasn't
- * bought it before. A power-up can be bought once a season (wallets are per
+ * Buys `itemId` at its current price, less `discount` (the player's skill
+ * tree discount, worked out by the caller from fresh rows), if the player
+ * can afford it and hasn't bought it before. Skill tree rewards are never
+ * sold. A power-up can be bought once a season (wallets are per
  * season), checked by its effect so a second item with the same effect
  * can't get round it. `earned` is the player's
  * derived earnings, worked out from fresh rows. Spending and grants are
@@ -71,18 +76,21 @@ export async function buyItem(
   playerId: string,
   itemId: string,
   earned: number,
+  discount = 0,
 ): Promise<boolean> {
   const db = getDb();
+  const price = sql`greatest(item.price - ${discount}::integer, 0)`;
   const [, inserted] = await db.batch([
     db.execute(lockWallet(playerId)),
     db.execute(sql`
       insert into ${coinPurchases} (player_id, item_id, price)
-      select ${playerId}, item.id, item.price
+      select ${playerId}, item.id, ${price}
       from ${shopItems} item
       where item.id = ${itemId}
         and item.available
         and ${onSaleNow("item")}
         and not item.crate_only
+        and not item.skill_only
         and not exists (
           select 1 from ${coinPurchases} owned
           join ${shopItems} owned_item on owned_item.id = owned.item_id
@@ -92,7 +100,7 @@ export async function buyItem(
               or owned_item.power_up = item.power_up
             )
         )
-        and (${budget(playerId, earned)}) >= item.price
+        and (${budget(playerId, earned)}) >= ${price}
       returning id`),
   ]);
   return inserted.rows.length > 0;
@@ -101,7 +109,8 @@ export async function buyItem(
 /**
  * Opens `crate` for the player, giving them `itemId` (rolled by the caller
  * from their personal odds): the item is owned through a zero-price
- * purchase and the crate's price is spent, in one statement under the
+ * purchase and the crate's price (as the caller passes it, after any skill
+ * tree discount) is spent, in one statement under the
  * wallet lock. A power-up won this way is that effect's one charge for the
  * season, exactly as if bought. Returns the opening's id, or `undefined` if
  * they can no longer afford it or already own the item (or, for a power-up,
@@ -125,6 +134,7 @@ export async function openCrate(
         from ${shopItems} item
         where item.id = ${itemId}
           and item.available
+          and not item.skill_only
           and ${onSaleNow("item")}
           and not exists (
             select 1 from ${coinPurchases} owned
@@ -151,8 +161,8 @@ export async function openCrate(
 
 /**
  * Sends `amount` coins from one player to another in the same season, if
- * the sender can afford it and it keeps them within the weekly gift cap
- * (gifts sent in the last 7 days count). `earned` is the sender's derived
+ * the sender can afford it and it keeps them within their weekly gift
+ * `cap` (gifts sent in the last 7 days count; skill trees can raise it). `earned` is the sender's derived
  * earnings from fresh rows. Checked under the sender's wallet lock, so two
  * gifts at once can't both spend the same coins or beat the cap.
  */
@@ -162,6 +172,7 @@ export async function sendGift(
   amount: number,
   message: string | null,
   earned: number,
+  cap: number = GIFT_WEEKLY_CAP,
 ): Promise<boolean> {
   const db = getDb();
   const [, inserted] = await db.batch([
@@ -181,7 +192,7 @@ export async function sendGift(
         and ${amount}::integer + coalesce((select sum(amount) from ${coinGifts}
             where from_player_id = ${fromPlayerId}
               and created_at > now() - interval '7 days'), 0)
-          <= ${GIFT_WEEKLY_CAP}
+          <= ${cap}::integer
         and (${budget(fromPlayerId, earned)}) >= ${amount}::integer
       returning id`),
   ]);

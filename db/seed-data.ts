@@ -1,4 +1,5 @@
 import type * as schema from "../src/db/schema";
+import { SKILL_REWARD_ITEMS } from "../src/data/skill-trees";
 
 // Initial data for a fresh database, generated from the original mock-data
 // modules. Postgres is now the source of truth: record new results in the
@@ -1629,4 +1630,12 @@ export const shopItems: Insert<typeof schema.shopItems> = [
     availableUntil: "2026-10-31 23:59:59",
     sortOrder: 27,
   },
+  // Skill tree rewards: never sold, granted by unlocking their node.
+  ...SKILL_REWARD_ITEMS.map((item, index) => ({
+    ...item,
+    category: "cosmetic" as const,
+    price: 0,
+    skillOnly: true,
+    sortOrder: 900 + index,
+  })),
 ];

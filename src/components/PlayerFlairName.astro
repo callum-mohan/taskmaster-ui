@@ -1,8 +1,11 @@
 ---
 // A player's name as lists show it, with their Clim Coin flair: the name
-// colour they bought and a tiny icon of their equipped pet.
+// colour they wear, a tiny icon of their equipped pet and their skill
+// pathway's sigil.
 import type { PlayerFlair } from "../types";
+import SkillSigil from "./SkillSigil.astro";
 import { NAME_COLOUR_CLASS } from "../lib/coin-ui";
+import { SKILL_ACCENT_CLASS } from "../lib/skill-ui";
 import { assetUrl } from "../lib/url";
 
 interface Props {
@@ -34,5 +37,19 @@ const { name, flair, class: className } = Astro.props;
       height="16"
       class="h-4 w-4 shrink-0 [image-rendering:pixelated]"
     />
+  )
+}
+{
+  flair?.skillPath && (
+    <span
+      title={flair.skillPath.name}
+      class:list={[
+        "inline-flex shrink-0",
+        SKILL_ACCENT_CLASS[flair.skillPath.accent].text,
+      ]}
+    >
+      <SkillSigil pathId={flair.skillPath.id} class="h-3 w-3" />
+      <span class="sr-only">({flair.skillPath.name})</span>
+    </span>
   )
 }

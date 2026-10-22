@@ -21,6 +21,11 @@ export const NAME_COLOUR_CLASS: Record<NameColour, string> = {
   pumpkin: "text-pumpkin",
   glitch: "name-glitch",
   rainbow: "name-rainbow",
+  storm: "name-storm",
+  hacker: "name-hacker",
+  friendship: "name-friendship",
+  platinum: "name-platinum",
+  cartographer: "name-cartographer",
 };
 
 export const PROFILE_THEME_INFO: Record<
@@ -70,6 +75,7 @@ export const PURCHASE_BLOCK_LABEL: Record<PurchaseBlock, string> = {
   owned: "owned",
   used: "used this season",
   "crate-only": "eggs only",
+  "skill-only": "skill tree reward",
   unaffordable: "not enough coins",
   unavailable: "retired",
   "season-closed": "season closed",

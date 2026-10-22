@@ -41,6 +41,8 @@ interface Props {
   ledgerHref: (page: number) => string;
   /** The outcome of the last wallet action, if any. */
   notice?: { tone: "success" | "error"; message: string };
+  /** The skill trees feature flag: links `/skills` when on. */
+  skillTrees?: boolean;
   class?: string;
 }
 
@@ -52,6 +54,7 @@ const {
   wish,
   hint,
   seasonName,
+  skillTrees = false,
   seasonClosed,
   ledgerPage,
   ledgerHref,
@@ -423,9 +426,21 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
       >
         inventory
       </h2>
-      <a href={withBase("/shop")} class="text-xs text-cyan hover:underline">
-        visit the shop →
-      </a>
+      <span class="flex flex-wrap gap-4">
+        {
+          skillTrees && (
+            <a
+              href={withBase("/skills")}
+              class="text-xs text-cyan hover:underline"
+            >
+              skill trees →
+            </a>
+          )
+        }
+        <a href={withBase("/shop")} class="text-xs text-cyan hover:underline">
+          visit the shop →
+        </a>
+      </span>
     </div>
     {
       wearables.length === 0 && powerUps.length === 0 ? (

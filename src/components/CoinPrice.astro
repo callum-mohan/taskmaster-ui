@@ -1,0 +1,30 @@
+---
+// A price the viewer pays: their discounted price, with the full price
+// struck through when a skill tree discount applies.
+import CoinAmount from "./CoinAmount.astro";
+
+interface Props {
+  /** What the viewer pays. */
+  price: number;
+  /** The list price, before discounts. */
+  listPrice: number;
+  class?: string;
+}
+
+const { price, listPrice, class: className } = Astro.props;
+const discounted = price < listPrice;
+---
+
+<span class:list={["inline-flex flex-wrap items-baseline gap-2", className]}>
+  <CoinAmount amount={price} class="text-amber" />
+  {
+    discounted && (
+      <>
+        <s class="text-[0.8em] text-ink-faint" aria-hidden="true">
+          {listPrice}
+        </s>
+        <span class="sr-only">(skill tree discount, usually {listPrice})</span>
+      </>
+    )
+  }
+</span>

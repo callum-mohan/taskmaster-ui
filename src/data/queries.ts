@@ -48,6 +48,7 @@ import { createRulesQueries } from "./rules-queries";
 import { createStreakQueries } from "./streak-queries";
 import { createWrappedQueries } from "./wrapped-queries";
 import { createCoinQueries } from "./coin-queries";
+import { createSkillQueries } from "./skill-queries";
 import { isWrappedLive } from "./seasons";
 import { assetUrl, withBase } from "../lib/url";
 import { ADMIN_HOME, ADMIN_SECTIONS } from "../lib/admin-nav";
@@ -1283,8 +1284,23 @@ export function createQueries(data: CompetitionData) {
         }))
       : [];
 
+    const skillItems: CommandPaletteItem[] = data.features.skill_trees
+      ? [
+          {
+            id: "page-skills",
+            label: "Skill trees",
+            group: "page",
+            href: withBase("/skills"),
+            hint: "spend clim coin on a pathway",
+            keywords:
+              "skills skill tree pathway perks stormbrewer elite hacker friendkeeper overachiever elephant cartographer clim coin",
+          },
+        ]
+      : [];
+
     return [
       ...PALETTE_PAGES,
+      ...skillItems,
       ...seasonItems,
       ...wrappedItems,
       ...taskItems,
@@ -1710,5 +1726,9 @@ export function createQueries(data: CompetitionData) {
     ...streakQueries,
     ...wrappedQueries,
     ...coinQueries,
+    ...createSkillQueries(data, {
+      getBalance: (playerId) => coinQueries.getWallet(playerId).balance,
+      getSkillPerks: coinQueries.getSkillPerks,
+    }),
   };
 }

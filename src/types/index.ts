@@ -1538,7 +1538,7 @@ export type PageLinkSlot = number | "gap";
 // ── Feature flags ─────────────────────────────────────────────────────
 
 /** A site feature an admin can switch on or off (see `feature-flags.ts`). */
-export type FeatureFlagKey = "shop_eggs" | "storm_mode";
+export type FeatureFlagKey = "shop_eggs" | "storm_mode" | "skill_trees";
 
 /** Whether each feature is on. */
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -1580,7 +1580,13 @@ export type NameColour =
   | "gold"
   | "pumpkin"
   | "glitch"
-  | "rainbow";
+  | "rainbow"
+  // Skill tree capstone rewards (never sold in the shop).
+  | "storm"
+  | "hacker"
+  | "friendship"
+  | "platinum"
+  | "cartographer";
 /** Profile terminal themes a theme cosmetic may use. */
 export type ProfileTheme =
   | "phosphor"
@@ -1610,6 +1616,8 @@ export interface ShopItem {
   crateOnly: boolean;
   /** Seasonal egg exclusive: only drops from this crate (by id). */
   crateId?: string;
+  /** Skill tree reward: only granted by unlocking a skill node, never sold. */
+  skillOnly: boolean;
   /** Limited-time stock: on sale from / until these instants (ISO 8601). */
   availableFrom?: string;
   availableUntil?: string;
@@ -1679,6 +1687,8 @@ export type CrateBlock = "guest" | "empty" | "unaffordable" | "season-closed";
 /** A crate as one viewer sees it in the shop: their personal odds. */
 export interface CrateView {
   crate: Crate;
+  /** What the viewer would pay, after their skill tree discounts. */
+  price: number;
   tiers: CrateTier[];
   /** Average shop value of one roll, in coins. */
   averageValue: number;
@@ -1814,6 +1824,10 @@ export interface ClimCoinData {
   wishes: Wish[];
   /** Taskmaster's Hints by task id; only shown to players who used Hint. */
   hints: Record<string, string>;
+  /** The skill pathway each of this season's players committed to. */
+  skillPaths: SkillPathPick[];
+  /** Skill nodes this season's players unlocked, oldest first. */
+  skillUnlocks: SkillUnlock[];
 }
 
 /** The payout table, as `/rules` and the shop explain it. */
@@ -1841,7 +1855,11 @@ export type CoinLedgerKind =
   | "crate"
   | "gift-in"
   | "gift-out"
-  | "item-gift";
+  | "item-gift"
+  /** Coins spent unlocking a skill node. */
+  | "skill"
+  /** Extra coins from a skill node's earning perk. */
+  | "skill-perk";
 
 /** One line in a wallet's history. */
 export interface CoinLedgerEntry {
@@ -1912,6 +1930,8 @@ export type PurchaseBlock =
   | "used"
   /** Crate exclusives: never sold directly. */
   | "crate-only"
+  /** Skill tree rewards: only unlocked through a skill node. */
+  | "skill-only"
   | "unaffordable"
   | "unavailable"
   | "season-closed";
@@ -1919,6 +1939,8 @@ export type PurchaseBlock =
 /** A catalogue item as one viewer sees it in the shop. */
 export interface ShopListing {
   item: ShopItem;
+  /** What the viewer would pay, after their skill tree discounts. */
+  price: number;
   /** Already bought (power-ups: this season, used or not). */
   owned: boolean;
   /** Power-ups: unused charges held. */
@@ -2047,4 +2069,178 @@ export interface PlayerFlair {
   pet?: { name: string; imageUrl: string };
   title?: string;
   nameColour?: NameColour;
+  /** The skill pathway they committed to (shown as its sigil). */
+  skillPath?: Pick<SkillPath, "id" | "name" | "accent">;
 }
+
+// ── Skill trees ───────────────────────────────────────────────────────
+
+/** The skill pathways (see `src/data/skill-trees.ts`). */
+export type SkillPathId =
+  | "stormbrewer"
+  | "elite-hacker"
+  | "friendkeeper"
+  | "overachiever"
+  | "elephant-cartographer";
+
+/** Earnings an `earn_bonus` perk adds to. */
+export type SkillEarnSource =
+  | "placement"
+  | "entry"
+  | "prediction"
+  | "poll-vote"
+  | "peoples-choice-vote"
+  | "power-up-use";
+
+/**
+ * What a skill node does for its owner. Perks only ever touch Clim Coin
+ * (never leaderboard points).
+ */
+export type SkillPerk =
+  /** Extra coins on every earning of `source` that lands after the unlock. */
+  | { kind: "earn_bonus"; source: SkillEarnSource; amount: number }
+  /** Coins off power-ups (all of them, or just `powerUps`). */
+  | { kind: "power_up_discount"; amount: number; powerUps?: PowerUpKind[] }
+  /** Coins off every item in the shop `categories` (not power-ups). */
+  | { kind: "shop_discount"; amount: number; categories: ShopCategory[] }
+  /** Coins off every egg. */
+  | { kind: "egg_discount"; amount: number }
+  /** Odds (out of 1) moved from an egg's commonest tier to the next one up. */
+  | { kind: "egg_luck"; amount: number }
+  /** Extra coins a player may gift in any 7 days. */
+  | { kind: "gift_cap"; amount: number };
+
+/** One node in a skill tree. */
+export interface SkillNode {
+  /** Unique across every pathway (it's stored on unlocks). */
+  id: string;
+  pathId: SkillPathId;
+  name: string;
+  /** A line of flavour; what it does is listed from `perks`. */
+  description: string;
+  /** 1 = root, 2 = branches, 3 = capstone. */
+  tier: 1 | 2 | 3;
+  price: number;
+  /** Node ids (in the same pathway) that must be unlocked first. */
+  requires: string[];
+  perks: SkillPerk[];
+  /** A skill-only shop item the node grants (title or name colour). */
+  rewardItemId?: string;
+}
+
+/** A themed skill tree a player can commit to for the season. */
+export interface SkillPath {
+  id: SkillPathId;
+  name: string;
+  /** The squad it's a nod to. */
+  inspiredBy: string;
+  /** Short tagline. */
+  motto: string;
+  description: string;
+  /** Accent token the pathway is drawn in. */
+  accent: "acid" | "amber" | "magenta" | "cyan" | "gold";
+  nodes: SkillNode[];
+}
+
+/** The pathway a player committed to (once a season). */
+export interface SkillPathPick {
+  playerId: string;
+  pathId: SkillPathId;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A skill node a player unlocked, at the price paid then. */
+export interface SkillUnlock {
+  id: number;
+  playerId: string;
+  pathId: SkillPathId;
+  nodeId: string;
+  price: number;
+  /** The zero-price purchase that grants the node's reward item, if any. */
+  purchaseId?: number;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A player's skill perks added up. */
+export interface SkillPerks {
+  /** Extra coins per earning, by source. */
+  earn: Partial<Record<SkillEarnSource, number>>;
+  /** Coins off every power-up. */
+  powerUpDiscount: number;
+  /** Extra coins off particular power-ups. */
+  powerUpDiscounts: Partial<Record<PowerUpKind, number>>;
+  /** Coins off pets, avatars and cosmetics, by category. */
+  shopDiscounts: Partial<Record<ShopCategory, number>>;
+  eggDiscount: number;
+  eggLuck: number;
+  giftCap: number;
+}
+
+/** Why a viewer can't unlock a skill node right now. */
+export type SkillBlock =
+  | "guest"
+  | "season-closed"
+  | "unlocked"
+  | "other-path"
+  | "locked"
+  | "unaffordable";
+
+/** A skill node as one viewer sees it. */
+export interface SkillNodeView {
+  node: SkillNode;
+  unlocked: boolean;
+  /** Why it can't be unlocked; unset when it can. */
+  blocked?: SkillBlock;
+  /** Prerequisites still to unlock. */
+  missing: SkillNode[];
+  reward?: ShopItem;
+}
+
+/** A pathway as one viewer sees it. */
+export interface SkillPathView {
+  path: SkillPath;
+  /** The viewer committed to this pathway. */
+  chosen: boolean;
+  /** Nodes by tier, root first. */
+  tiers: SkillNodeView[][];
+  unlockedCount: number;
+  /** Coins to unlock the whole tree. */
+  totalCost: number;
+}
+
+/** The `/skills` page for one viewer. */
+export interface SkillTreesView {
+  paths: SkillPathView[];
+  chosen?: SkillPath;
+  /** The viewer's balance, when they're a player this season. */
+  balance?: number;
+  perks?: SkillPerks;
+}
+
+/** A player's pathway and progress, for their profile. */
+export interface PlayerSkills {
+  path: SkillPath;
+  unlocked: SkillNode[];
+  /** Nodes in the pathway. */
+  total: number;
+}
+
+/** A player's skill tree record, as the admin player page lists it. */
+export interface SkillLog {
+  path?: SkillPath;
+  /** Oldest first. */
+  unlocks: { node: SkillNode; price: number; at: string }[];
+}
+
+/** Outcome of unlocking a skill node, shown after the redirect. */
+export type SkillOutcome =
+  | "unlocked"
+  | "unaffordable"
+  | "locked"
+  | "owned"
+  | "other-path"
+  | "season-closed"
+  | "unavailable"
+  | "invalid";

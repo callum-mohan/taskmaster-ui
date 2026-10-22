@@ -68,3 +68,53 @@ export async function purgeCached(
     console.error(`Cache purge ${key} failed`, error);
   }
 }
+
+/**
+ * Whether a rendered response can be shared: a plain HTML 200 that sets no
+ * cookies and leaves caching to us (pages that care, like `/live`, set their
+ * own `Cache-Control`).
+ */
+function isShareablePage(response: Response): boolean {
+  return (
+    response.status === 200 &&
+    !response.headers.has("Set-Cookie") &&
+    !response.headers.has("Cache-Control") &&
+    (response.headers.get("Content-Type") ?? "").startsWith("text/html")
+  );
+}
+
+/**
+ * Returns the cached page for `key`, or renders it with `render` and, if
+ * it's shareable, caches it for `ttlSeconds`. Only use it for responses
+ * that are the same for every visitor. A hit is served without the cache's
+ * `Cache-Control`, so browsers don't keep a copy.
+ */
+export async function cachedPage(
+  key: string,
+  ttlSeconds: number,
+  render: () => Promise<Response>,
+  cache: EdgeCache | undefined = defaultEdgeCache(),
+): Promise<Response> {
+  if (!cache) return render();
+  try {
+    const hit = await cache.match(key);
+    if (hit) {
+      const response = new Response(hit.body, hit);
+      response.headers.delete("Cache-Control");
+      return response;
+    }
+  } catch (error) {
+    console.error(`Cache read ${key} failed`, error);
+  }
+  const response = await render();
+  if (!isShareablePage(response)) return response;
+  const body = await response.text();
+  try {
+    const headers = new Headers(response.headers);
+    headers.set("Cache-Control", `max-age=${ttlSeconds}`);
+    await cache.put(key, new Response(body, { status: 200, headers }));
+  } catch (error) {
+    console.error(`Cache write ${key} failed`, error);
+  }
+  return new Response(body, response);
+}

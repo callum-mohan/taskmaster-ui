@@ -41,9 +41,14 @@ Rules:
   `const { getLeaderboard } = await Astro.locals.getQueries();`, then hand
   ready-to-render data to components. Never cache competition data in
   module-level state: a Worker isolate serves many requests concurrently.
-  The only cache is the raw-rows edge cache in `competition.ts`; new
+  The caches are the raw-rows edge cache in `competition.ts` and the
+  signed-out page cache keyed on its generation (`cachedPage`); new
   competition writes must happen in a `POST` under `/admin` or `/account`
-  so the middleware purges it.
+  so the middleware purges both. Public pages must render the same HTML
+  for every signed-out visitor (no per-request randomness or nonces, and
+  any cookie they read must make the middleware skip the cache), or set
+  their own `Cache-Control` to opt out. The Workers Free plan allows 10 ms
+  of CPU per request: keep per-request work lean.
 - All cross-record computation (leaderboard ranking, stats, recent results,
   initials) lives in `queries.ts` as pure functions — not in components or
   page markup.

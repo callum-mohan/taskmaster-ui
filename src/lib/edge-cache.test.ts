@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { cachedJson, purgeCached, type EdgeCache } from "./edge-cache";
+import {
+  cachedJson,
+  cachedPage,
+  purgeCached,
+  type EdgeCache,
+} from "./edge-cache";
 
 /** An in-memory stand-in for `caches.default`. */
 function memoryCache() {
@@ -85,6 +90,92 @@ describe("purgeCached", () => {
     } as unknown as EdgeCache;
 
     await expect(purgeCached(KEY, broken)).resolves.toBeUndefined();
+    error.mockRestore();
+  });
+});
+
+describe("cachedPage", () => {
+  const html = (body: string, headers: Record<string, string> = {}) =>
+    new Response(body, {
+      headers: { "Content-Type": "text/html", ...headers },
+    });
+
+  it("renders and caches a page on a miss, then serves the cached copy", async () => {
+    const { cache, entries } = memoryCache();
+    const render = vi.fn(async () => html("<p>home</p>"));
+
+    const first = await cachedPage(KEY, 60, render, cache);
+    const second = await cachedPage(KEY, 60, render, cache);
+
+    expect(await first.text()).toBe("<p>home</p>");
+    expect(await second.text()).toBe("<p>home</p>");
+    expect(render).toHaveBeenCalledTimes(1);
+    expect(entries.get(KEY)?.headers.get("Cache-Control")).toBe("max-age=60");
+    // Browsers never get the cache's lifetime.
+    expect(first.headers.has("Cache-Control")).toBe(false);
+    expect(second.headers.has("Cache-Control")).toBe(false);
+    expect(second.headers.get("Content-Type")).toBe("text/html");
+  });
+
+  it.each([
+    [
+      "an error",
+      () =>
+        new Response("oops", {
+          status: 500,
+          headers: { "Content-Type": "text/html" },
+        }),
+    ],
+    [
+      "a redirect",
+      () => new Response(null, { status: 302, headers: { Location: "/" } }),
+    ],
+    ["a cookie", () => html("<p>hi</p>", { "Set-Cookie": "a=b" })],
+    [
+      "its own Cache-Control",
+      () => html("<p>live</p>", { "Cache-Control": "no-store" }),
+    ],
+    [
+      "non-HTML",
+      () =>
+        new Response("{}", { headers: { "Content-Type": "application/json" } }),
+    ],
+  ])("doesn't cache a response with %s", async (_, make) => {
+    const { cache, entries } = memoryCache();
+    const response = make();
+
+    expect(await cachedPage(KEY, 60, async () => response, cache)).toBe(
+      response,
+    );
+    expect(entries.size).toBe(0);
+  });
+
+  it("renders every time without a cache", async () => {
+    const render = vi.fn(async () => html("<p>home</p>"));
+
+    await cachedPage(KEY, 60, render, undefined);
+    await cachedPage(KEY, 60, render, undefined);
+
+    expect(render).toHaveBeenCalledTimes(2);
+  });
+
+  it("still serves the page when the cache fails", async () => {
+    const broken: EdgeCache = {
+      match: () => Promise.reject(new Error("down")),
+      put: () => Promise.reject(new Error("down")),
+      delete: () => Promise.reject(new Error("down")),
+    };
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await cachedPage(
+      KEY,
+      60,
+      async () => html("<p>home</p>"),
+      broken,
+    );
+
+    expect(await response.text()).toBe("<p>home</p>");
+    expect(error).toHaveBeenCalledTimes(2);
     error.mockRestore();
   });
 });

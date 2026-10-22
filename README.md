@@ -172,7 +172,26 @@ rows are cached at the edge rather than read on every page view:
   fresh on every poll with one small query, so results night stays in sync
   everywhere.
 
-The cache is a no-op on `*.workers.dev` URLs (Cloudflare's Cache API only
+**Signed-out pages** are cached too, as rendered HTML. The Worker runs on the
+Workers Free plan, whose 10 ms CPU limit per request a full render can exceed
+(`Worker exceeded CPU time limit`), so a signed-out visitor's page is
+rendered once per data centre and shared (`cachedPage` in
+`src/lib/edge-cache.ts`, wired up in `src/middleware.ts`):
+
+- Only `GET`s without a session or task-reveal cookie, and only plain HTML
+  `200`s that set no cookie and no `Cache-Control` of their own (so `/live`,
+  which sends `no-store`, never is). Signed-in pages are always rendered.
+- They're kept for 60 seconds (`PAGE_CACHE_TTL_SECONDS`), which bounds how
+  late time-driven changes (a week going live) reach signed-out visitors.
+- The key includes a cache generation (`competitionCacheGeneration`) that is
+  purged with the rows, so a write empties the page cache in that data
+  centre too, and that expires with them.
+
+The timezone helpers in `src/lib/time.ts` also memoise their `Intl` work
+(per 15-minute offset slot, and per formatter), as those conversions were
+the biggest share of the data layer's CPU time.
+
+The caches are a no-op on `*.workers.dev` URLs (Cloudflare's Cache API only
 works on custom domains), where every request reads the database.
 
 ## 🗄️ Database (Neon)

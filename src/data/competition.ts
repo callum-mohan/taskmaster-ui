@@ -94,9 +94,33 @@ const rowsCacheKey = (origin: string) =>
     env.CF_VERSION_METADATA?.id ?? "local"
   }`;
 
-/** Drops the cached rows in this data centre, after a write. */
-export const invalidateCompetitionCache = (origin: string) =>
-  purgeCached(rowsCacheKey(origin));
+// Signed-out visitors' pages are cached under the current generation (see
+// `src/middleware.ts`). Purging it with the rows moves every page in this
+// data centre onto fresh keys, since a URL-keyed cache can't be emptied.
+const generationCacheKey = (origin: string) =>
+  `${origin}/__cache/competition-generation/${
+    env.CF_VERSION_METADATA?.id ?? "local"
+  }`;
+
+/**
+ * The current generation of the cached competition data (in this data
+ * centre): it changes whenever the cached rows are purged or expire. Cache
+ * keys that include it are dropped along with the rows.
+ */
+export const competitionCacheGeneration = (origin: string) =>
+  cachedJson<string>(
+    generationCacheKey(origin),
+    ROWS_CACHE_TTL_SECONDS,
+    async () => `${env.CF_VERSION_METADATA?.id ?? "local"}-${Date.now()}`,
+  );
+
+/** Drops the cached rows (and pages built from them) in this data centre. */
+export const invalidateCompetitionCache = async (origin: string) => {
+  await Promise.all([
+    purgeCached(rowsCacheKey(origin)),
+    purgeCached(generationCacheKey(origin)),
+  ]);
+};
 
 /** Every competition table's rows, in one HTTP round trip. */
 async function fetchCompetitionRows() {

@@ -25,7 +25,7 @@ interface WallClock {
   second: number;
 }
 
-function wallClockAt(ms: number): WallClock {
+function zonedWallClockAt(ms: number): WallClock {
   const parts: Record<string, number> = {};
   for (const { type, value } of partsFmt.formatToParts(new Date(ms))) {
     if (type !== "literal") parts[type] = Number(value);
@@ -43,9 +43,37 @@ function wallClockAt(ms: number): WallClock {
 const utcOf = (w: WallClock) =>
   Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second);
 
+// `formatToParts` is slow, and every task and poll time goes through it on
+// each request (a Worker gets very little CPU time). Zone offsets only change
+// on a quarter hour, so the offset is looked up once per 15-minute slot. This
+// memoises a pure function of the instant; it holds no competition data.
+const OFFSET_SLOT_MS = 15 * 60 * 1000;
+const OFFSET_CACHE_LIMIT = 10_000;
+const offsetsBySlot = new Map<number, number>();
+
 /** UK offset from UTC (ms) at the given instant: 0 for GMT, 1h for BST. */
 function offsetAt(ms: number): number {
-  return utcOf(wallClockAt(ms)) - Math.floor(ms / 1000) * 1000;
+  const slot = Math.floor(ms / OFFSET_SLOT_MS);
+  let offset = offsetsBySlot.get(slot);
+  if (offset === undefined) {
+    const start = slot * OFFSET_SLOT_MS;
+    offset = utcOf(zonedWallClockAt(start)) - start;
+    if (offsetsBySlot.size >= OFFSET_CACHE_LIMIT) offsetsBySlot.clear();
+    offsetsBySlot.set(slot, offset);
+  }
+  return offset;
+}
+
+function wallClockAt(ms: number): WallClock {
+  const d = new Date(Math.floor(ms / 1000) * 1000 + offsetAt(ms));
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    second: d.getUTCSeconds(),
+  };
 }
 
 /**
@@ -88,12 +116,22 @@ export function toWallClock(date: Date): string {
   );
 }
 
+// Building an `Intl.DateTimeFormat` is expensive, so each distinct set of
+// options is built once and shared (formatters are immutable).
+const ukFormats = new Map<string, Intl.DateTimeFormat>();
+
 /** An `en-GB` date formatter pinned to UK time. */
 export function ukDateFormat(
   options: Intl.DateTimeFormatOptions,
 ): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat("en-GB", {
-    ...options,
-    timeZone: SITE_TIME_ZONE,
-  });
+  const key = JSON.stringify(options);
+  let format = ukFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      ...options,
+      timeZone: SITE_TIME_ZONE,
+    });
+    ukFormats.set(key, format);
+  }
+  return format;
 }

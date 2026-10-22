@@ -16,6 +16,7 @@ import {
   players,
   powerUpUses,
   shopItems,
+  wishes,
 } from "../db/schema";
 import { violatedConstraint } from "./db-errors";
 import { GIFT_WEEKLY_CAP } from "./coin-rules";
@@ -50,8 +51,11 @@ const onSaleNow = (item: string) =>
   and (${item}.available_until is null
     or ${item}.available_until > (now() at time zone 'Europe/London'))`);
 
-/** Serialises a player's spending, so two at once can't both spend. */
-const lockWallet = (playerId: string) =>
+/**
+ * Serialises a player's spending, so two at once can't both spend. Admin
+ * item gifts take it too, so a gift and a purchase can't both give the item.
+ */
+export const lockWallet = (playerId: string) =>
   sql`select pg_advisory_xact_lock(hashtext(${`clim-coin:${playerId}`}))`;
 
 /**
@@ -212,6 +216,32 @@ export async function unequipSlot(
     .where(
       and(eq(equippedItems.playerId, playerId), eq(equippedItems.slot, slot)),
     );
+}
+
+/**
+ * Spends the player's unused One Wish Willow charge on `wish`, for the
+ * Taskmaster to grant or decline. The unique `purchase_id` stops a
+ * double-submit spending one charge twice. Returns whether it was made.
+ */
+export async function makeWish(
+  playerId: string,
+  wish: string,
+): Promise<boolean> {
+  const inserted = await getDb().execute(sql`
+    insert into ${wishes} (purchase_id, player_id, wish)
+    select charge.id, ${playerId}, ${wish}
+    from ${coinPurchases} charge
+    join ${shopItems} item on item.id = charge.item_id
+    where charge.player_id = ${playerId}
+      and item.power_up = 'wish'
+      and not exists (
+        select 1 from ${wishes} made where made.purchase_id = charge.id
+      )
+    order by charge.id
+    limit 1
+    on conflict (purchase_id) do nothing
+    returning id`);
+  return inserted.rows.length > 0;
 }
 
 const USE_CONSTRAINT_OUTCOMES: Record<string, CoinOutcome> = {

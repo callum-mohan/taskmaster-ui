@@ -73,6 +73,13 @@ export const powerUpKind = pgEnum("power_up_kind", [
   "shield",
   "mirror",
   "insurance",
+  // Spent by making a wish (a `wishes` row), never on a week.
+  "wish",
+]);
+export const wishStatus = pgEnum("wish_status", [
+  "pending",
+  "granted",
+  "declined",
 ]);
 export const loadoutSlot = pgEnum("loadout_slot", [
   "pet",
@@ -788,11 +795,12 @@ export const powerUpUses = pgTable(
       "power_up_uses_not_self",
       sql`${t.targetPlayerId} is distinct from ${t.playerId}`,
     ),
-    // Shield, Mirror and Insurance are passive. Compared as text so the
-    // check doesn't use the enum values added in the same migration.
+    // Shield, Mirror and Insurance are passive, and a wish is spent on a
+    // `wishes` row. Compared as text so the check doesn't use the enum
+    // values added in the same migration.
     check(
       "power_up_uses_active_effect",
-      sql`${t.effect}::text not in ('shield', 'mirror', 'insurance')`,
+      sql`${t.effect}::text not in ('shield', 'mirror', 'insurance', 'wish')`,
     ),
     index("power_up_uses_task_id_idx").on(t.taskId),
     index("power_up_uses_target_player_id_idx").on(t.targetPlayerId),
@@ -846,6 +854,82 @@ export const coinAdjustments = pgTable(
       sql`${t.amount} <> 0 and ${t.amount} between -10000 and 10000`,
     ),
     index("coin_adjustments_player_id_idx").on(t.playerId),
+  ],
+);
+
+/**
+ * A shop item (pet, avatar, cosmetic or power-up) an admin gifted a player.
+ * Like a crate win, it's owned through `purchaseId`, a zero-price
+ * `coin_purchases` row written in the same statement, so ownership works
+ * exactly like buying. The actor's name is copied in, like
+ * `coin_adjustments`.
+ */
+export const itemGifts = pgTable(
+  "item_gifts",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "restrict" }),
+    purchaseId: integer()
+      .notNull()
+      .unique("item_gifts_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    reason: text().notNull(),
+    actorId: text().notNull(),
+    actorName: text().notNull(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("item_gifts_player_id_idx").on(t.playerId),
+    index("item_gifts_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * A wish made with the One Wish Willow power-up: its `purchaseId` is the
+ * charge it spent (so one wish per charge). The Taskmaster grants or
+ * declines it from the admin dashboard; either way it's spent. The
+ * decider's name is copied in, like `coin_adjustments`.
+ */
+export const wishes = pgTable(
+  "wishes",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    purchaseId: integer()
+      .notNull()
+      .unique("wishes_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    wish: text().notNull(),
+    status: wishStatus().notNull().default("pending"),
+    // The Taskmaster's reply, shown to the player with the decision.
+    response: text(),
+    deciderId: text(),
+    deciderName: text(),
+    decidedAt: timestamp({ withTimezone: true, mode: "string" }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    check("wishes_wish_length", sql`char_length(${t.wish}) between 1 and 200`),
+    check(
+      "wishes_response_length",
+      sql`${t.response} is null or char_length(${t.response}) <= 200`,
+    ),
+    check(
+      "wishes_decided_when_not_pending",
+      sql`(${t.status} = 'pending') = (${t.decidedAt} is null)`,
+    ),
+    index("wishes_player_id_idx").on(t.playerId),
   ],
 );
 

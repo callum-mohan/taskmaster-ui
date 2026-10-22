@@ -481,8 +481,9 @@ reads too. Wallets are per season: they belong to the season's player rows.
 
 **Stored facts:** `shop_items` (the site-wide catalogue, edited in
 `/admin/site#shop`), `coin_purchases` (price copied at purchase),
-`power_up_uses`, `equipped_items`, `coin_gifts` and `coin_adjustments` (admin
-grants and deductions, on the player's admin page). A purchase or gift checks
+`power_up_uses`, `equipped_items`, `coin_gifts`, `coin_adjustments` (admin
+grants and deductions, on the player's admin page) and `item_gifts` (see
+below). A purchase or gift checks
 the balance against fresh (uncached) rows, then re-checks it in the insert
 under a per-player advisory lock, so concurrent spends can't overspend. A
 balance can go negative if a result is corrected after spending; buying is
@@ -492,6 +493,17 @@ then blocked.
 season, up to 5 in any rolling 7 days (`GIFT_WEEKLY_CAP`), with an optional
 80-character note. The cap is re-checked in the insert under the sender's
 lock, and the recipient gets a notification.
+
+**Admin gifts:** on a player's admin page (`/admin/players/[id]`) an admin can
+gift Clim Coin (a positive `coin_adjustments` row) and any shop item: a pet,
+avatar, cosmetic or power-up, including retired, egg-exclusive and
+out-of-window ones. Like an egg prize, a gifted item is owned through a
+zero-price `coin_purchases` row, written with its `item_gifts` row (reason
+and admin's name) in one statement under the player's wallet lock. Items they
+already own, and power-ups whose effect they've had this season, can't be
+gifted. A gift can be taken back unless it's a power-up charge that's been
+spent (revoke the use in the week's judge tab first); that also unequips it.
+The player is notified and the gift shows in their wallet history.
 
 **Limited-time stock:** `shop_items.available_from` / `available_until` (UK
 wall-clock, like task dates) set a sale window. Items with an end date sit on
@@ -523,6 +535,17 @@ season like the others but never used: the database refuses them in
   feed says so and both players are notified.
 - **Insurance** pays 3rd-place coins instead of the base 2 for the first week
   (whose deadline was after the purchase) where the owner finished last.
+
+**One Wish Willow** (`wish`, 10 coins, once a season, can hatch from eggs
+like any power-up) is spent from the wallet, any time, by writing a wish of
+up to 200 characters to the Taskmaster: a `wishes` row whose unique
+`purchase_id` is the charge it spends (the database refuses `wish` in
+`power_up_uses`). Wishes are private to the player and admins. They land in
+the wish inbox on the admin dashboard (`/admin#wishes`, every season), where
+an admin grants or declines each one with an optional reply. A decision is
+final, the wish is spent either way, and the player is notified. Granting
+doesn't do anything by itself: the admin makes it happen (e.g. with an
+admin gift). A gifted Willow can't be taken back once its wish is made.
 
 **Mystery eggs** (lootboxes, called crates in the code) sit behind the
 `shop_eggs` [feature flag](#-feature-flags), off by default. When on, they're on the shop page:
@@ -584,7 +607,9 @@ a dropdown (a full-height drawer on phones) listing the newest 20 events:
 - **Sabotage**, when another player uses the Clim Coin power-up on them, and
   once the week's results are out, whether a **Shield or Mirror** stopped it
   (the saboteur hears about a bounce too).
-- **Gifts** of Clim Coin from another player.
+- **Gifts** of Clim Coin from another player, and Clim Coin grants or
+  items an admin gifted them.
+- **Wishes** granted or declined by the Taskmaster, with their reply.
 
 Guests and admin accounts without a player profile don't see it.
 

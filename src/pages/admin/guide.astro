@@ -33,7 +33,7 @@ const areas = [
   {
     href: ADMIN_HOME,
     label: "dashboard",
-    what: "What needs doing now: the live week, any finished week that still needs judging or publishing, and the next week to be released. Each has a button for its next step. It also tells you when a season is ready to close or the next one is ready to launch.",
+    what: "What needs doing now: the live week, any finished week that still needs judging or publishing, and the next week to be released. Each has a button for its next step. It also tells you when a season is ready to close or the next one is ready to launch, and holds the One Wish Willow inbox.",
   },
   {
     href: ADMIN_SEASONS,
@@ -533,10 +533,14 @@ const link = "text-cyan hover:underline";
             gift each other up to 5 coins a week; gifts show in both wallets' history.
           </li>
           <li>
-            <span class="text-cyan" aria-hidden="true">&gt;</span> Grant or deduct
-            coins on a player's page in the
-            <a href={withBase(ADMIN_ROSTER)} class={link}>roster</a> (with a reason
-            they'll see).
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Gift, grant or
+            deduct coins, and gift any shop item (pets, avatars, cosmetics and power-ups,
+            even retired or egg-exclusive ones), on a player's page in the <a
+              href={withBase(ADMIN_ROSTER)}
+              class={link}>roster</a
+            >, with a reason they'll see. Gifts are free for them and they're
+            notified. You can take an item back unless it's a power-up they've
+            already used.
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Power-ups used
@@ -544,6 +548,16 @@ const link = "text-cyan hover:underline";
             goes and the player gets that power-up back to use again; they can't buy
             a second one). Write the week's
             <span class="text-ink">taskmaster's hint</span> on its brief tab.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Wishes made with
+            the <span class="text-ink">One Wish Willow</span> power-up land in the
+            <a href={withBase(ADMIN_HOME + "#wishes")} class={link}>dashboard</a
+            >'s wish inbox (private to the player and admins). Grant or decline
+            each one, with an optional reply; the decision is final, the wish is
+            spent either way, and the player is notified. Granting is just a
+            promise: make it happen yourself (e.g. gift coins or an item from
+            their page).
           </li>
         </ul>
       </TerminalWindow>

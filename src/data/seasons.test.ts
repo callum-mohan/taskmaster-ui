@@ -140,6 +140,8 @@ describe("rowsForSeason", () => {
     crateOpenRows: [],
     coinGiftRows: [],
     featureFlagRows: [],
+    itemGiftRows: [],
+    wishRows: [],
   };
   const player = (id: string, seasonId: string) => ({
     id,

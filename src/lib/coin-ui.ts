@@ -141,6 +141,11 @@ export const COIN_OUTCOME_NOTICE: Record<
     tone: "error",
     message: "That's over your weekly gift limit. Try a smaller amount.",
   },
+  wished: {
+    tone: "success",
+    message:
+      "Wish sent to the Taskmaster. You'll be notified when they decide.",
+  },
 };
 
 export const GIFT_BLOCK_LABEL: Record<GiftBlock, string> = {

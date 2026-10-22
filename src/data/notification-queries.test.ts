@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createNotificationQueries } from "./notification-queries";
-import { at, competitionData, poll, task } from "../test/fixtures";
+import { at, competitionData, poll, shopItem, task } from "../test/fixtures";
 import type {
   CompetitionData,
   NotificationItem,
@@ -547,6 +547,113 @@ describe("getNotifications", () => {
         detail: '"for the carry"',
         href: "/account#history",
         at: "2026-06-30T10:00:00.000Z",
+        unread: true,
+      });
+    });
+
+    it("tells a player how the Taskmaster answered their wish", () => {
+      const wish = {
+        purchaseId: 1,
+        playerId: "ann",
+        wish: "An extra day",
+        at: "2026-06-30T09:00:00.000Z",
+      };
+      const { items } = feedFor(
+        {
+          coins: {
+            ...competitionData().coins,
+            wishes: [
+              { ...wish, id: 1, status: "pending" },
+              {
+                ...wish,
+                id: 2,
+                status: "granted",
+                response: "Enjoy!",
+                decidedAt: "2026-06-30T10:00:00.000Z",
+              },
+              {
+                ...wish,
+                id: 3,
+                status: "declined",
+                decidedAt: "2026-06-30T11:00:00.000Z",
+              },
+            ],
+          },
+        },
+        { playerId: "ann" },
+      );
+      expect(byId(items, "wish:1")).toBeUndefined();
+      expect(byId(items, "wish:2")).toEqual({
+        id: "wish:2",
+        kind: "wish-granted",
+        title: "The Taskmaster granted your wish",
+        detail: "Enjoy!",
+        href: "/account#wish",
+        at: "2026-06-30T10:00:00.000Z",
+        unread: true,
+      });
+      expect(byId(items, "wish:3")).toMatchObject({
+        kind: "wish-declined",
+        detail: '"An extra day"',
+      });
+    });
+
+    it("tells a player about coins and items an admin gifted them", () => {
+      const { items } = feedFor(
+        {
+          coins: {
+            ...competitionData().coins,
+            items: [shopItem({ id: "ghost", name: "Ghost" })],
+            adjustments: [
+              {
+                id: 4,
+                playerId: "ann",
+                amount: 5,
+                reason: "Great sportsmanship",
+                actorName: "Taskmaster",
+                at: "2026-06-30T10:00:00.000Z",
+              },
+              {
+                id: 5,
+                playerId: "ann",
+                amount: -2,
+                reason: "Correction",
+                actorName: "Taskmaster",
+                at: "2026-06-30T11:00:00.000Z",
+              },
+            ],
+            itemGifts: [
+              {
+                id: 6,
+                purchaseId: 9,
+                playerId: "ann",
+                itemId: "ghost",
+                reason: "Best costume",
+                actorName: "Taskmaster",
+                at: "2026-06-30T12:00:00.000Z",
+              },
+            ],
+          },
+        },
+        { playerId: "ann" },
+      );
+      expect(byId(items, "coin-grant:4")).toEqual({
+        id: "coin-grant:4",
+        kind: "gift-received",
+        title: "You were gifted 5 Clim Coin",
+        detail: "Great sportsmanship",
+        href: "/account#history",
+        at: "2026-06-30T10:00:00.000Z",
+        unread: true,
+      });
+      expect(byId(items, "coin-grant:5")).toBeUndefined();
+      expect(byId(items, "item-gift:6")).toEqual({
+        id: "item-gift:6",
+        kind: "gift-received",
+        title: "You were gifted Ghost",
+        detail: "Best costume",
+        href: "/account#inventory",
+        at: "2026-06-30T12:00:00.000Z",
         unread: true,
       });
     });

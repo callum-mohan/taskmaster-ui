@@ -16,6 +16,8 @@ import {
   crateOpens as crateOpensTable,
   equippedItems as equippedItemsTable,
   featureFlags as featureFlagsTable,
+  itemGifts as itemGiftsTable,
+  wishes as wishesTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
   peoplesChoiceVotes as peoplesChoiceVotesTable,
@@ -53,6 +55,8 @@ import {
   mapEquipped,
   mapGifts,
   mapHints,
+  mapItemGifts,
+  mapWishes,
   mapPowerUpUses,
   mapPurchases,
   mapShopItems,
@@ -122,6 +126,8 @@ async function fetchCompetitionRows() {
     crateOpenRows,
     coinGiftRows,
     featureFlagRows,
+    itemGiftRows,
+    wishRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -181,6 +187,8 @@ async function fetchCompetitionRows() {
     db.select().from(crateOpensTable).orderBy(asc(crateOpensTable.id)),
     db.select().from(coinGiftsTable).orderBy(asc(coinGiftsTable.id)),
     db.select().from(featureFlagsTable),
+    db.select().from(itemGiftsTable).orderBy(asc(itemGiftsTable.id)),
+    db.select().from(wishesTable).orderBy(asc(wishesTable.id)),
   ]);
   return {
     seasonRows,
@@ -207,6 +215,8 @@ async function fetchCompetitionRows() {
     crateOpenRows,
     coinGiftRows,
     featureFlagRows,
+    itemGiftRows,
+    wishRows,
   };
 }
 
@@ -301,6 +311,8 @@ async function buildSeasonCompetition(
     crateOpenRows,
     coinGiftRows,
     featureFlagRows,
+    itemGiftRows,
+    wishRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -422,6 +434,8 @@ async function buildSeasonCompetition(
       entries: mapEntries(entryRows),
       crateOpens: mapCrateOpens(crateOpenRows),
       gifts: mapGifts(coinGiftRows),
+      itemGifts: mapItemGifts(itemGiftRows),
+      wishes: mapWishes(wishRows),
       hints: mapHints(taskRows),
     },
     features: mapFeatureFlags(featureFlagRows),

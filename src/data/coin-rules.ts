@@ -8,6 +8,7 @@ import type {
   NameColour,
   PassivePowerUpKind,
   PowerUpKind,
+  WishPowerUpKind,
   ProfileTheme,
   Rarity,
   ShopCategory,
@@ -122,9 +123,15 @@ export const PASSIVE_POWER_UP_KINDS = [
   "insurance",
 ] as const satisfies readonly PassivePowerUpKind[];
 
+/** The One Wish Willow's effect: spent by making a wish, not on a week. */
+export const WISH_POWER_UP: WishPowerUpKind = "wish";
+/** The longest wish (and Taskmaster's reply), in characters. */
+export const WISH_MAX = 200;
+
 export const POWER_UP_KINDS = [
   ...ACTIVE_POWER_UP_KINDS,
   ...PASSIVE_POWER_UP_KINDS,
+  WISH_POWER_UP,
 ] as const satisfies readonly PowerUpKind[];
 
 export const isActivePowerUp = (kind: PowerUpKind): kind is ActivePowerUpKind =>

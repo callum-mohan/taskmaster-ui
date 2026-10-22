@@ -410,6 +410,47 @@ describe("crates", () => {
   });
 });
 
+describe("admin item gifts", () => {
+  it("costs nothing and shows as a gift, not a purchase", () => {
+    const data = competitionData({
+      coins: coinData({
+        items: [shopItem({ id: "ghost", name: "Ghost", price: 40 })],
+        purchases: [
+          {
+            id: 9,
+            playerId: "ann",
+            itemId: "ghost",
+            price: 0,
+            at: "2026-01-13T00:00:00.000Z",
+          },
+        ],
+        itemGifts: [
+          {
+            id: 1,
+            purchaseId: 9,
+            playerId: "ann",
+            itemId: "ghost",
+            reason: "Best costume",
+            actorName: "Taskmaster",
+            at: "2026-01-13T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+    const wallet = deriveWallet(data, "ann", NOW);
+    expect(wallet.balance).toBe(0);
+    expect(wallet.ledger).toEqual([
+      {
+        kind: "item-gift",
+        amount: 0,
+        label: "Gifted Ghost: Best costume",
+        at: "2026-01-13T00:00:00.000Z",
+      },
+    ]);
+    expect(deriveWallet(data, "bob", NOW).ledger).toEqual([]);
+  });
+});
+
 describe("passive defences", () => {
   const shield = shopItem({
     id: "shield",

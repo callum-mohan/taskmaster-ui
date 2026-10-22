@@ -10,6 +10,8 @@ import {
   btnDanger,
   btnGhost,
   btnPrimary,
+  inputClass,
+  labelClass,
 } from "../../../components/admin/styles";
 import {
   addCoinAdjustment,
@@ -18,7 +20,9 @@ import {
   describeWriteError,
   getPlayer,
   getPlayerDeleteImpact,
+  giftItem,
   listCoinAdjustments,
+  revokeItemGift,
   updatePlayer,
 } from "../../../data/admin";
 import CoinAmount from "../../../components/CoinAmount.astro";
@@ -31,6 +35,7 @@ import {
 import { resetUserPassword, temporaryPassword } from "../../../lib/auth";
 import {
   parseCoinAdjustmentForm,
+  parseItemGiftForm,
   parsePlayerEmailForm,
   parsePlayerForm,
   parseRowId,
@@ -38,6 +43,8 @@ import {
   type FormValues,
 } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
+import { CATEGORY_INFO, POWER_UP_INFO } from "../../../data/coins";
+import type { ShopItem } from "../../../types";
 import { withSeason } from "../../../lib/admin-season";
 
 // Fail closed if the middleware guard is ever bypassed.
@@ -70,6 +77,11 @@ let coinValues: FormValues = {};
 let coinErrors: FieldErrors = {};
 const coinsDone = (done: string) =>
   Astro.redirect(withBase(`/admin/players/${id}?done=${done}#coins`));
+let itemValues: FormValues = {};
+let itemErrors: FieldErrors = {};
+let itemError: string | undefined;
+const itemsDone = (done: string) =>
+  Astro.redirect(withBase(`/admin/players/${id}?done=${done}#items`));
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -92,6 +104,31 @@ if (Astro.request.method === "POST") {
     const rowId = parseRowId(form);
     if (rowId !== undefined) await deleteCoinAdjustment(id, rowId);
     return coinsDone("coins-deleted");
+  } else if (intent === "item-gift") {
+    const parsed = parseItemGiftForm(form);
+    itemValues = parsed.values;
+    if (!parsed.ok) {
+      itemErrors = parsed.errors;
+    } else if (await giftItem(id, parsed.data, admin)) {
+      return itemsDone("item-gifted");
+    } else {
+      itemErrors = {
+        itemId:
+          "They already own that item (or have had that power-up this season), or it no longer exists.",
+      };
+    }
+  } else if (intent === "item-revoke") {
+    const rowId = parseRowId(form);
+    const { getItemGifts } = await Astro.locals.getQueries(player.seasonId);
+    const gift = getItemGifts(id).find((g) => g.gift.id === rowId);
+    if (rowId === undefined || !gift) return itemsDone("item-revoked");
+    // A spent passive charge (a Shield, Mirror or Insurance that's already
+    // paid out) has no stored use to protect it, so check the snapshot too.
+    if (gift.spent || !(await revokeItemGift(id, rowId))) {
+      itemError = `${gift.item.name} has already been used, so it can't be taken back. Revoke the use in that week's judge tab first.`;
+    } else {
+      return itemsDone("item-revoked");
+    }
   } else if (intent === "reset-password") {
     if (!account?.userId) {
       accountError = "This player has no sign-in account to reset yet.";
@@ -154,12 +191,30 @@ if (Astro.request.method === "POST") {
   }
 }
 
-const [impact, adjustments, { getWallet }] = await Promise.all([
+const [
+  impact,
+  adjustments,
+  { getWallet, getInventory, getGiftableItems, getItemGifts },
+] = await Promise.all([
   getPlayerDeleteImpact(id),
   listCoinAdjustments(id),
   Astro.locals.getQueries(player.seasonId),
 ]);
 const wallet = getWallet(id);
+const inventory = getInventory(id);
+const giftable = getGiftableItems(id);
+const itemGifts = getItemGifts(id);
+/** Extra context for an item in the gift picker. */
+const itemTags = (item: ShopItem) =>
+  [
+    item.powerUp && POWER_UP_INFO[item.powerUp].passive ? "passive" : "",
+    !item.available ? "retired" : "",
+    item.crateOnly ? "egg exclusive" : "",
+  ].filter(Boolean);
+const itemNotice = {
+  "item-gifted": "Item gifted. The player has been notified.",
+  "item-revoked": "Gifted item taken back.",
+}[Astro.url.searchParams.get("done") ?? ""];
 const coinNotice = {
   coins: "Clim Coin adjustment saved.",
   "coins-deleted": "Clim Coin adjustment removed.",
@@ -395,6 +450,161 @@ const statusHelp: Record<typeof status, string> = {
                     label="remove"
                   />
                 </span>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </TerminalWindow>
+  </section>
+  <section id="items" aria-labelledby="items-heading" class="mt-8 scroll-mt-24">
+    <h2
+      id="items-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      gift items &amp; power-ups
+    </h2>
+    <TerminalWindow title={`~/players/${player.id}/inventory`}>
+      {
+        itemNotice && !itemError && (
+          <Notice tone="success" class="mb-5">
+            {itemNotice}
+          </Notice>
+        )
+      }
+      {
+        itemError && (
+          <Notice tone="error" class="mb-5">
+            {itemError}
+          </Notice>
+        )
+      }
+      <p class="text-xs text-ink-faint">
+        <span class="text-acid" aria-hidden="true">$</span> ls ./inventory
+      </p>
+      {
+        inventory.length === 0 ? (
+          <p class="mt-2 text-sm text-ink-dim">
+            {player.name} doesn't own anything yet.
+          </p>
+        ) : (
+          <ul class="mt-2 flex flex-wrap gap-2 text-xs">
+            {inventory.map(({ item, equipped, charges }) => (
+              <li class="rounded-md border border-grid bg-term-bg px-2 py-1 text-ink-dim">
+                <span class="text-ink">{item.name}</span>{" "}
+                <span class="text-ink-faint">
+                  · {CATEGORY_INFO[item.category].label.toLowerCase()}
+                  {equipped && " · worn"}
+                  {charges > 0 && ` · ${charges} unused`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      {
+        giftable.length === 0 ? (
+          <p class="mt-5 text-sm text-ink-dim">
+            {player.name} already owns everything in the shop.
+          </p>
+        ) : (
+          <form
+            method="post"
+            class="mt-5 grid gap-4 sm:grid-cols-[minmax(0,16rem)_1fr_auto] sm:items-start"
+            novalidate
+          >
+            <input type="hidden" name="intent" value="item-gift" />
+            <div class="space-y-1.5">
+              <label for="field-itemId" class={labelClass}>
+                item
+                <span class="text-acid" aria-hidden="true">
+                  {" "}
+                  *
+                </span>
+              </label>
+              <select
+                id="field-itemId"
+                name="itemId"
+                required
+                aria-invalid={itemErrors.itemId ? "true" : undefined}
+                aria-describedby={
+                  itemErrors.itemId ? "field-itemId-error" : "field-itemId-hint"
+                }
+                class={inputClass(Boolean(itemErrors.itemId))}
+              >
+                <option value="" selected={!itemValues.itemId}>
+                  choose an item
+                </option>
+                {giftable.map((group) => (
+                  <optgroup label={group.label}>
+                    {group.items.map((item) => {
+                      const tags = itemTags(item);
+                      return (
+                        <option
+                          value={item.id}
+                          selected={itemValues.itemId === item.id}
+                        >
+                          {item.name} ({item.price}c
+                          {tags.length > 0 && `, ${tags.join(", ")}`})
+                        </option>
+                      );
+                    })}
+                  </optgroup>
+                ))}
+              </select>
+              {itemErrors.itemId ? (
+                <p id="field-itemId-error" class="text-xs text-danger">
+                  {itemErrors.itemId}
+                </p>
+              ) : (
+                <p id="field-itemId-hint" class="text-xs text-ink-faint">
+                  Anything they don't own yet, retired and egg-exclusive items
+                  too. Free for them.
+                </p>
+              )}
+            </div>
+            <AdminField
+              label="reason"
+              name="giftReason"
+              value={itemValues.giftReason}
+              error={itemErrors.reason}
+              required
+              hint="Shown in the player's notification and wallet history."
+            />
+            <button type="submit" class:list={[btnPrimary, "sm:mt-6"]}>
+              gift item
+            </button>
+          </form>
+        )
+      }
+      {
+        itemGifts.length > 0 && (
+          <ul class="mt-5 divide-y divide-grid/60 rounded-md border border-grid text-sm">
+            {itemGifts.map(({ gift, item, spent }) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                <span class="min-w-0 text-ink-dim">
+                  <span class="text-ink">{item.name}</span>
+                  <span class="text-ink-faint">
+                    {" "}
+                    · {CATEGORY_INFO[item.category].label.toLowerCase()}
+                  </span>
+                  <span class="block">{gift.reason}</span>
+                  <span class="block text-[11px] text-ink-faint">
+                    by {gift.actorName}
+                  </span>
+                </span>
+                {spent ? (
+                  <span class="text-[11px] font-bold uppercase tracking-widest text-ink-faint">
+                    used
+                  </span>
+                ) : (
+                  <ConfirmDelete
+                    subject={`the gifted ${item.name} from ${player.name}'s inventory`}
+                    intent="item-revoke"
+                    fields={{ rowId: gift.id }}
+                    label="take back"
+                  />
+                )}
               </li>
             ))}
           </ul>

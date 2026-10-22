@@ -176,6 +176,20 @@
       "when": 1792656245732,
       "tag": "0024_gift_storm_pet_to_luke",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792660008935,
+      "tag": "0025_admin_item_gifts",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792661542265,
+      "tag": "0026_one_wish_willow",
+      "breakpoints": true
     }
   ]
 }

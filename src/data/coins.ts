@@ -12,6 +12,7 @@ import type {
   CosmeticKind,
   EntryActivity,
   EquippedItem,
+  ItemGift,
   LoadoutSlot,
   Player,
   PowerUpKind,
@@ -20,6 +21,7 @@ import type {
   ShopCategory,
   ShopItem,
   Wallet,
+  Wish,
 } from "../types";
 import type {
   coinAdjustments as coinAdjustmentsTable,
@@ -27,9 +29,11 @@ import type {
   coinPurchases as coinPurchasesTable,
   crateOpens as crateOpensTable,
   equippedItems as equippedItemsTable,
+  itemGifts as itemGiftsTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
   tasks as tasksTable,
+  wishes as wishesTable,
 } from "../db/schema";
 import { timestamptzToIso, wallClockToIso } from "../lib/time";
 import { peoplesChoiceClosesAt } from "./peoples-choice";
@@ -45,6 +49,7 @@ import {
   POLL_VOTE_COINS,
   PREDICTION_COINS,
   SABOTAGE_POINTS,
+  WISH_MAX,
   CRATE_CATEGORIES,
   CRATE_TIER_KINDS,
   RARITIES,
@@ -63,14 +68,16 @@ export {
   POWER_UP_KINDS,
   PROFILE_THEMES,
   SHOP_CATEGORIES,
+  WISH_MAX,
+  WISH_POWER_UP,
 } from "./coin-rules";
 
 // Clim Coin: a per-season wallet. Earnings are derived from the competition
 // records (like the poll and prediction bonuses), so a corrected score or a
 // withdrawn vote can never leave stale coins behind. Only purchases, power-up
-// uses, equipped items, gifts and admin adjustments are stored; the passive
-// power-ups (Shield, Mirror, Insurance) are worked out from them here. The
-// payout and power-up numbers live in `coin-rules.ts`.
+// uses, equipped items, gifts, admin adjustments and admin item gifts are
+// stored; the passive power-ups (Shield, Mirror, Insurance) are worked out
+// from them here. The payout and power-up numbers live in `coin-rules.ts`.
 
 export const CATEGORY_INFO: Record<
   ShopCategory,
@@ -128,6 +135,11 @@ export const POWER_UP_INFO: Record<
     label: "Insurance",
     description: `Passive: the first week you finish last after buying it, you're paid 3rd-place coins (${PLACEMENT_COINS.third}) instead of ${PLACEMENT_COINS.scored}.`,
     passive: true,
+  },
+  wish: {
+    label: "One Wish Willow",
+    description: `Make one wish to the Taskmaster (up to ${WISH_MAX} characters, within reason) from your wallet, any time. They'll grant it or not, entirely at their discretion; either way it's spent.`,
+    passive: false,
   },
 };
 
@@ -245,6 +257,8 @@ type EquippedRow = typeof equippedItemsTable.$inferSelect;
 type AdjustmentRow = typeof coinAdjustmentsTable.$inferSelect;
 type CrateOpenRow = typeof crateOpensTable.$inferSelect;
 type GiftRow = typeof coinGiftsTable.$inferSelect;
+type ItemGiftRow = typeof itemGiftsTable.$inferSelect;
+type WishRow = typeof wishesTable.$inferSelect;
 type TaskRow = typeof tasksTable.$inferSelect;
 
 export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
@@ -355,6 +369,37 @@ export function mapGifts(rows: GiftRow[]): CoinGift[] {
       toPlayerId: row.toPlayerId,
       amount: row.amount,
       ...(row.message !== null && { message: row.message }),
+      at: timestamptzToIso(row.createdAt),
+    }));
+}
+
+export function mapItemGifts(rows: ItemGiftRow[]): ItemGift[] {
+  return [...rows]
+    .sort((a, b) => a.id - b.id)
+    .map((row) => ({
+      id: row.id,
+      purchaseId: row.purchaseId,
+      playerId: row.playerId,
+      itemId: row.itemId,
+      reason: row.reason,
+      actorName: row.actorName,
+      at: timestamptzToIso(row.createdAt),
+    }));
+}
+
+export function mapWishes(rows: WishRow[]): Wish[] {
+  return [...rows]
+    .sort((a, b) => a.id - b.id)
+    .map((row) => ({
+      id: row.id,
+      purchaseId: row.purchaseId,
+      playerId: row.playerId,
+      wish: row.wish,
+      status: row.status,
+      ...(row.response !== null && { response: row.response }),
+      ...(row.decidedAt !== null && {
+        decidedAt: timestamptzToIso(row.decidedAt),
+      }),
       at: timestamptzToIso(row.createdAt),
     }));
 }
@@ -544,12 +589,15 @@ export function deriveWallet(
       label: a.reason,
       at: a.at,
     }));
-  // Crate wins are owned through a zero-price purchase; the crate's own
-  // line shows the cost and what it gave.
-  const crateWins = new Set(data.coins.crateOpens.map((o) => o.purchaseId));
+  // Crate wins and admin item gifts are owned through a zero-price
+  // purchase; their own lines say where the item came from.
+  const freeItems = new Set([
+    ...data.coins.crateOpens.map((o) => o.purchaseId),
+    ...data.coins.itemGifts.map((g) => g.purchaseId),
+  ]);
   const purchases: CoinLedgerEntry[] = [
     ...data.coins.purchases
-      .filter((p) => p.playerId === playerId && !crateWins.has(p.id))
+      .filter((p) => p.playerId === playerId && !freeItems.has(p.id))
       .map((p): CoinLedgerEntry => ({
         kind: "purchase",
         amount: -p.price,
@@ -594,6 +642,14 @@ export function deriveWallet(
       return [];
     },
   );
+  const itemGifts: CoinLedgerEntry[] = data.coins.itemGifts
+    .filter((g) => g.playerId === playerId)
+    .map((g) => ({
+      kind: "item-gift",
+      amount: 0,
+      label: `Gifted ${itemNames.get(g.itemId) ?? g.itemId}: ${g.reason}`,
+      at: g.at,
+    }));
   const sum = (list: CoinLedgerEntry[]) =>
     list.reduce((total, e) => total + e.amount, 0);
   const earned = sum(earnings);
@@ -607,9 +663,13 @@ export function deriveWallet(
     adjusted,
     spent,
     gifted,
-    ledger: [...earnings, ...adjustments, ...purchases, ...gifts].sort(
-      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
-    ),
+    ledger: [
+      ...earnings,
+      ...adjustments,
+      ...purchases,
+      ...gifts,
+      ...itemGifts,
+    ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
   };
 }
 

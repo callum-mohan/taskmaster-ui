@@ -297,6 +297,69 @@ export function createNotificationQueries(
         })
       : [];
 
+    // Coins and items an admin gave the player (deductions aren't gifts).
+    const itemNames = new Map(data.coins.items.map((i) => [i.id, i.name]));
+    const adminGifts: FeedEvent[] = playerId
+      ? [
+          ...data.coins.adjustments.flatMap((grant): FeedEvent[] => {
+            if (grant.playerId !== playerId || grant.amount <= 0) return [];
+            const time = new Date(grant.at).getTime();
+            if (Number.isNaN(time) || time > now) return [];
+            return [
+              {
+                id: `coin-grant:${grant.id}`,
+                kind: "gift-received",
+                title: `You were gifted ${grant.amount} Clim Coin`,
+                detail: grant.reason,
+                href: withBase("/account#history"),
+                at: grant.at,
+                time,
+              },
+            ];
+          }),
+          ...data.coins.itemGifts.flatMap((gift): FeedEvent[] => {
+            if (gift.playerId !== playerId) return [];
+            const time = new Date(gift.at).getTime();
+            if (Number.isNaN(time) || time > now) return [];
+            return [
+              {
+                id: `item-gift:${gift.id}`,
+                kind: "gift-received",
+                title: `You were gifted ${itemNames.get(gift.itemId) ?? "an item"}`,
+                detail: gift.reason,
+                href: withBase("/account#inventory"),
+                at: gift.at,
+                time,
+              },
+            ];
+          }),
+        ]
+      : [];
+
+    // The Taskmaster's answer to a wish (private to the player).
+    const wishes: FeedEvent[] = playerId
+      ? data.coins.wishes.flatMap((wish): FeedEvent[] => {
+          if (wish.playerId !== playerId || !wish.decidedAt) return [];
+          if (wish.status === "pending") return [];
+          const time = new Date(wish.decidedAt).getTime();
+          if (Number.isNaN(time) || time > now) return [];
+          const granted = wish.status === "granted";
+          return [
+            {
+              id: `wish:${wish.id}`,
+              kind: granted ? "wish-granted" : "wish-declined",
+              title: granted
+                ? "The Taskmaster granted your wish"
+                : "The Taskmaster declined your wish",
+              detail: wish.response ?? `"${wish.wish}"`,
+              href: withBase("/account#wish"),
+              at: wish.decidedAt,
+              time,
+            },
+          ];
+        })
+      : [];
+
     const opened: FeedEvent[] = polls.flatMap((poll) => {
       const time = new Date(poll.opensAt).getTime();
       if (!poll.published || Number.isNaN(time) || time > now) return [];
@@ -325,6 +388,8 @@ export function createNotificationQueries(
       ...sabotages,
       ...defended,
       ...gifts,
+      ...adminGifts,
+      ...wishes,
       ...opened,
     ];
   }

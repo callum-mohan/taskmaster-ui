@@ -2,14 +2,14 @@ import type { CoinOutcome, Season } from "../types";
 import type { WalletAction } from "../lib/account-forms";
 import { createQueries, type Queries } from "./queries";
 import { loadFreshPlayerCompetition } from "./competition";
-import { equipItem, sendGift, unequipSlot, usePowerUp } from "./shop";
+import { equipItem, makeWish, sendGift, unequipSlot, usePowerUp } from "./shop";
 import { slotOf } from "./coins";
 
 /**
  * Carries out a wallet action from the account page (equip, take off, use
- * a power-up or send a gift) and says how it went. Power-ups change scores
- * and gifts spend coins, so they're checked against fresh rows; the writes
- * re-check the stored facts too.
+ * a power-up, make a wish or send a gift) and says how it went. Power-ups
+ * change scores and gifts spend coins, so they're checked against fresh
+ * rows; the writes re-check the stored facts too.
  */
 export async function runWalletAction(
   playerId: string,
@@ -33,6 +33,12 @@ export async function runWalletAction(
 
   const fresh = await loadFreshPlayerCompetition(playerId);
   if (!fresh) return "invalid";
+
+  if (action.intent === "wish") {
+    const { blocked } = createQueries(fresh).getWishPanel(playerId);
+    if (blocked) return blocked;
+    return (await makeWish(playerId, action.wish)) ? "wished" : "no-charge";
+  }
 
   if (action.intent === "gift") {
     const { getGiftPanel, getWallet } = createQueries(fresh);

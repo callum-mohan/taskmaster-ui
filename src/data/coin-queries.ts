@@ -4,7 +4,9 @@ import type {
   CratePull,
   CrateView,
   GiftPanel,
+  GiftableItemGroup,
   InventoryItem,
+  ItemGiftView,
   Player,
   PlayerFlair,
   PlayerLoadout,
@@ -20,6 +22,7 @@ import type {
   ShopSection,
   Task,
   Wallet,
+  WishPanel,
 } from "../types";
 import {
   ACTIVE_POWER_UP_KINDS,
@@ -62,7 +65,11 @@ export function createCoinQueries(data: CompetitionData) {
   const itemById = new Map(coins.items.map((i) => [i.id, i]));
   const playerById = new Map(players.map((p) => [p.id, p]));
   const seasonClosed = season.status === "closed";
-  const usedPurchaseIds = new Set(coins.uses.map((u) => u.purchaseId));
+  // Charges spent on a week, or (the One Wish Willow) on a wish.
+  const usedPurchaseIds = new Set([
+    ...coins.uses.map((u) => u.purchaseId),
+    ...coins.wishes.map((w) => w.purchaseId),
+  ]);
   // Passive power-ups: how each Sabotage resolved (Shields and Mirrors are
   // only shown once the week's results are out), and spent defences.
   const sabotages = resolveSabotages(coins.uses, coins.purchases, coins.items);
@@ -206,6 +213,44 @@ export function createCoinQueries(data: CompetitionData) {
           ...(slot && { slot }),
           equipped: slot !== undefined && worn.get(slot)?.id === item.id,
           charges: 0,
+        },
+      ];
+    });
+  }
+
+  /**
+   * What an admin can gift a player, by shop category: any item in the
+   * catalogue (retired, egg-exclusive and out-of-window ones included) that
+   * they don't own yet, and power-ups whose effect they haven't had this
+   * season (a second charge could never be used).
+   */
+  function getGiftableItems(playerId: string): GiftableItemGroup[] {
+    const owned = ownedItemIds(playerId);
+    const effects = boughtEffects(playerId);
+    return SHOP_CATEGORIES.flatMap((category): GiftableItemGroup[] => {
+      const items = coins.items.filter(
+        (item) =>
+          item.category === category &&
+          !owned.has(item.id) &&
+          !(item.powerUp && effects.has(item.powerUp)),
+      );
+      return items.length > 0
+        ? [{ category, label: CATEGORY_INFO[category].label, items }]
+        : [];
+    });
+  }
+
+  /** Items admins gifted a player, newest first. */
+  function getItemGifts(playerId: string): ItemGiftView[] {
+    const spent = spentChargeIds(playerId);
+    return [...coins.itemGifts].reverse().flatMap((gift): ItemGiftView[] => {
+      const item = itemById.get(gift.itemId);
+      if (gift.playerId !== playerId || !item) return [];
+      return [
+        {
+          gift,
+          item,
+          spent: item.category === "power_up" && spent.has(gift.purchaseId),
         },
       ];
     });
@@ -444,6 +489,21 @@ export function createCoinQueries(data: CompetitionData) {
     };
   }
 
+  /** The wallet's One Wish Willow panel: unused charges and past wishes. */
+  function getWishPanel(playerId: string): WishPanel {
+    const charges = chargesFor(playerId, "wish");
+    const blocked: WishPanel["blocked"] = seasonClosed
+      ? "season-closed"
+      : charges === 0
+        ? "no-charge"
+        : undefined;
+    return {
+      charges,
+      ...(blocked && { blocked }),
+      wishes: coins.wishes.filter((w) => w.playerId === playerId).reverse(),
+    };
+  }
+
   /** The wallet's "send coins" form for `playerId`. */
   function getGiftPanel(playerId: string, now: number = Date.now()): GiftPanel {
     const recipients = players.filter((p) => p.id !== playerId);
@@ -562,6 +622,8 @@ export function createCoinQueries(data: CompetitionData) {
     getShopItemById,
     getWallet,
     getInventory,
+    getGiftableItems,
+    getItemGifts,
     getLoadout,
     getPlayerFlair,
     getPlayerFlairs,
@@ -573,6 +635,7 @@ export function createCoinQueries(data: CompetitionData) {
     getSabotagesOf,
     getSabotagesBy,
     getGiftPanel,
+    getWishPanel,
     getPowerUpWeek,
     getSabotageTargets,
     getPowerUpBlock,

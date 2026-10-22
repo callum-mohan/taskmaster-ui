@@ -1,0 +1,174 @@
+---
+// The dashboard's One Wish Willow inbox: pending wishes to grant or decline
+// (with an optional reply for the player), and the last few decided.
+import TerminalWindow from "../TerminalWindow.astro";
+import Notice from "./Notice.astro";
+import { btnGhost, btnPrimary, inputClass, labelClass } from "./styles";
+import type { AdminWish, WishStatus } from "../../types";
+import { WISH_MAX } from "../../data/coin-rules";
+import { ukDateFormat } from "../../lib/time";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  pending: AdminWish[];
+  recent: AdminWish[];
+  /** The outcome of the last decision, if any. */
+  notice?: { tone: "success" | "error"; message: string };
+  /** A rejected decision: which wish, and the reply that was typed. */
+  failed?: { rowId: number; response: string };
+  class?: string;
+}
+
+const { pending, recent, notice, failed, class: className } = Astro.props;
+
+const STATUS: Record<WishStatus, { label: string; class: string }> = {
+  pending: { label: "● pending", class: "text-amber" },
+  granted: { label: "✧ granted", class: "text-magenta" },
+  declined: { label: "✕ declined", class: "text-ink-faint" },
+};
+const stamp = ukDateFormat({
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const when = (iso: string) => stamp.format(new Date(iso));
+const playerHref = (id: string) =>
+  withBase(`/admin/players/${encodeURIComponent(id)}#items`);
+---
+
+<section
+  id="wishes"
+  aria-labelledby="wishes-heading"
+  class:list={["scroll-mt-24", className]}
+>
+  <TerminalWindow
+    title="~/wishes"
+    meta={pending.length === 0 ? "inbox zero" : `${pending.length} pending`}
+  >
+    <h2 id="wishes-heading" class="text-sm font-bold text-ink">
+      <span class="text-magenta" aria-hidden="true">✧</span> one wish willow
+    </h2>
+    <p class="mt-1 text-xs text-ink-faint">
+      Players' wishes, private to them and admins. Grant or decline at your
+      discretion; either way the wish is spent and they're notified with your
+      reply. Granting doesn't do anything by itself: make it happen (gift coins
+      or items from the player's page, extend a deadline, …).
+    </p>
+    {
+      notice && (
+        <Notice tone={notice.tone} class="mt-4">
+          {notice.message}
+        </Notice>
+      )
+    }
+    {
+      pending.length === 0 ? (
+        <p class="mt-4 text-sm text-ink-dim">
+          <span class="text-acid">✓</span> No wishes waiting.
+        </p>
+      ) : (
+        <ul class="mt-4 space-y-3">
+          {pending.map((w) => {
+            const fieldId = `wish-response-${w.id}`;
+            const retry = failed?.rowId === w.id ? failed : undefined;
+            return (
+              <li class="rounded-md border border-magenta/40 bg-magenta/5 px-4 py-3">
+                <p class="text-xs text-ink-faint">
+                  <a
+                    href={playerHref(w.playerId)}
+                    class="font-bold text-ink hover:text-acid"
+                  >
+                    {w.playerName}
+                  </a>{" "}
+                  wished · <time datetime={w.at}>{when(w.at)}</time>
+                </p>
+                <p class="mt-1 whitespace-pre-line text-sm text-ink">
+                  "{w.wish}"
+                </p>
+                <form method="post" class="mt-3 space-y-2">
+                  <input type="hidden" name="intent" value="wish-decide" />
+                  <input type="hidden" name="rowId" value={w.id} />
+                  <label for={fieldId} class={labelClass}>
+                    reply (optional)
+                  </label>
+                  <input
+                    id={fieldId}
+                    type="text"
+                    name="response"
+                    maxlength={WISH_MAX}
+                    value={retry?.response}
+                    placeholder="Granted: enjoy the extra day!"
+                    class={inputClass(Boolean(retry))}
+                  />
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="submit"
+                      name="decision"
+                      value="granted"
+                      class={btnPrimary}
+                    >
+                      grant<span class="sr-only"> {w.playerName}'s wish</span>
+                    </button>
+                    <button
+                      type="submit"
+                      name="decision"
+                      value="declined"
+                      class:list={[
+                        btnGhost,
+                        "hover:border-danger/60 hover:text-danger",
+                      ]}
+                    >
+                      decline<span class="sr-only"> {w.playerName}'s wish</span>
+                    </button>
+                  </div>
+                </form>
+              </li>
+            );
+          })}
+        </ul>
+      )
+    }
+    {
+      recent.length > 0 && (
+        <details class="mt-4">
+          <summary class="cursor-pointer text-xs text-cyan hover:underline">
+            recently decided ({recent.length})
+          </summary>
+          <ul class="mt-2 divide-y divide-grid/60 rounded-md border border-grid text-sm">
+            {recent.map((w) => (
+              <li class="space-y-1 px-3 py-2">
+                <p class="text-xs text-ink-faint">
+                  <a
+                    href={playerHref(w.playerId)}
+                    class="font-bold text-ink hover:text-acid"
+                  >
+                    {w.playerName}
+                  </a>
+                  : <span class="text-ink-dim">"{w.wish}"</span>
+                </p>
+                <p class="text-[11px]">
+                  <span class={STATUS[w.status].class}>
+                    {STATUS[w.status].label}
+                  </span>
+                  <span class="text-ink-faint">
+                    {w.deciderName && ` by ${w.deciderName}`}
+                    {w.decidedAt && ` · ${when(w.decidedAt)}`}
+                  </span>
+                </p>
+                {w.response && (
+                  <p class="text-xs text-ink-dim">
+                    <span class="text-acid" aria-hidden="true">
+                      &gt;{" "}
+                    </span>
+                    {w.response}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )
+    }
+  </TerminalWindow>
+</section>

@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { createCoinQueries } from "./coin-queries";
-import type { CoinGift, CoinPurchase, PowerUpUse, ShopItem } from "../types";
+import type {
+  CoinGift,
+  CoinPurchase,
+  PowerUpUse,
+  ShopItem,
+  Wish,
+} from "../types";
 import {
   coinData,
   competitionData,
@@ -523,6 +529,149 @@ describe("limited-time stock", () => {
         .flatMap((s) => s.listings.map((l) => l.item.id));
     expect(listed(NOW)).not.toContain("bat");
     expect(listed(halloween)).toContain("bat");
+  });
+});
+
+describe("one wish willow", () => {
+  const willow = shopItem({
+    id: "willow",
+    name: "One Wish Willow",
+    category: "power_up",
+    price: 10,
+    powerUp: "wish",
+  });
+  const charge: CoinPurchase = {
+    id: 50,
+    playerId: "ann",
+    itemId: "willow",
+    price: 10,
+    at: "2026-01-13T00:00:00.000Z",
+  };
+  const made: Wish = {
+    id: 1,
+    purchaseId: 50,
+    playerId: "ann",
+    wish: "An extra day",
+    status: "pending",
+    at: "2026-01-14T00:00:00.000Z",
+  };
+  const queries = (wishes: Wish[] = [], closed = false) =>
+    createCoinQueries(
+      competitionData({
+        season: season({ status: closed ? "closed" : "running" }),
+        players: [player("ann", "Ann"), player("bob", "Bob")],
+        tasks: [done, live],
+        coins: coinData({ items: [willow], purchases: [charge], wishes }),
+      }),
+    );
+
+  it("lets a holder make one wish, any time", () => {
+    expect(queries().getWishPanel("ann")).toEqual({ charges: 1, wishes: [] });
+    expect(queries().getWishPanel("bob")).toEqual({
+      charges: 0,
+      blocked: "no-charge",
+      wishes: [],
+    });
+    expect(queries([], true).getWishPanel("ann").blocked).toBe("season-closed");
+  });
+
+  it("spends the charge on the wish, and can't be bought again", () => {
+    const q = queries([made]);
+    expect(q.getWishPanel("ann")).toEqual({
+      charges: 0,
+      blocked: "no-charge",
+      wishes: [made],
+    });
+    expect(q.getPurchaseBlock(willow, { playerId: "ann" })).toBe("used");
+    expect(q.getWishPanel("bob").wishes).toEqual([]);
+  });
+
+  it("isn't a power-up used on a week", () => {
+    expect(
+      queries()
+        .getPowerUpPanel("ann")
+        .options.map((o) => o.effect),
+    ).toEqual([]);
+  });
+});
+
+describe("admin item gifts", () => {
+  const crateOnly = shopItem({
+    id: "egg-pet",
+    name: "Egg Pet",
+    crateOnly: true,
+  });
+  const charge = (id: number, item: ShopItem): CoinPurchase => ({
+    id,
+    playerId: "ann",
+    itemId: item.id,
+    price: 0,
+    at: "2026-01-13T00:00:00.000Z",
+  });
+  const gift = (id: number, purchase: CoinPurchase) => ({
+    id,
+    purchaseId: purchase.id,
+    playerId: purchase.playerId,
+    itemId: purchase.itemId,
+    reason: "Well played",
+    actorName: "Taskmaster",
+    at: purchase.at,
+  });
+  const queries = (purchases: CoinPurchase[], uses: PowerUpUse[] = []) =>
+    createCoinQueries(
+      competitionData({
+        players: [player("ann", "Ann"), player("bob", "Bob")],
+        tasks: [done, live],
+        coins: coinData({
+          items: [duck, robot, sabotage, hint, retired, crateOnly],
+          purchases,
+          uses,
+          itemGifts: purchases.map((p, i) => gift(i + 1, p)),
+        }),
+      }),
+    );
+
+  it("offers anything not owned, retired and egg exclusives included", () => {
+    const groups = queries([
+      charge(1, duck),
+      charge(2, sabotage),
+    ]).getGiftableItems("ann");
+    expect(groups.map((g) => [g.category, g.items.map((i) => i.id)])).toEqual([
+      ["pet", ["old", "egg-pet"]],
+      ["avatar", ["robot"]],
+      ["power_up", ["hint"]],
+    ]);
+  });
+
+  it("lists a player's gifts newest first, flagging spent charges", () => {
+    const sab = charge(2, sabotage);
+    const gifts = queries(
+      [charge(1, duck), sab],
+      [
+        {
+          id: 1,
+          purchaseId: sab.id,
+          playerId: "ann",
+          taskId: "w2",
+          effect: "sabotage",
+          targetPlayerId: "bob",
+          at: "2026-01-14T00:00:00.000Z",
+        },
+      ],
+    ).getItemGifts("ann");
+    expect(gifts.map((g) => [g.item.id, g.spent])).toEqual([
+      ["sabotage", true],
+      ["duck", false],
+    ]);
+    expect(queries([charge(1, duck)]).getItemGifts("bob")).toEqual([]);
+  });
+
+  it("gives the gifted item and power-up charge like a purchase", () => {
+    const q = queries([charge(1, duck), charge(2, hint)]);
+    expect(q.getInventory("ann").map((i) => [i.item.id, i.charges])).toEqual([
+      ["duck", 0],
+      ["hint", 1],
+    ]);
   });
 });
 

@@ -1067,7 +1067,9 @@ export type NotificationKind =
   | "sabotaged"
   | "shielded"
   | "reflected"
-  | "gift-received";
+  | "gift-received"
+  | "wish-granted"
+  | "wish-declined";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
@@ -1561,7 +1563,12 @@ export type ActivePowerUpKind =
   "double_down" | "hint" | "golden_week" | "sabotage";
 /** Power-ups that work by themselves once bought (effects derived). */
 export type PassivePowerUpKind = "shield" | "mirror" | "insurance";
-export type PowerUpKind = ActivePowerUpKind | PassivePowerUpKind;
+/** The One Wish Willow: spent by making a wish (a `wishes` row). */
+export type WishPowerUpKind = "wish";
+export type PowerUpKind =
+  ActivePowerUpKind | PassivePowerUpKind | WishPowerUpKind;
+/** Whether the Taskmaster has answered a wish, and how. */
+export type WishStatus = "pending" | "granted" | "declined";
 /** Where an owned item is worn: one item per slot. */
 export type LoadoutSlot = "pet" | "avatar" | "title" | "name_colour" | "theme";
 /** Name colour cosmetics: accent tokens, plus a few special effects. */
@@ -1753,6 +1760,35 @@ export interface CoinAdjustment {
   at: string;
 }
 
+/** A shop item an admin gifted a player (owned through a free purchase). */
+export interface ItemGift {
+  id: number;
+  /** The zero-price purchase that makes the player own the item. */
+  purchaseId: number;
+  playerId: string;
+  itemId: string;
+  reason: string;
+  actorName: string;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A wish a player made with the One Wish Willow (private to them and admins). */
+export interface Wish {
+  id: number;
+  /** The Willow charge it spent. */
+  purchaseId: number;
+  playerId: string;
+  wish: string;
+  status: WishStatus;
+  /** The Taskmaster's reply, once decided. */
+  response?: string;
+  /** ISO 8601, once decided. */
+  decidedAt?: string;
+  /** ISO 8601. */
+  at: string;
+}
+
 /** A player's first visible entry on a task (earns the entry payout). */
 export interface EntryActivity {
   taskId: string;
@@ -1772,6 +1808,10 @@ export interface ClimCoinData {
   crateOpens: CrateOpen[];
   /** Gifts between this season's players, oldest first. */
   gifts: CoinGift[];
+  /** Items admins gifted this season's players, oldest first. */
+  itemGifts: ItemGift[];
+  /** Wishes this season's players made, oldest first. */
+  wishes: Wish[];
   /** Taskmaster's Hints by task id; only shown to players who used Hint. */
   hints: Record<string, string>;
 }
@@ -1800,7 +1840,8 @@ export type CoinLedgerKind =
   | "purchase"
   | "crate"
   | "gift-in"
-  | "gift-out";
+  | "gift-out"
+  | "item-gift";
 
 /** One line in a wallet's history. */
 export interface CoinLedgerEntry {
@@ -1833,6 +1874,24 @@ export interface PlayerLoadout {
   title?: string;
   nameColour?: NameColour;
   theme?: ProfileTheme;
+}
+
+/** An item an admin gifted a player, as the admin player page lists it. */
+export interface ItemGiftView {
+  gift: ItemGift;
+  item: ShopItem;
+  /**
+   * A power-up charge that's been spent (used on a week, or a passive one
+   * triggered): revoking it would rewrite results, so it's kept.
+   */
+  spent: boolean;
+}
+
+/** Items an admin can gift a player, grouped by shop category. */
+export interface GiftableItemGroup {
+  category: ShopCategory;
+  label: string;
+  items: ShopItem[];
 }
 
 /** An owned item in a player's inventory. */
@@ -1916,6 +1975,33 @@ export interface PowerUpPanel {
   targets: Player[];
 }
 
+/** Why a player can't make a wish right now. */
+export type WishBlock = "season-closed" | "no-charge";
+
+/** The wallet's One Wish Willow panel. */
+export interface WishPanel {
+  /** Unused Willow charges the player holds. */
+  charges: number;
+  blocked?: WishBlock;
+  /** The player's wishes, newest first. */
+  wishes: Wish[];
+}
+
+/** A wish as the admin dashboard lists it (any season). */
+export interface AdminWish {
+  id: number;
+  playerId: string;
+  playerName: string;
+  wish: string;
+  status: WishStatus;
+  response?: string;
+  deciderName?: string;
+  /** ISO 8601, once decided. */
+  decidedAt?: string;
+  /** ISO 8601. */
+  at: string;
+}
+
 /** Outcome of a wallet action, shown after the redirect. */
 export type CoinOutcome =
   | "bought"
@@ -1936,7 +2022,8 @@ export type CoinOutcome =
   | "not-live"
   | "no-charge"
   | "gifted"
-  | "gift-limit";
+  | "gift-limit"
+  | "wished";
 
 /** Why a player can't send a gift right now. */
 export type GiftBlock =

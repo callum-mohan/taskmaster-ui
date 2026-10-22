@@ -18,7 +18,9 @@ import {
   coinAdjustments,
   coinPurchases,
   crateOpens,
+  equippedItems,
   featureFlags,
+  itemGifts,
   powerUpUses,
   shopItems,
   playerAccounts,
@@ -38,10 +40,12 @@ import {
   teamMembers,
   teamScores,
   teams,
+  wishes,
 } from "../db/schema";
 import type { BatchItem } from "drizzle-orm/batch";
 import type {
   AdminUser,
+  AdminWish,
   FeatureFlagKey,
   FeatureFlagView,
   Page,
@@ -51,6 +55,7 @@ import type {
 } from "../types";
 import { EMPTY_WEEK_COUNTS } from "./week-progress";
 import { featureFlagViews } from "./feature-flags";
+import { lockWallet } from "./shop";
 import { timestamptzToIso } from "../lib/time";
 import { LIST_PAGE_SIZE, pageInfo } from "../lib/pagination";
 import { deleteObjects, putObject } from "../lib/storage";
@@ -60,6 +65,8 @@ import type {
   BonusInput,
   ChangelogInput,
   CoinAdjustmentInput,
+  ItemGiftInput,
+  WishDecisionInput,
   PlayerInput,
   PollInput,
   RecapInput,
@@ -206,7 +213,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o]] =
+  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o], [i]] =
     await db.batch([
       db
         .select({ n: count() })
@@ -251,6 +258,10 @@ export async function getPlayerDeleteImpact(
         .select({ n: count() })
         .from(crateOpens)
         .where(eq(crateOpens.playerId, id)),
+      db
+        .select({ n: count() })
+        .from(itemGifts)
+        .where(eq(itemGifts.playerId, id)),
     ]);
   return [
     { label: "individual score", count: s.n },
@@ -264,6 +275,7 @@ export async function getPlayerDeleteImpact(
     { label: "Clim Coin purchase", count: c.n },
     { label: "Clim Coin grant / deduction", count: g.n },
     { label: "mystery egg cracked", count: o.n },
+    { label: "gifted item", count: i.n },
   ];
 }
 
@@ -1477,6 +1489,173 @@ export async function deleteCoinAdjustment(
 }
 
 /**
+ * Gifts a player a shop item: owned through a zero-price purchase, written
+ * with its `item_gifts` row in one statement under the player's wallet lock.
+ * Any catalogue item can be gifted (retired, egg-exclusive or out of its
+ * sale window too), but not one they already own, nor a power-up whose
+ * effect they've had this season (each effect is used once a season, so a
+ * second charge would be dead). Returns whether it was gifted.
+ */
+export async function giftItem(
+  playerId: string,
+  input: ItemGiftInput,
+  actor: AdminUser,
+): Promise<boolean> {
+  const { actorId, actorName } = actorFields(actor);
+  const db = getDb();
+  const [, gifted] = await db.batch([
+    db.execute(lockWallet(playerId)),
+    db.execute(sql`
+      with given as (
+        insert into ${coinPurchases} (player_id, item_id, price)
+        select player.id, item.id, 0
+        from ${players} player
+        cross join ${shopItems} item
+        where player.id = ${playerId}
+          and item.id = ${input.itemId}
+          and not exists (
+            select 1 from ${coinPurchases} owned
+            join ${shopItems} owned_item on owned_item.id = owned.item_id
+            where owned.player_id = player.id
+              and (
+                owned.item_id = item.id
+                or owned_item.power_up = item.power_up
+              )
+          )
+        returning id, item_id
+      )
+      insert into ${itemGifts}
+        (player_id, item_id, purchase_id, reason, actor_id, actor_name)
+      select ${playerId}, given.item_id, given.id, ${input.reason},
+        ${actorId}, ${actorName}
+      from given
+      returning id`),
+  ]);
+  return gifted.rows.length > 0;
+}
+
+/**
+ * Takes back an item an admin gifted: its free purchase goes (and the gift
+ * row with it), and the player stops wearing it. A power-up charge already
+ * used on a week is kept (revoke the use in the week's judge tab first).
+ * Returns whether it was taken back.
+ */
+export async function revokeItemGift(
+  playerId: string,
+  giftId: number,
+): Promise<boolean> {
+  const db = getDb();
+  const [revoked] = await db.batch([
+    db.execute(sql`
+      delete from ${coinPurchases}
+      where id = (
+          select purchase_id from ${itemGifts}
+          where id = ${giftId} and player_id = ${playerId}
+        )
+        and not exists (
+          select 1 from ${powerUpUses} used
+          where used.purchase_id = ${coinPurchases.id}
+        )
+        and not exists (
+          select 1 from ${wishes} made
+          where made.purchase_id = ${coinPurchases.id}
+        )
+      returning id`),
+    db.delete(equippedItems).where(
+      and(
+        eq(equippedItems.playerId, playerId),
+        sql`not exists (
+            select 1 from ${coinPurchases} owned
+            where owned.player_id = ${equippedItems.playerId}
+              and owned.item_id = ${equippedItems.itemId}
+          )`,
+      ),
+    ),
+  ]);
+  return revoked.rows.length > 0;
+}
+
+// ── Wishes ────────────────────────────────────────────────────────────
+
+/** How many decided wishes the dashboard shows under the pending ones. */
+const RECENT_WISHES = 5;
+
+/**
+ * Wishes for the admin dashboard, from every season: all pending ones
+ * (oldest first, so they're answered in order) and the newest few decided.
+ */
+export async function listWishes(): Promise<{
+  pending: AdminWish[];
+  recent: AdminWish[];
+}> {
+  const db = getDb();
+  const columns = {
+    id: wishes.id,
+    playerId: wishes.playerId,
+    playerName: players.name,
+    wish: wishes.wish,
+    status: wishes.status,
+    response: wishes.response,
+    deciderName: wishes.deciderName,
+    decidedAt: wishes.decidedAt,
+    createdAt: wishes.createdAt,
+  };
+  const [pending, recent] = await db.batch([
+    db
+      .select(columns)
+      .from(wishes)
+      .innerJoin(players, eq(players.id, wishes.playerId))
+      .where(eq(wishes.status, "pending"))
+      .orderBy(asc(wishes.id)),
+    db
+      .select(columns)
+      .from(wishes)
+      .innerJoin(players, eq(players.id, wishes.playerId))
+      .where(notInArray(wishes.status, ["pending"]))
+      .orderBy(desc(wishes.decidedAt), desc(wishes.id))
+      .limit(RECENT_WISHES),
+  ]);
+  const toWish = (row: (typeof pending)[number]): AdminWish => ({
+    id: row.id,
+    playerId: row.playerId,
+    playerName: row.playerName,
+    wish: row.wish,
+    status: row.status,
+    ...(row.response !== null && { response: row.response }),
+    ...(row.deciderName !== null && { deciderName: row.deciderName }),
+    ...(row.decidedAt !== null && {
+      decidedAt: timestamptzToIso(row.decidedAt),
+    }),
+    at: timestamptzToIso(row.createdAt),
+  });
+  return { pending: pending.map(toWish), recent: recent.map(toWish) };
+}
+
+/**
+ * Grants or declines a pending wish, with an optional reply for the player.
+ * A decision is final; returns `false` if it was already decided (e.g. by
+ * another admin at the same time).
+ */
+export async function decideWish(
+  input: WishDecisionInput,
+  actor: AdminUser,
+): Promise<boolean> {
+  const { actorId, actorName } = actorFields(actor);
+  const decided = await getDb()
+    .update(wishes)
+    .set({
+      status: input.decision,
+      response: input.response,
+      deciderId: actorId,
+      deciderName: actorName,
+      decidedAt: sql`now()`,
+    })
+    .where(and(eq(wishes.id, input.rowId), eq(wishes.status, "pending")))
+    .returning({ id: wishes.id });
+  return decided.length > 0;
+}
+
+/**
  * Cancels a power-up used on a week: its effect goes and the charge returns
  * to the player's wallet, unused.
  */
@@ -1524,6 +1703,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   coin_purchases_item_id_shop_items_id_fk:
     "Players own this item, so it can't be deleted. Retire it instead.",
   coin_adjustments_amount_range: "Use a non-zero amount up to 10000.",
+  item_gifts_item_id_shop_items_id_fk:
+    "Players were gifted this item, so it can't be deleted. Retire it instead.",
   shop_items_crate_only_droppable: "Power-ups can't be egg exclusives.",
   crate_opens_item_id_shop_items_id_fk:
     "Players hatched this item from an egg, so it can't be deleted. Retire it instead.",

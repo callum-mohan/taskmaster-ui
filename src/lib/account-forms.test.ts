@@ -293,6 +293,15 @@ describe("parseWalletAction", () => {
   const parse = (fields: Record<string, string>) =>
     parseWalletAction(formData(fields));
 
+  it("parses a wish on one line, up to 200 characters", () => {
+    expect(parse({ intent: "wish", wish: "  An extra\n day  " })).toEqual({
+      intent: "wish",
+      wish: "An extra day",
+    });
+    expect(parse({ intent: "wish", wish: "   " })).toBeUndefined();
+    expect(parse({ intent: "wish", wish: "x".repeat(201) })).toBeUndefined();
+  });
+
   it("parses equip and unequip", () => {
     expect(parse({ intent: "equip", itemId: "duck" })).toEqual({
       intent: "equip",

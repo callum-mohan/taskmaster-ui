@@ -12,6 +12,7 @@ import {
   GIFT_MESSAGE_MAX,
   GIFT_WEEKLY_CAP,
   LOADOUT_SLOTS,
+  WISH_MAX,
 } from "../data/coin-rules";
 
 // Validation for the player self-service forms under `/account`. Players can
@@ -201,6 +202,15 @@ const walletActionSchema = z.discriminatedUnion("intent", [
       .transform((v) => (v === "" ? null : v.replace(/\s+/g, " "))),
   }),
   z.object({
+    intent: z.literal("wish"),
+    // One line, shown to the Taskmaster on the admin dashboard.
+    wish: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/\s+/g, " "))
+      .pipe(z.string().min(1).max(WISH_MAX)),
+  }),
+  z.object({
     intent: z.literal("use"),
     // Shield, Mirror and Insurance are passive: they're never used.
     effect: z.enum(ACTIVE_POWER_UP_KINDS),
@@ -217,9 +227,9 @@ const walletActionSchema = z.discriminatedUnion("intent", [
 export type WalletAction = z.output<typeof walletActionSchema>;
 
 /**
- * A wallet page action (equip, unequip, use a power-up or send a gift), or
- * `undefined` for a malformed post. Sabotage must name a target; nothing
- * else may.
+ * A wallet page action (equip, unequip, use a power-up, make a wish or send
+ * a gift), or `undefined` for a malformed post. Sabotage must name a target;
+ * nothing else may.
  */
 export function parseWalletAction(form: FormData): WalletAction | undefined {
   const values = formValues(form);
@@ -233,6 +243,7 @@ export function parseWalletAction(form: FormData): WalletAction | undefined {
     toPlayerId: values.toPlayerId ?? "",
     amount: values.amount ?? "",
     message: values.message ?? "",
+    wish: values.wish ?? "",
   });
   if (!parsed.success) return undefined;
   const action = parsed.data;

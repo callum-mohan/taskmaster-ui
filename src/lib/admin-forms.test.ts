@@ -11,6 +11,8 @@ import {
   parseBonusForm,
   parseChangelogForm,
   parseCoinAdjustmentForm,
+  parseItemGiftForm,
+  parseWishDecisionForm,
   parseFeatureFlagForm,
   parseNewPlayerForm,
   parsePlayerEmailForm,
@@ -1596,6 +1598,56 @@ describe("parseCoinAdjustmentForm", () => {
     );
     expect(errors.amount).toBe("Use a non-zero amount.");
     expect(errors.reason).toBe("Required.");
+  });
+});
+
+describe("parseItemGiftForm", () => {
+  it("parses the item and the note posted as giftReason", () => {
+    expect(
+      dataOf(
+        parseItemGiftForm(
+          formData({ itemId: " duck ", giftReason: " Well played " }),
+        ),
+      ),
+    ).toEqual({ itemId: "duck", reason: "Well played" });
+  });
+
+  it("requires an item and a reason", () => {
+    const errors = errorsOf(
+      parseItemGiftForm(formData({ itemId: "", giftReason: " " })),
+    );
+    expect(errors.itemId).toBe("Pick an item to gift.");
+    expect(errors.reason).toBe("Required.");
+  });
+});
+
+describe("parseWishDecisionForm", () => {
+  it("parses a decision with an optional reply", () => {
+    expect(
+      dataOf(
+        parseWishDecisionForm(
+          formData({ rowId: "3", decision: "granted", response: " Done! " }),
+        ),
+      ),
+    ).toEqual({ rowId: 3, decision: "granted", response: "Done!" });
+    expect(
+      dataOf(
+        parseWishDecisionForm(formData({ rowId: "3", decision: "declined" })),
+      ),
+    ).toEqual({ rowId: 3, decision: "declined", response: null });
+  });
+
+  it("rejects an unknown decision or wish, and a long reply", () => {
+    const errors = errorsOf(
+      parseWishDecisionForm(
+        formData({ rowId: "x", decision: "maybe", response: "y".repeat(201) }),
+      ),
+    );
+    expect(Object.keys(errors).sort()).toEqual([
+      "decision",
+      "response",
+      "rowId",
+    ]);
   });
 });
 

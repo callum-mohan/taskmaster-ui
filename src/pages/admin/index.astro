@@ -4,8 +4,15 @@ import TerminalWindow from "../../components/TerminalWindow.astro";
 import StatCard from "../../components/StatCard.astro";
 import TaskStatusBadge from "../../components/TaskStatusBadge.astro";
 import WeekSteps from "../../components/admin/WeekSteps.astro";
+import WishInbox from "../../components/admin/WishInbox.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
-import { getAdminCounts, getWeekCounts } from "../../data/admin";
+import {
+  decideWish,
+  getAdminCounts,
+  getWeekCounts,
+  listWishes,
+} from "../../data/admin";
+import { parseWishDecisionForm } from "../../lib/admin-forms";
 import { getWeekProgress } from "../../data/week-progress";
 import {
   ADMIN_SEASONS,
@@ -18,20 +25,63 @@ import { ukDateFormat } from "../../lib/time";
 import { withBase } from "../../lib/url";
 
 // Fail closed if the middleware guard is ever bypassed.
-if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
+
+let wishFailed: { rowId: number; response: string } | undefined;
+let wishError: string | undefined;
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  if (form.get("intent") === "wish-decide") {
+    const parsed = parseWishDecisionForm(form);
+    if (!parsed.ok) {
+      wishError =
+        parsed.errors.response ?? "That didn't work. Pick grant or decline.";
+      const rowId = Number(parsed.values.rowId);
+      if (Number.isInteger(rowId)) {
+        wishFailed = { rowId, response: parsed.values.response ?? "" };
+      }
+    } else {
+      const decided = await decideWish(parsed.data, admin);
+      const done = decided ? `wish-${parsed.data.decision}` : "wish-stale";
+      return Astro.redirect(withBase(`/admin?done=${done}#wishes`));
+    }
+  }
+}
 
 const [
   counts,
   weekCounts,
   { season, tasks, players, teams, resultsPostedAt },
   { seasons },
+  wishes,
 ] = await Promise.all([
   getAdminCounts(),
   getWeekCounts(),
   Astro.locals.getQueries(),
   Astro.locals.getSeasons(),
+  listWishes(),
 ]);
-const admin = Astro.locals.admin;
+const WISH_NOTICES: Record<
+  string,
+  { tone: "success" | "error"; message: string }
+> = {
+  "wish-granted": {
+    tone: "success",
+    message: "Wish granted. The player has been notified; now make it happen!",
+  },
+  "wish-declined": {
+    tone: "success",
+    message: "Wish declined. The player has been notified.",
+  },
+  "wish-stale": {
+    tone: "error",
+    message: "That wish had already been decided.",
+  },
+};
+const wishNotice = wishError
+  ? { tone: "error" as const, message: wishError }
+  : WISH_NOTICES[Astro.url.searchParams.get("done") ?? ""];
 const hasSeason = season.id !== "";
 const readyToClose =
   hasSeason &&
@@ -86,8 +136,8 @@ const when = (iso: string) => stamp.format(new Date(iso));
     <span class="text-acid">$</span> whoami
   </h1>
   <p class="mt-2 max-w-prose text-sm text-ink-dim">
-    Signed in as <span class="text-ink">{admin?.email}</span>. Changes go live
-    on the public site as soon as you save. Press{" "}
+    Signed in as <span class="text-ink">{admin.email}</span>. Changes go live on
+    the public site as soon as you save. Press{" "}
     <kbd class="rounded border border-grid px-1 text-ink">⌘K</kbd> anywhere to jump
     to a section.
   </p>
@@ -254,6 +304,14 @@ const when = (iso: string) => stamp.format(new Date(iso));
       }
     </TerminalWindow>
   </section>
+
+  <WishInbox
+    pending={wishes.pending}
+    recent={wishes.recent}
+    notice={wishNotice}
+    failed={wishFailed}
+    class="mt-8"
+  />
 
   <section aria-labelledby="sections-heading" class="mt-8">
     <h2

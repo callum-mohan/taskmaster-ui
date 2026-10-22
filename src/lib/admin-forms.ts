@@ -10,6 +10,7 @@ import {
   POWER_UP_KINDS,
   PROFILE_THEMES,
   SHOP_CATEGORIES,
+  WISH_MAX,
 } from "../data/coin-rules";
 import {
   MAX_CAPTION_LENGTH,
@@ -1148,6 +1149,55 @@ export function parseCoinAdjustmentForm(
   return parseWith(
     coinAdjustmentSchema,
     { amount: values.amount ?? "", reason: values.reason ?? "" },
+    values,
+  );
+}
+
+const itemGiftSchema = z.object({
+  itemId: z.string().trim().min(1, "Pick an item to gift."),
+  reason: requiredText(200),
+});
+
+export type ItemGiftInput = z.output<typeof itemGiftSchema>;
+
+/**
+ * An admin gifting a player a shop item (pet, avatar, cosmetic or power-up).
+ * The note is posted as `giftReason`, so its field id doesn't clash with the
+ * coin form's `reason` on the same page.
+ */
+export function parseItemGiftForm(form: FormData): ParseResult<ItemGiftInput> {
+  const values = formValues(form);
+  return parseWith(
+    itemGiftSchema,
+    { itemId: values.itemId ?? "", reason: values.giftReason ?? "" },
+    values,
+  );
+}
+
+const wishDecisionSchema = z.object({
+  rowId: z.coerce.number().int().positive(),
+  decision: z.enum(["granted", "declined"]),
+  response: z
+    .string()
+    .trim()
+    .max(WISH_MAX, `Keep it under ${WISH_MAX} characters.`)
+    .transform((v) => (v === "" ? null : v.replace(/\s+/g, " "))),
+});
+
+export type WishDecisionInput = z.output<typeof wishDecisionSchema>;
+
+/** The Taskmaster granting or declining a wish, with an optional reply. */
+export function parseWishDecisionForm(
+  form: FormData,
+): ParseResult<WishDecisionInput> {
+  const values = formValues(form);
+  return parseWith(
+    wishDecisionSchema,
+    {
+      rowId: values.rowId ?? "",
+      decision: values.decision ?? "",
+      response: values.response ?? "",
+    },
     values,
   );
 }

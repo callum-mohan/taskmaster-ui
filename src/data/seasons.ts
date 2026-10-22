@@ -151,7 +151,7 @@ export function rowsForSeason(
     predictionRows: bySeasonPlayers(rows.predictionRows),
     recapRows: forWeeks(rows.recapRows),
     // Wallets are per season: the season's players' purchases, uses on its
-    // weeks, equipped items and grants. The catalogue is site-wide.
+    // weeks, equipped items, grants, item gifts and wishes. The catalogue is site-wide.
     coinPurchaseRows: forPlayers(rows.coinPurchaseRows),
     powerUpUseRows: bySeasonPlayers(rows.powerUpUseRows),
     equippedRows: forPlayers(rows.equippedRows),
@@ -159,5 +159,7 @@ export function rowsForSeason(
     entryRows: bySeasonPlayers(rows.entryRows),
     crateOpenRows: forPlayers(rows.crateOpenRows),
     coinGiftRows: inSeason(rows.coinGiftRows),
+    itemGiftRows: forPlayers(rows.itemGiftRows),
+    wishRows: forPlayers(rows.wishRows),
   };
 }

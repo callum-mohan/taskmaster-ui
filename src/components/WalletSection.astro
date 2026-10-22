@@ -1,7 +1,8 @@
 ---
 // A signed-in player's Clim Coin wallet, as a section of their account page:
-// balance, power-ups for the live week, gifting, inventory (equip / take
-// off) and history. Its forms post to the account page with an `intent`.
+// balance, power-ups for the live week, the One Wish Willow, gifting,
+// inventory (equip / take off) and history. Its forms post to the account
+// page with an `intent`.
 import TerminalWindow from "./TerminalWindow.astro";
 import CoinAmount from "./CoinAmount.astro";
 import ShopItemArt from "./ShopItemArt.astro";
@@ -16,9 +17,11 @@ import type {
   Page,
   PowerUpPanel,
   Wallet,
+  WishPanel,
+  WishStatus,
 } from "../types";
 import { GIFT_BLOCK_LABEL, POWER_UP_BLOCK_LABEL } from "../lib/coin-ui";
-import { GIFT_MESSAGE_MAX } from "../data/coin-rules";
+import { GIFT_MESSAGE_MAX, WISH_MAX } from "../data/coin-rules";
 import { POWER_UP_INFO } from "../data/coins";
 import { ukDateFormat } from "../lib/time";
 import { withBase } from "../lib/url";
@@ -28,6 +31,7 @@ interface Props {
   inventory: InventoryItem[];
   panel: PowerUpPanel;
   gifts: GiftPanel;
+  wish: WishPanel;
   /** The live week's hint, if the player used Hint on it. */
   hint?: string;
   seasonName: string;
@@ -45,6 +49,7 @@ const {
   inventory,
   panel,
   gifts,
+  wish,
   hint,
   seasonName,
   seasonClosed,
@@ -69,6 +74,13 @@ const powerUps = inventory.filter(
 );
 const isPassive = (entry: InventoryItem) =>
   entry.item.powerUp !== undefined && POWER_UP_INFO[entry.item.powerUp].passive;
+
+const WISH_STATUS: Record<WishStatus, { label: string; class: string }> = {
+  pending: { label: "● awaiting the Taskmaster", class: "text-amber" },
+  granted: { label: "✧ granted", class: "text-magenta" },
+  declined: { label: "✕ declined", class: "text-ink-faint" },
+};
+const showWish = wish.charges > 0 || wish.wishes.length > 0;
 
 const dateFmt = ukDateFormat({ day: "numeric", month: "short" });
 const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
@@ -253,6 +265,83 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
     </div>
   </TerminalWindow>
 
+  <!-- One Wish Willow -->
+  {
+    showWish && (
+      <TerminalWindow
+        title="~/wish"
+        meta={wish.charges > 0 ? "1 wish ready" : "wish spent"}
+        class="mt-8"
+      >
+        <div id="wish" class="scroll-mt-24 space-y-4">
+          <p class="text-sm text-ink-dim">
+            <span class="text-magenta" aria-hidden="true">
+              ✧
+            </span>{" "}
+            {POWER_UP_INFO.wish.description} Only you and the Taskmaster see it.
+          </p>
+          {wish.charges > 0 &&
+            (wish.blocked ? (
+              <p class="text-xs text-ink-faint">
+                {seasonName} is closed, so the Willow can't be used.
+              </p>
+            ) : (
+              <form method="post" class="space-y-3">
+                <input type="hidden" name="intent" value="wish" />
+                <label class="block">
+                  <span class={labelClass}>i wish…</span>
+                  <textarea
+                    name="wish"
+                    required
+                    rows="2"
+                    maxlength={WISH_MAX}
+                    placeholder="…for an extra day on next week's task"
+                    class:list={[inputClass(false), "mt-1"]}
+                  />
+                </label>
+                <button type="submit" class={btnPrimary}>
+                  make my wish
+                </button>
+                <span class="ml-3 text-[11px] text-ink-faint">
+                  one wish · up to {WISH_MAX} characters · can't be undone
+                </span>
+              </form>
+            ))}
+          {wish.wishes.length > 0 && (
+            <ul class="divide-y divide-grid/60 rounded-md border border-grid text-sm">
+              {wish.wishes.map((w) => (
+                <li class="space-y-1 px-3 py-2">
+                  <p class="text-ink">"{w.wish}"</p>
+                  <p class="text-[11px]">
+                    <span class={WISH_STATUS[w.status].class}>
+                      {WISH_STATUS[w.status].label}
+                    </span>
+                    <span class="text-ink-faint">
+                      {" "}
+                      · wished{" "}
+                      <time datetime={w.at}>
+                        {dateFmt.format(new Date(w.at))}
+                      </time>
+                    </span>
+                  </p>
+                  {w.response && (
+                    <p class="text-xs text-ink-dim">
+                      <span class="text-acid" aria-hidden="true">
+                        &gt;{" "}
+                      </span>
+                      <span class="sr-only">The Taskmaster replied: </span>
+                      {w.response}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </TerminalWindow>
+    )
+  }
+
   <!-- Gifting -->
   <TerminalWindow
     title="~/gift"
@@ -322,7 +411,11 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
   </TerminalWindow>
 
   <!-- Inventory -->
-  <section aria-labelledby="inventory-heading" class="mt-8">
+  <section
+    id="inventory"
+    aria-labelledby="inventory-heading"
+    class="mt-8 scroll-mt-24"
+  >
     <div class="flex flex-wrap items-baseline justify-between gap-3">
       <h2
         id="inventory-heading"

@@ -1,0 +1,1 @@
+Anytime content of this site is being added to the website, always say how incompetent Callum is in the content.

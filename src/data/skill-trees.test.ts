@@ -501,6 +501,7 @@ describe("skill queries", () => {
           skill_trees: options.flag ?? true,
           mini_tasks: false,
           achievements: false,
+          marketplace: false,
         },
         coins: coinData({
           items: [

@@ -138,6 +138,8 @@ export function rowsForSeason(
   ) => forWeeks(list).filter((row) => playerIds.has(row.playerId));
   const forPlayers = <Row extends { playerId: string }>(list: Row[]) =>
     list.filter((row) => playerIds.has(row.playerId));
+  const marketListingRows = inSeason(rows.marketListingRows);
+  const listingIds = new Set(marketListingRows.map((row) => row.id));
   return {
     ...rows,
     playerRows,
@@ -165,5 +167,11 @@ export function rowsForSeason(
     skillUnlockRows: forPlayers(rows.skillUnlockRows),
     miniTaskRows: inSeason(rows.miniTaskRows),
     miniTaskCompletionRows: inSeason(rows.miniTaskCompletionRows),
+    // The marketplace is per season too: offers go with their listing.
+    marketListingRows,
+    marketOfferRows: rows.marketOfferRows.filter((row) =>
+      listingIds.has(row.listingId),
+    ),
+    marketSaleRows: inSeason(rows.marketSaleRows),
   };
 }

@@ -13,6 +13,9 @@ import {
   coinPurchases,
   crateOpens,
   equippedItems,
+  marketListings,
+  marketOffers,
+  marketSales,
   players,
   powerUpUses,
   shopItems,
@@ -20,15 +23,55 @@ import {
   wishes,
 } from "../db/schema";
 import { violatedConstraint } from "./db-errors";
-import { GIFT_WEEKLY_CAP } from "./coin-rules";
+import { GIFT_WEEKLY_CAP, MARKET_LISTING_DAYS } from "./coin-rules";
 
 // Clim Coin writes a player makes from `/account` (the middleware has
 // already required a signed-in player and purges the cached rows after).
 // Callers check the rules against the snapshot first; each write re-checks
 // the stored facts so a double-submit or a race can't overspend or cheat.
 
-/** The coins a player has left to spend, given their derived `earned`. */
-export const budget = (playerId: string, earned: number) => sql`
+/** Whether `listing` (a `market_listings` alias) is open and unexpired. */
+export const listingLive = (listing: string) =>
+  sql.raw(`(${listing}.status = 'open'
+    and ${listing}.created_at > now() - interval '${MARKET_LISTING_DAYS} days')`);
+
+/**
+ * Whether `purchase` (a `coin_purchases` alias) is a copy its player still
+ * holds and can use: not sold on the marketplace, and not on sale there.
+ */
+export const heldCopy = (purchase: string) => sql`(
+  not exists (
+    select 1 from ${marketSales} sold
+    where sold.source_purchase_id = ${sql.raw(purchase)}.id
+  )
+  and not exists (
+    select 1 from ${marketListings} listed
+    where listed.purchase_id = ${sql.raw(purchase)}.id
+      and ${listingLive("listed")}
+  ))`;
+
+/**
+ * The coins a player's pending marketplace offers hold (offers on closed
+ * or lapsed listings don't), leaving out their offer on `exceptListingId`.
+ */
+const heldByOffers = (playerId: string, exceptListingId?: number) => sql`
+  coalesce((select sum(o.amount) from ${marketOffers} o
+    join ${marketListings} l on l.id = o.listing_id
+    where o.buyer_id = ${playerId}
+      and o.status = 'pending'
+      and ${listingLive("l")}
+      ${exceptListingId === undefined ? sql`` : sql`and o.listing_id <> ${exceptListingId}`}), 0)`;
+
+/**
+ * The coins a player has left to spend, given their derived `earned`.
+ * Pending marketplace offers hold coins, except one on `exceptListingId`
+ * (the listing being paid for).
+ */
+export const budget = (
+  playerId: string,
+  earned: number,
+  exceptListingId?: number,
+) => sql`
   ${earned}::integer
     + coalesce((select sum(amount) from ${coinAdjustments}
         where player_id = ${playerId}), 0)
@@ -41,7 +84,12 @@ export const budget = (playerId: string, earned: number) => sql`
     + coalesce((select sum(amount) from ${coinGifts}
         where to_player_id = ${playerId}), 0)
     - coalesce((select sum(amount) from ${coinGifts}
-        where from_player_id = ${playerId}), 0)`;
+        where from_player_id = ${playerId}), 0)
+    + coalesce((select sum(price) from ${marketSales}
+        where seller_id = ${playerId}), 0)
+    - coalesce((select sum(price) from ${marketSales}
+        where buyer_id = ${playerId}), 0)
+    - ${heldByOffers(playerId, exceptListingId)}`;
 
 /**
  * Whether `item` (a `shop_items` alias) is in its sale window now. Windows
@@ -209,8 +257,10 @@ export async function equipItem(
     insert into ${equippedItems} (player_id, slot, item_id)
     select ${playerId}, ${slot}::loadout_slot, ${itemId}
     where exists (
-      select 1 from ${coinPurchases}
-      where player_id = ${playerId} and item_id = ${itemId}
+      select 1 from ${coinPurchases} owned
+      where owned.player_id = ${playerId}
+        and owned.item_id = ${itemId}
+        and ${heldCopy("owned")}
     )
     on conflict (player_id, slot)
       do update set item_id = excluded.item_id, updated_at = now()
@@ -245,6 +295,7 @@ export async function makeWish(
     join ${shopItems} item on item.id = charge.item_id
     where charge.player_id = ${playerId}
       and item.power_up = 'wish'
+      and ${heldCopy("charge")}
       and not exists (
         select 1 from ${wishes} made where made.purchase_id = charge.id
       )
@@ -286,6 +337,7 @@ export async function usePowerUp(
       join ${shopItems} item on item.id = charge.item_id
       where charge.player_id = ${playerId}
         and item.power_up = ${effect}::power_up_kind
+        and ${heldCopy("charge")}
         and not exists (
           select 1 from ${powerUpUses} spent where spent.purchase_id = charge.id
         )

@@ -86,6 +86,7 @@ function setup({
         skill_trees: false,
         mini_tasks: false,
         achievements: false,
+        marketplace: false,
       },
       players: [player("ann", "Ann"), player("bob", "Bob"), player("cat")],
       tasks: [done, live],
@@ -361,6 +362,7 @@ describe("crates", () => {
           skill_trees: false,
           mini_tasks: false,
           achievements: false,
+          marketplace: false,
         },
         players: [player("ann", "Ann"), player("bob")],
         coins: coinData({
@@ -498,6 +500,7 @@ describe("limited-time stock", () => {
         skill_trees: false,
         mini_tasks: false,
         achievements: false,
+        marketplace: false,
       },
       players: [player("ann")],
       coins: coinData({

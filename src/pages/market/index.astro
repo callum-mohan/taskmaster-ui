@@ -1,0 +1,296 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import MarketListingCard from "../../components/MarketListingCard.astro";
+import MarketSalesFeed from "../../components/MarketSalesFeed.astro";
+import CoinAmount from "../../components/CoinAmount.astro";
+import Pagination from "../../components/Pagination.astro";
+import Notice from "../../components/admin/Notice.astro";
+import { btnGhost, btnPrimary } from "../../components/admin/styles";
+import { CATEGORY_INFO, SHOP_CATEGORIES } from "../../data/coins";
+import { MARKET_LISTING_DAYS } from "../../data/coin-rules";
+import {
+  describeMarketOutcome,
+  isMarketOutcome,
+} from "../../lib/account-forms";
+import {
+  GALLERY_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../lib/pagination";
+import { withBase } from "../../lib/url";
+import type { MarketSort, ShopCategory } from "../../types";
+
+const [queries, viewer] = await Promise.all([
+  Astro.locals.getQueries(),
+  Astro.locals.getViewer(),
+]);
+const {
+  season,
+  marketEnabled,
+  getMarketListings,
+  getRecentMarketSales,
+  getWallet,
+  getPlayerById,
+} = queries;
+// Behind the marketplace feature flag (/admin/site#flags).
+if (!marketEnabled) return Astro.rewrite("/404");
+
+const params = Astro.url.searchParams;
+const category = SHOP_CATEGORIES.find((c) => c === params.get("type"));
+const SORTS: Record<MarketSort, string> = {
+  newest: "newest",
+  "price-asc": "cheapest",
+  "price-desc": "priciest",
+};
+const SORT_KEYS = Object.keys(SORTS) as MarketSort[];
+const sort = SORT_KEYS.find((s) => s === params.get("sort")) ?? "newest";
+const listings = getMarketListings({ ...(category && { category }), sort });
+const page = paginate(
+  listings,
+  parsePage(params.get("page")),
+  GALLERY_PAGE_SIZE,
+);
+const sales = getRecentMarketSales();
+
+const playerId =
+  viewer?.playerId && getPlayerById(viewer.playerId)
+    ? viewer.playerId
+    : undefined;
+const wallet = playerId ? getWallet(playerId) : undefined;
+
+const outcomeParam = params.get("market") ?? "";
+const notice = isMarketOutcome(outcomeParam)
+  ? describeMarketOutcome(outcomeParam)
+  : undefined;
+
+/** A filter link that keeps the other filter and goes back to page 1. */
+const filterHref = (next: {
+  type?: ShopCategory | null;
+  sort?: MarketSort;
+}) => {
+  const search = new URLSearchParams();
+  const type = next.type === undefined ? category : next.type;
+  const nextSort = next.sort ?? sort;
+  if (type) search.set("type", type);
+  if (nextSort !== "newest") search.set("sort", nextSort);
+  const query = search.toString();
+  return `${withBase("/market")}${query ? `?${query}` : ""}#listings`;
+};
+// Listing happens from the account side, where the player's inventory is.
+const sellHref = withBase("/account/market#sell");
+const signInToSellHref = withBase(
+  `/login?${new URLSearchParams({ next: "/account/market" })}`,
+);
+const chip = (active: boolean) =>
+  [
+    "rounded-md border px-3 py-1 text-[11px] font-bold tracking-widest transition-colors",
+    active
+      ? "border-acid bg-acid/10 text-acid"
+      : "border-grid text-ink-dim hover:border-ink-faint hover:text-ink",
+  ].join(" ");
+---
+
+<Layout
+  title="Clim Coin marketplace"
+  description="Buy and sell pets, avatars, flair and power-ups with other EAYL Taskmaster players for Clim Coin."
+>
+  <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <header class="flex flex-wrap items-end justify-between gap-6">
+      <div>
+        <p
+          class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim"
+        >
+          ./market --trade clim-coin
+        </p>
+        <h1
+          class="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+        >
+          THE <span class="text-cyan">MARKET</span>PLACE
+        </h1>
+        <p class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim">
+          <span class="text-acid">//</span> Players selling to players. Buy at the
+          listed price or make a lower offer (your coins are held until the seller
+          answers). Listings last {MARKET_LISTING_DAYS} days. Trading is between {
+            season.name
+          } players only.
+        </p>
+      </div>
+      {
+        wallet ? (
+          <div class="rounded-lg border border-amber/40 bg-amber/5 px-5 py-4">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+              you can spend
+            </p>
+            <CoinAmount
+              amount={wallet.balance}
+              class:list={[
+                "mt-1 text-3xl",
+                wallet.balance < 0 ? "text-danger" : "text-amber",
+              ]}
+            />
+            {wallet.held > 0 && (
+              <p class="mt-1 text-[11px] text-ink-faint">
+                + {wallet.held} held in offers
+              </p>
+            )}
+            <div class="mt-3 flex flex-col gap-2">
+              <a
+                href={withBase("/account/market#listings")}
+                class="text-center text-xs text-cyan hover:underline"
+              >
+                your listings & offers →
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div class="w-full rounded-lg border border-grid bg-term-panel/60 px-5 py-4 sm:w-auto sm:max-w-xs">
+            <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+              trading
+            </p>
+            <p class="mt-1 text-sm leading-relaxed text-ink-dim">
+              {viewer
+                ? `Only ${season.name} players can trade here.`
+                : "Sign in as a player to buy, sell and make offers."}
+            </p>
+            {!viewer && (
+              <a
+                href={withBase(
+                  `/login?${new URLSearchParams({ next: "/market" })}`,
+                )}
+                class="mt-2 block text-xs text-cyan hover:underline"
+              >
+                sign in →
+              </a>
+            )}
+          </div>
+        )
+      }
+    </header>
+
+    {
+      notice && (
+        <Notice tone={notice.tone} class="mt-6">
+          {notice.message}
+        </Notice>
+      )
+    }
+
+    <div class="mt-12 grid gap-8 lg:grid-cols-[1fr_20rem]">
+      <section
+        id="listings"
+        aria-labelledby="listings-heading"
+        class="min-w-0 scroll-mt-24"
+      >
+        <p class="prompt text-[11px] text-ink-faint">
+          ls ./listings{category ? ` --type ${category}` : ""} --sort {sort}
+        </p>
+        <div class="mt-1 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="listings-heading" class="text-xl font-extrabold text-ink">
+            For sale <span class="text-ink-faint">({listings.length})</span>
+          </h2>
+          {
+            playerId ? (
+              <a href={sellHref} class={btnPrimary}>
+                + sell an item
+              </a>
+            ) : (
+              !viewer && (
+                <a href={signInToSellHref} class={btnGhost}>
+                  sign in to sell
+                </a>
+              )
+            )
+          }
+        </div>
+
+        <nav aria-label="Filter listings" class="mt-4 flex flex-wrap gap-2">
+          <a
+            href={filterHref({ type: null })}
+            class={chip(!category)}
+            aria-current={!category ? "page" : undefined}
+          >
+            all
+          </a>
+          {
+            SHOP_CATEGORIES.map((c) => (
+              <a
+                href={filterHref({ type: c })}
+                class={chip(category === c)}
+                aria-current={category === c ? "page" : undefined}
+              >
+                {CATEGORY_INFO[c].label.toLowerCase()}
+              </a>
+            ))
+          }
+          <span class="mx-1 hidden w-px bg-grid sm:block" aria-hidden="true"
+          ></span>
+          {
+            SORT_KEYS.map((s) => (
+              <a
+                href={filterHref({ sort: s })}
+                class={chip(sort === s)}
+                aria-current={sort === s ? "page" : undefined}
+              >
+                {SORTS[s]}
+              </a>
+            ))
+          }
+        </nav>
+
+        {
+          page.items.length === 0 ? (
+            <p class="mt-6 rounded-lg border border-dashed border-grid p-6 text-sm text-ink-faint">
+              <span class="text-cyan" aria-hidden="true">
+                &gt;{" "}
+              </span>
+              nothing for sale{category ? " in this category" : ""} right now.
+              {playerId && (
+                <>
+                  {" "}
+                  <a href={sellHref} class="text-cyan hover:underline">
+                    list something of yours →
+                  </a>
+                </>
+              )}
+            </p>
+          ) : (
+            <ul class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {page.items.map((view) => (
+                <li class="flex">
+                  <MarketListingCard view={view} class="w-full" />
+                </li>
+              ))}
+            </ul>
+          )
+        }
+        <Pagination
+          info={page}
+          href={(n) =>
+            pageHref(Astro.url, "page", n, {
+              hash: "listings",
+              drop: ["market"],
+            })}
+          label="Listing pages"
+          itemLabel="listings"
+          class="mt-6"
+        />
+      </section>
+
+      <aside aria-labelledby="sales-heading">
+        <TerminalWindow title="~/market/recent-sales.log">
+          <div class="p-4">
+            <h2
+              id="sales-heading"
+              class="text-xs font-bold uppercase tracking-[0.2em] text-ink-faint"
+            >
+              Recent sales
+            </h2>
+            <MarketSalesFeed sales={sales} class="mt-2" />
+          </div>
+        </TerminalWindow>
+      </aside>
+    </div>
+  </div>
+</Layout>

@@ -21,6 +21,9 @@ import {
   equippedItems,
   featureFlags,
   itemGifts,
+  marketListings,
+  marketOffers,
+  marketSales,
   miniTaskCompletions,
   miniTasks,
   powerUpUses,
@@ -326,16 +329,38 @@ export async function setCurrentSeason(id: string): Promise<void> {
 
 /**
  * Closes a season, crowning its champion, or reopens it. A closed season's
- * weeks, roster and scores are read-only (see the middleware).
+ * weeks, roster and scores are read-only (see the middleware). Closing also
+ * takes its open marketplace listings down and declines their pending
+ * offers, so items go back to their sellers and offered coins are freed.
  */
 export async function setSeasonClosed(
   id: string,
   closed: boolean,
 ): Promise<void> {
-  await getDb()
+  const db = getDb();
+  const close = db
     .update(seasons)
     .set({ closedAt: closed ? sql`now()` : null })
     .where(eq(seasons.id, id));
+  if (!closed) {
+    await close;
+    return;
+  }
+  await db.batch([
+    close,
+    db.execute(sql`
+      update ${marketOffers} o
+      set status = 'declined', decided_at = now()
+      from ${marketListings} l
+      where l.id = o.listing_id
+        and l.season_id = ${id}
+        and l.status = 'open'
+        and o.status = 'pending'`),
+    db.execute(sql`
+      update ${marketListings}
+      set status = 'cancelled', closed_at = now()
+      where season_id = ${id} and status = 'open'`),
+  ]);
 }
 
 /** What still belongs to a season; only an empty season can be deleted. */
@@ -1586,6 +1611,10 @@ export async function revokeItemGift(
         and not exists (
           select 1 from ${wishes} made
           where made.purchase_id = ${coinPurchases.id}
+        )
+        and not exists (
+          select 1 from ${marketSales} sold
+          where sold.source_purchase_id = ${coinPurchases.id}
         )
       returning id`),
     db.delete(equippedItems).where(

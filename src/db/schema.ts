@@ -81,6 +81,20 @@ export const wishStatus = pgEnum("wish_status", [
   "granted",
   "declined",
 ]);
+// `expired` is written lazily (listings also expire by age when read), so a
+// stale open listing never blocks relisting its item.
+export const marketListingStatus = pgEnum("market_listing_status", [
+  "open",
+  "sold",
+  "cancelled",
+  "expired",
+]);
+export const marketOfferStatus = pgEnum("market_offer_status", [
+  "pending",
+  "accepted",
+  "declined",
+  "withdrawn",
+]);
 export const loadoutSlot = pgEnum("loadout_slot", [
   "pet",
   "avatar",
@@ -1018,6 +1032,145 @@ export const crateOpens = pgTable(
     ),
     index("crate_opens_player_id_idx").on(t.playerId),
     index("crate_opens_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * A player-to-player marketplace listing: one owned copy (`purchaseId`, the
+ * seller's `coin_purchases` row) for sale at a fixed price. Open listings
+ * also expire by age (`MARKET_LISTING_DAYS` in `coin-rules.ts`), derived
+ * when read; `expired` is only written when the item is relisted. An admin
+ * cancelling one has their name copied in, like `coin_adjustments`.
+ */
+export const marketListings = pgTable(
+  "market_listings",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: seasonId(),
+    sellerId: text().notNull(),
+    purchaseId: integer()
+      .notNull()
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    // Copied from the purchase so listings can be browsed by item.
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "restrict" }),
+    price: integer().notNull(),
+    status: marketListingStatus().notNull().default("open"),
+    cancelledByName: text(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    closedAt: timestamp({ withTimezone: true, mode: "string" }),
+  },
+  (t) => [
+    foreignKey({
+      name: "market_listings_seller_season_fk",
+      columns: [t.sellerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    uniqueIndex("market_listings_one_open_per_purchase_idx")
+      .on(t.purchaseId)
+      .where(sql`${t.status} = 'open'`),
+    check("market_listings_price_range", sql`${t.price} between 1 and 30000`),
+    check(
+      "market_listings_closed_when_not_open",
+      sql`(${t.status} = 'open') = (${t.closedAt} is null)`,
+    ),
+    index("market_listings_seller_id_idx").on(t.sellerId),
+    index("market_listings_item_id_idx").on(t.itemId),
+  ],
+);
+
+/**
+ * An offer below a listing's price. Pending offers hold the buyer's coins
+ * (derived: they're taken off what they can spend) until the seller accepts
+ * or declines, the buyer withdraws, or the listing closes or expires. One
+ * pending offer per buyer per listing; offering again replaces it.
+ */
+export const marketOffers = pgTable(
+  "market_offers",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    listingId: integer()
+      .notNull()
+      .references(() => marketListings.id, { onDelete: "cascade" }),
+    buyerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    amount: integer().notNull(),
+    status: marketOfferStatus().notNull().default("pending"),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+    decidedAt: timestamp({ withTimezone: true, mode: "string" }),
+  },
+  (t) => [
+    uniqueIndex("market_offers_one_pending_per_buyer_idx")
+      .on(t.listingId, t.buyerId)
+      .where(sql`${t.status} = 'pending'`),
+    check("market_offers_amount_positive", sql`${t.amount} > 0`),
+    check(
+      "market_offers_decided_when_not_pending",
+      sql`(${t.status} = 'pending') = (${t.decidedAt} is null)`,
+    ),
+    index("market_offers_buyer_id_idx").on(t.buyerId),
+  ],
+);
+
+/**
+ * A completed marketplace sale. The seller's copy (`sourcePurchaseId`) stops
+ * being theirs, and the buyer owns the item through `buyerPurchaseId`, a
+ * zero-price `coin_purchases` row written in the same statement, like crate
+ * wins. `price` moves from the buyer's wallet to the seller's (derived).
+ */
+export const marketSales = pgTable(
+  "market_sales",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: seasonId(),
+    listingId: integer()
+      .notNull()
+      .unique("market_sales_listing_id_unique")
+      .references(() => marketListings.id, { onDelete: "cascade" }),
+    sellerId: text().notNull(),
+    buyerId: text().notNull(),
+    itemId: text()
+      .notNull()
+      .references(() => shopItems.id, { onDelete: "restrict" }),
+    price: integer().notNull(),
+    sourcePurchaseId: integer()
+      .notNull()
+      .unique("market_sales_source_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    buyerPurchaseId: integer()
+      .notNull()
+      .unique("market_sales_buyer_purchase_id_unique")
+      .references(() => coinPurchases.id, { onDelete: "cascade" }),
+    // Set when the sale was an accepted offer.
+    offerId: integer().references(() => marketOffers.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: "market_sales_seller_season_fk",
+      columns: [t.sellerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "market_sales_buyer_season_fk",
+      columns: [t.buyerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    check("market_sales_not_self", sql`${t.sellerId} <> ${t.buyerId}`),
+    check("market_sales_price_positive", sql`${t.price} > 0`),
+    index("market_sales_seller_id_idx").on(t.sellerId),
+    index("market_sales_buyer_id_idx").on(t.buyerId),
+    index("market_sales_item_id_idx").on(t.itemId),
   ],
 );
 

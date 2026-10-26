@@ -43,6 +43,8 @@ interface Props {
   notice?: { tone: "success" | "error"; message: string };
   /** The skill trees feature flag: links `/skills` when on. */
   skillTrees?: boolean;
+  /** The marketplace feature flag: links selling and listed items when on. */
+  market?: boolean;
   class?: string;
 }
 
@@ -55,6 +57,7 @@ const {
   hint,
   seasonName,
   skillTrees = false,
+  market = false,
   seasonClosed,
   ledgerPage,
   ledgerHref,
@@ -126,7 +129,12 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
           wallet.gifted !== 0 &&
             ` · gifts ${wallet.gifted > 0 ? "+" : ""}${wallet.gifted}`
         }
+        {
+          wallet.traded !== 0 &&
+            ` · market ${wallet.traded > 0 ? "+" : ""}${wallet.traded}`
+        }
         · spent {wallet.spent}
+        {wallet.held > 0 && ` · ${wallet.held} held in offers`}
       </p>
     </div>
   </div>
@@ -437,6 +445,16 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
             </a>
           )
         }
+        {
+          market && (
+            <a
+              href={withBase("/account/market#sell")}
+              class="text-xs text-cyan hover:underline"
+            >
+              sell on the market →
+            </a>
+          )
+        }
         <a href={withBase("/shop")} class="text-xs text-cyan hover:underline">
           visit the shop →
         </a>
@@ -453,7 +471,7 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
             <div>
               <h3 class="text-xs font-bold text-ink-dim">{group.label}</h3>
               <ul class="mt-2 grid gap-3 sm:grid-cols-2">
-                {bySlot(group.slot).map(({ item, equipped }) => (
+                {bySlot(group.slot).map(({ item, equipped, listingId }) => (
                   <li
                     class:list={[
                       "flex items-center gap-3 rounded-md border p-3",
@@ -468,40 +486,57 @@ const weekLabel = (n: number) => `Week ${String(n).padStart(2, "0")}`;
                       {equipped && (
                         <p class="text-[11px] text-acid">✓ equipped</p>
                       )}
+                      {listingId !== undefined && (
+                        <p class="text-[11px] text-cyan">on the market</p>
+                      )}
                     </div>
-                    {!seasonClosed && (
-                      <form method="post">
-                        {equipped ? (
-                          <>
-                            <input
-                              type="hidden"
-                              name="intent"
-                              value="unequip"
-                            />
-                            <input
-                              type="hidden"
-                              name="slot"
-                              value={group.slot}
-                            />
-                            <button type="submit" class={btnGhost}>
-                              take off
-                              <span class="sr-only"> {item.name}</span>
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <input type="hidden" name="intent" value="equip" />
-                            <input
-                              type="hidden"
-                              name="itemId"
-                              value={item.id}
-                            />
-                            <button type="submit" class={btnPrimary}>
-                              equip<span class="sr-only"> {item.name}</span>
-                            </button>
-                          </>
-                        )}
-                      </form>
+                    {listingId !== undefined ? (
+                      <a
+                        href={withBase(`/market/${listingId}`)}
+                        class={btnGhost}
+                      >
+                        view listing
+                        <span class="sr-only"> for {item.name}</span>
+                      </a>
+                    ) : (
+                      !seasonClosed && (
+                        <form method="post">
+                          {equipped ? (
+                            <>
+                              <input
+                                type="hidden"
+                                name="intent"
+                                value="unequip"
+                              />
+                              <input
+                                type="hidden"
+                                name="slot"
+                                value={group.slot}
+                              />
+                              <button type="submit" class={btnGhost}>
+                                take off
+                                <span class="sr-only"> {item.name}</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="hidden"
+                                name="intent"
+                                value="equip"
+                              />
+                              <input
+                                type="hidden"
+                                name="itemId"
+                                value={item.id}
+                              />
+                              <button type="submit" class={btnPrimary}>
+                                equip<span class="sr-only"> {item.name}</span>
+                              </button>
+                            </>
+                          )}
+                        </form>
+                      )
                     )}
                   </li>
                 ))}

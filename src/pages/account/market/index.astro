@@ -1,0 +1,425 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import ShopItemArt from "../../../components/ShopItemArt.astro";
+import CoinAmount from "../../../components/CoinAmount.astro";
+import MarketListingCard from "../../../components/MarketListingCard.astro";
+import MarketStatusBadge from "../../../components/MarketStatusBadge.astro";
+import Pagination from "../../../components/Pagination.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import {
+  btnGhost,
+  btnPrimary,
+  inputClass,
+} from "../../../components/admin/styles";
+import { runMarketAction } from "../../../data/market-actions";
+import { MARKET_LISTING_DAYS } from "../../../data/coin-rules";
+import { CATEGORY_INFO } from "../../../data/coins";
+import {
+  describeMarketOutcome,
+  isMarketOutcome,
+  parseMarketAction,
+} from "../../../lib/account-forms";
+import {
+  LIST_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../../lib/pagination";
+import { withBase } from "../../../lib/url";
+import type { MarketListBlock } from "../../../types";
+
+// Fail closed if the middleware guard is ever bypassed.
+const player = Astro.locals.player;
+if (!player || player.mustChangePassword) {
+  return Astro.redirect(withBase("/login"));
+}
+
+// Every marketplace form posts here (from this page and from a listing's
+// page). Living under `/account` means the middleware has already required
+// a signed-in player and purges the cached rows after.
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = parseMarketAction(form);
+  const { outcome, listingId } = action
+    ? await runMarketAction(player.playerId, action)
+    : { outcome: "invalid" as const, listingId: undefined };
+  const search = `?${new URLSearchParams({ market: outcome })}`;
+  const target =
+    form.get("from") === "listing" && listingId !== undefined
+      ? withBase(`/market/${listingId}${search}`)
+      : withBase(`/account/market${search}`);
+  return Astro.redirect(target, 303);
+}
+
+// Wallets are per season: the season the player's roster row is in.
+const season = (await Astro.locals.getSeasons()).seasonOfPlayer(
+  player.playerId,
+);
+const queries = await Astro.locals.getQueries(season?.id);
+if (!queries.marketEnabled) return Astro.rewrite("/404");
+
+const market = queries.getPlayerMarket(player.playerId);
+const wallet = queries.getWallet(player.playerId);
+const sellable = market.listable.filter((l) => !l.listing);
+const unlisted = sellable.filter((l) => !l.blocked);
+const kept = sellable.filter((l) => l.blocked);
+
+const params = Astro.url.searchParams;
+const listingsPage = paginate(
+  market.listings,
+  parsePage(params.get("listings")),
+  LIST_PAGE_SIZE,
+);
+const offersPage = paginate(
+  market.offersMade,
+  parsePage(params.get("offers")),
+  LIST_PAGE_SIZE,
+);
+const pageLink = (param: string, hash: string) => (n: number) =>
+  pageHref(Astro.url, param, n, { hash, drop: ["market"] });
+
+const outcomeParam = params.get("market") ?? "";
+const notice = isMarketOutcome(outcomeParam)
+  ? describeMarketOutcome(outcomeParam)
+  : undefined;
+
+const KEPT_LABEL: Record<MarketListBlock, string> = {
+  disabled: "market closed",
+  "season-closed": "season over",
+  untradeable: "can't be traded",
+  spent: "already used",
+};
+const action = withBase("/account/market");
+const sectionHeading =
+  "text-xs font-bold uppercase tracking-[0.2em] text-ink-faint";
+---
+
+<Layout title="Your market">
+  <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p
+          class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim"
+        >
+          market --mine
+        </p>
+        <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-ink">
+          Your market
+        </h1>
+        <p class="mt-2 max-w-prose text-sm text-ink-dim">
+          Sell what you own to other {season?.name ?? "season"} players. Listings
+          last {MARKET_LISTING_DAYS} days; a listed item comes off and can't be worn
+          or used until it sells or you take it down.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="rounded-lg border border-amber/40 bg-amber/5 px-4 py-3">
+          <p class="text-[10px] uppercase tracking-[0.25em] text-ink-faint">
+            you can spend
+          </p>
+          <CoinAmount
+            amount={wallet.balance}
+            class="mt-1 text-2xl text-amber"
+          />
+          {
+            market.held > 0 && (
+              <p class="mt-1 text-[11px] text-ink-faint">
+                + {market.held} held in offers
+              </p>
+            )
+          }
+        </div>
+        <a href={withBase("/market")} class={btnGhost}>browse market →</a>
+      </div>
+    </header>
+
+    {
+      notice && (
+        <Notice tone={notice.tone} class="mt-6">
+          {notice.message}
+        </Notice>
+      )
+    }
+
+    {
+      market.offersReceived.length > 0 && (
+        <section
+          id="received"
+          aria-labelledby="received-heading"
+          class="mt-10 scroll-mt-24"
+        >
+          <TerminalWindow
+            title="~/market/inbox"
+            meta={`${market.offersReceived.length} pending`}
+          >
+            <div class="p-5">
+              <h2 id="received-heading" class={sectionHeading}>
+                Offers on your listings
+              </h2>
+              <ul class="mt-3 divide-y divide-grid/60">
+                {market.offersReceived.map((o) => (
+                  <li class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                    <span class="min-w-0 text-ink-dim">
+                      <span class="text-ink">{o.buyer.name}</span> offers{" "}
+                      <CoinAmount amount={o.offer.amount} class="text-amber" />{" "}
+                      for{" "}
+                      <a
+                        href={withBase(`/market/${o.listing.listing.id}`)}
+                        class="text-cyan hover:underline"
+                      >
+                        {o.listing.item.name}
+                      </a>
+                      <span class="text-ink-faint">
+                        {" "}
+                        (listed at {o.listing.listing.price})
+                      </span>
+                    </span>
+                    <span class="flex gap-2">
+                      <form method="post" action={action}>
+                        <input type="hidden" name="intent" value="accept" />
+                        <input
+                          type="hidden"
+                          name="offerId"
+                          value={o.offer.id}
+                        />
+                        <button
+                          type="submit"
+                          class:list={[btnPrimary, "px-3 py-1"]}
+                          aria-label={`Accept ${o.buyer.name}'s offer of ${o.offer.amount} for ${o.listing.item.name}`}
+                        >
+                          accept
+                        </button>
+                      </form>
+                      <form method="post" action={action}>
+                        <input type="hidden" name="intent" value="decline" />
+                        <input
+                          type="hidden"
+                          name="offerId"
+                          value={o.offer.id}
+                        />
+                        <button
+                          type="submit"
+                          class:list={[btnGhost, "px-3 py-1"]}
+                          aria-label={`Decline ${o.buyer.name}'s offer of ${o.offer.amount} for ${o.listing.item.name}`}
+                        >
+                          decline
+                        </button>
+                      </form>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </TerminalWindow>
+        </section>
+      )
+    }
+
+    <section
+      id="sell"
+      aria-labelledby="sell-heading"
+      class="mt-10 scroll-mt-24"
+    >
+      <p class="prompt text-[11px] text-ink-faint">ls ./inventory --sellable</p>
+      <h2 id="sell-heading" class="mt-1 text-xl font-extrabold text-ink">
+        Sell something
+      </h2>
+      {
+        unlisted.length === 0 ? (
+          <p class="mt-4 text-sm text-ink-faint">
+            <span class="text-cyan" aria-hidden="true">
+              &gt;{" "}
+            </span>
+            nothing you own can go on sale right now.{" "}
+            <a href={withBase("/shop")} class="text-cyan hover:underline">
+              visit the shop →
+            </a>
+          </p>
+        ) : (
+          <ul class="mt-4 grid gap-4 sm:grid-cols-2">
+            {unlisted.map((copy) => (
+              <li class="flex flex-col gap-3 rounded-lg border border-grid bg-term-panel/60 p-4">
+                <div class="flex items-start gap-3">
+                  <ShopItemArt item={copy.item} />
+                  <div class="min-w-0">
+                    <h3 class="truncate text-sm font-extrabold text-ink">
+                      {copy.item.name}
+                    </h3>
+                    <p class="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                      {CATEGORY_INFO[copy.item.category].label}
+                      {!copy.item.crateOnly && ` · shop ${copy.item.price}`}
+                    </p>
+                  </div>
+                </div>
+                <form
+                  method="post"
+                  action={action}
+                  class="mt-auto flex items-end gap-2"
+                >
+                  <input type="hidden" name="intent" value="list" />
+                  <input
+                    type="hidden"
+                    name="purchaseId"
+                    value={copy.purchaseId}
+                  />
+                  <label class="min-w-0 flex-1">
+                    <span class="block text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+                      price ({copy.range.min}–{copy.range.max})
+                    </span>
+                    <input
+                      name="price"
+                      type="number"
+                      inputmode="numeric"
+                      required
+                      min={copy.range.min}
+                      max={copy.range.max}
+                      value={Math.min(
+                        Math.max(copy.item.price, copy.range.min),
+                        copy.range.max,
+                      )}
+                      class:list={[inputClass(false), "mt-1"]}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    class={btnPrimary}
+                    aria-label={`List ${copy.item.name} for sale`}
+                  >
+                    list
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      {
+        kept.length > 0 && (
+          <details class="mt-4 text-xs text-ink-faint">
+            <summary class="cursor-pointer hover:text-ink">
+              {kept.length} item{kept.length === 1 ? "" : "s"} you can't sell
+            </summary>
+            <ul class="mt-2 space-y-1 pl-4">
+              {kept.map((copy) => (
+                <li>
+                  {copy.item.name}
+                  {copy.blocked && (
+                    <span class="text-ink-faint">
+                      {" "}
+                      · {KEPT_LABEL[copy.blocked]}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )
+      }
+    </section>
+
+    <section
+      id="listings"
+      aria-labelledby="listings-heading"
+      class="mt-12 scroll-mt-24"
+    >
+      <h2 id="listings-heading" class="text-xl font-extrabold text-ink">
+        Your listings
+      </h2>
+      {
+        listingsPage.items.length === 0 ? (
+          <p class="mt-4 text-sm text-ink-faint">nothing listed yet.</p>
+        ) : (
+          <ul class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {listingsPage.items.map((view) => (
+              <li class="flex flex-col gap-2">
+                <MarketListingCard view={view} showStatus class="flex-1" />
+                {view.status === "open" && (
+                  <form method="post" action={action}>
+                    <input type="hidden" name="intent" value="cancel" />
+                    <input
+                      type="hidden"
+                      name="listingId"
+                      value={view.listing.id}
+                    />
+                    <button
+                      type="submit"
+                      class:list={[btnGhost, "w-full"]}
+                      aria-label={`Take down your ${view.item.name} listing`}
+                    >
+                      take down
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <Pagination
+        info={listingsPage}
+        href={pageLink("listings", "listings")}
+        label="Your listing pages"
+        itemLabel="listings"
+        class="mt-4"
+      />
+    </section>
+
+    <section
+      id="offers"
+      aria-labelledby="offers-heading"
+      class="mt-12 scroll-mt-24"
+    >
+      <h2 id="offers-heading" class="text-xl font-extrabold text-ink">
+        Offers you made
+      </h2>
+      {
+        offersPage.items.length === 0 ? (
+          <p class="mt-4 text-sm text-ink-faint">no offers yet.</p>
+        ) : (
+          <ul class="mt-4 divide-y divide-grid/60 rounded-lg border border-grid bg-term-panel/60 px-4">
+            {offersPage.items.map((o) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                <span class="min-w-0 text-ink-dim">
+                  <CoinAmount amount={o.offer.amount} class="text-amber" /> for{" "}
+                  <a
+                    href={withBase(`/market/${o.listing.listing.id}`)}
+                    class="text-cyan hover:underline"
+                  >
+                    {o.listing.item.name}
+                  </a>{" "}
+                  <span class="text-ink-faint">
+                    from {o.listing.seller.name}
+                  </span>
+                </span>
+                <span class="flex items-center gap-3">
+                  <MarketStatusBadge status={o.status} />
+                  {o.status === "pending" && (
+                    <form method="post" action={action}>
+                      <input type="hidden" name="intent" value="withdraw" />
+                      <input type="hidden" name="offerId" value={o.offer.id} />
+                      <button
+                        type="submit"
+                        class="text-xs text-cyan hover:underline"
+                        aria-label={`Withdraw your offer for ${o.listing.item.name}`}
+                      >
+                        withdraw
+                      </button>
+                    </form>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <Pagination
+        info={offersPage}
+        href={pageLink("offers", "offers")}
+        label="Your offer pages"
+        itemLabel="offers"
+        class="mt-4"
+      />
+    </section>
+  </div>
+</Layout>

@@ -537,7 +537,10 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
           owns can be deleted.
         </p>
       </div>
-      <a href={withBase("/admin/shop/new")} class={btnGhost}>+ new item</a>
+      <span class="flex flex-wrap gap-2">
+        <a href={withBase("/admin/market")} class={btnGhost}>marketplace →</a>
+        <a href={withBase("/admin/shop/new")} class={btnGhost}>+ new item</a>
+      </span>
     </div>
     <TerminalWindow title="~/site/shop" bodyClass="p-0 sm:p-0">
       <div class="overflow-x-auto">

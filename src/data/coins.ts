@@ -43,6 +43,7 @@ import type {
 } from "../db/schema";
 import { timestamptzToIso, wallClockToIso } from "../lib/time";
 import { peoplesChoiceClosesAt } from "./peoples-choice";
+import { heldCoins } from "./market-mappers";
 import type { DerivedBonusRow } from "./polls";
 import {
   DOUBLE_DOWN_POINTS,
@@ -721,6 +722,7 @@ export function deriveWallet(
     ...data.coins.crateOpens.map((o) => o.purchaseId),
     ...data.coins.itemGifts.map((g) => g.purchaseId),
     ...data.coins.skillUnlocks.flatMap((u) => u.purchaseId ?? []),
+    ...data.coins.market.sales.map((sale) => sale.buyerPurchaseId),
   ]);
   const purchases: CoinLedgerEntry[] = [
     ...data.coins.purchases
@@ -784,6 +786,32 @@ export function deriveWallet(
       return [];
     },
   );
+  const trades: CoinLedgerEntry[] = data.coins.market.sales.flatMap(
+    (sale): CoinLedgerEntry[] => {
+      const item = itemNames.get(sale.itemId) ?? sale.itemId;
+      if (sale.sellerId === playerId) {
+        return [
+          {
+            kind: "market-sale",
+            amount: sale.price,
+            label: `Sold ${item} to ${names.get(sale.buyerId) ?? "someone"} on the market`,
+            at: sale.at,
+          },
+        ];
+      }
+      if (sale.buyerId === playerId) {
+        return [
+          {
+            kind: "market-buy",
+            amount: -sale.price,
+            label: `Bought ${item} from ${names.get(sale.sellerId) ?? "someone"} on the market`,
+            at: sale.at,
+          },
+        ];
+      }
+      return [];
+    },
+  );
   const itemGifts: CoinLedgerEntry[] = data.coins.itemGifts
     .filter((g) => g.playerId === playerId)
     .map((g) => ({
@@ -798,18 +826,24 @@ export function deriveWallet(
   const adjusted = sum(adjustments);
   const spent = -sum(purchases);
   const gifted = sum(gifts);
+  const traded = sum(trades);
+  // Pending marketplace offers hold coins until they're decided or lapse.
+  const held = heldCoins(data.coins.market, playerId, now);
   return {
     playerId,
-    balance: earned + adjusted - spent + gifted,
+    balance: earned + adjusted - spent + gifted + traded - held,
     earned,
     adjusted,
     spent,
     gifted,
+    traded,
+    held,
     ledger: [
       ...earnings,
       ...adjustments,
       ...purchases,
       ...gifts,
+      ...trades,
       ...itemGifts,
     ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
   };

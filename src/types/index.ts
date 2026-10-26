@@ -1104,7 +1104,12 @@ export type NotificationKind =
   | "gift-received"
   | "wish-granted"
   | "wish-declined"
-  | "mini-task";
+  | "mini-task"
+  | "market-offer"
+  | "market-sold"
+  | "offer-accepted"
+  | "offer-declined"
+  | "listing-expired";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
@@ -1581,7 +1586,12 @@ export type PageLinkSlot = number | "gap";
 
 /** A site feature an admin can switch on or off (see `feature-flags.ts`). */
 export type FeatureFlagKey =
-  "shop_eggs" | "storm_mode" | "skill_trees" | "mini_tasks" | "achievements";
+  | "shop_eggs"
+  | "storm_mode"
+  | "skill_trees"
+  | "mini_tasks"
+  | "achievements"
+  | "marketplace";
 
 /** Whether each feature is on. */
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -1877,7 +1887,197 @@ export interface ClimCoinData {
   miniTasks: MiniTask[];
   /** Who completed which mini-task, oldest first. */
   miniTaskCompletions: MiniTaskCompletion[];
+  /** The player-to-player marketplace, this season's rows, oldest first. */
+  market: MarketData;
 }
+
+// ── Marketplace ───────────────────────────────────────────────────────
+
+/**
+ * A listing's state. Stored `open` listings past their expiry read as
+ * `expired` (derived), so nothing has to run when they lapse.
+ */
+export type MarketListingStatus = "open" | "sold" | "cancelled" | "expired";
+/** An offer's state; a pending offer on a closed listing reads as `expired`. */
+export type MarketOfferStatus =
+  "pending" | "accepted" | "declined" | "withdrawn" | "expired";
+
+/** One owned copy of an item for sale (the seller's purchase). */
+export interface MarketListing {
+  id: number;
+  sellerId: string;
+  /** The seller's `coin_purchases` row being sold. */
+  purchaseId: number;
+  itemId: string;
+  price: number;
+  /** As stored: an `open` one may have expired by age. */
+  status: MarketListingStatus;
+  /** Set when an admin cancelled it. */
+  cancelledByName?: string;
+  /** ISO 8601. */
+  at: string;
+  /** ISO 8601, once closed. */
+  closedAt?: string;
+}
+
+/** An offer below a listing's price (pending offers hold the coins). */
+export interface MarketOffer {
+  id: number;
+  listingId: number;
+  buyerId: string;
+  amount: number;
+  status: Exclude<MarketOfferStatus, "expired">;
+  /** ISO 8601. */
+  at: string;
+  decidedAt?: string;
+}
+
+/** A completed sale: the item and the coins changed hands. */
+export interface MarketSale {
+  id: number;
+  listingId: number;
+  sellerId: string;
+  buyerId: string;
+  itemId: string;
+  price: number;
+  /** The seller's copy, no longer theirs. */
+  sourcePurchaseId: number;
+  /** The zero-price purchase that makes the buyer own it. */
+  buyerPurchaseId: number;
+  /** Set when the sale was an accepted offer. */
+  offerId?: number;
+  /** ISO 8601. */
+  at: string;
+}
+
+export interface MarketData {
+  listings: MarketListing[];
+  offers: MarketOffer[];
+  sales: MarketSale[];
+}
+
+/** How the market page orders open listings. */
+export type MarketSort = "newest" | "price-asc" | "price-desc";
+
+/** The prices an item may be listed at or offered for, inclusive. */
+export interface MarketPriceRange {
+  min: number;
+  max: number;
+}
+
+/** A listing as the market shows it. */
+export interface MarketListingView {
+  listing: MarketListing;
+  /** Derived (expiry applied). */
+  status: MarketListingStatus;
+  item: ShopItem;
+  seller: Player;
+  /** When it lapses if unsold (ISO 8601). */
+  expiresAt: string;
+  range: MarketPriceRange;
+  /** Live pending offers. */
+  offerCount: number;
+  bestOffer?: number;
+  /** Set once sold. */
+  sale?: MarketSaleView;
+}
+
+/** A sale as the recent-sales feed and price history show it. */
+export interface MarketSaleView {
+  sale: MarketSale;
+  item: ShopItem;
+  seller: Player;
+  buyer: Player;
+}
+
+/** An offer with who made it and the listing it's on. */
+export interface MarketOfferView {
+  offer: MarketOffer;
+  /** Derived (expired once its listing closes or lapses). */
+  status: MarketOfferStatus;
+  buyer: Player;
+  listing: MarketListingView;
+}
+
+/** Why a viewer can't buy a listing or make an offer on it. */
+export type MarketBuyBlock =
+  | "guest"
+  | "disabled"
+  | "season-closed"
+  | "closed"
+  | "own-listing"
+  /** They already hold the item (power-ups: a charge of that effect). */
+  | "owned"
+  /** Offers only: it's listed at the lowest price allowed. */
+  | "no-offers"
+  | "unaffordable";
+
+/** Why an owned copy can't be listed. */
+export type MarketListBlock =
+  | "disabled"
+  | "season-closed"
+  /** Skill tree rewards and passive power-ups. */
+  | "untradeable"
+  /** A power-up charge already used (or a wish already made). */
+  | "spent";
+
+/** One listing's page, as one viewer sees it. */
+export interface MarketListingDetail {
+  view: MarketListingView;
+  /** Earlier sales of the same item this season, newest first. */
+  history: MarketSaleView[];
+  buyBlocked?: MarketBuyBlock;
+  offerBlocked?: MarketBuyBlock;
+  /** The viewer's pending offer on it. */
+  myOffer?: MarketOfferView;
+  /** Live offers, highest first: only for the seller. */
+  offers: MarketOfferView[];
+  /** What the viewer can spend now (after held offers). */
+  available?: number;
+}
+
+/** An owned copy a player could list, and its listing if it's on sale. */
+export interface ListableItem {
+  purchaseId: number;
+  item: ShopItem;
+  range: MarketPriceRange;
+  /** Its live listing, if listed. */
+  listing?: MarketListingView;
+  blocked?: MarketListBlock;
+}
+
+/** A player's side of the market (the account page). */
+export interface PlayerMarket {
+  /** Their listings, newest first (every state). */
+  listings: MarketListingView[];
+  /** Offers they made, newest first. */
+  offersMade: MarketOfferView[];
+  /** Live offers on their open listings, newest first. */
+  offersReceived: MarketOfferView[];
+  /** What they own that could go on sale. */
+  listable: ListableItem[];
+  /** Coins held by their pending offers. */
+  held: number;
+}
+
+/** Outcome of a market action, shown after the redirect. */
+export type MarketOutcome =
+  | "listed"
+  | "cancelled"
+  | "bought"
+  | "offered"
+  | "withdrawn"
+  | "accepted"
+  | "declined"
+  | "invalid"
+  | "disabled"
+  | "season-closed"
+  | "closed"
+  | "owned"
+  | "unaffordable"
+  | "out-of-range"
+  | "untradeable"
+  | "spent";
 
 /** The payout table, as `/rules` and the shop explain it. */
 export interface CoinRules {
@@ -1910,7 +2110,11 @@ export type CoinLedgerKind =
   /** Extra coins from a skill node's earning perk. */
   | "skill-perk"
   /** A mini-task an admin marked as completed. */
-  | "mini-task";
+  | "mini-task"
+  /** Coins from selling an item on the marketplace. */
+  | "market-sale"
+  /** Coins spent buying an item on the marketplace. */
+  | "market-buy";
 
 /** One line in a wallet's history. */
 export interface CoinLedgerEntry {
@@ -1926,12 +2130,17 @@ export interface CoinLedgerEntry {
 /** A player's Clim Coin balance and history. */
 export interface Wallet {
   playerId: string;
+  /** What they can spend now: everything below, less `held`. */
   balance: number;
   earned: number;
   adjusted: number;
   spent: number;
   /** Gifts received minus gifts sent. */
   gifted: number;
+  /** Marketplace sales minus marketplace buys. */
+  traded: number;
+  /** Coins held by their pending marketplace offers. */
+  held: number;
   /** Newest first. */
   ledger: CoinLedgerEntry[];
 }
@@ -1971,6 +2180,8 @@ export interface InventoryItem {
   equipped: boolean;
   /** Power-ups: unused charges. */
   charges: number;
+  /** Set while (one copy of) it's on the marketplace: it can't be worn. */
+  listingId?: number;
 }
 
 /** Why a shop item can't be bought right now. */
@@ -2358,7 +2569,8 @@ export type ActivityKind =
   | "gift"
   | "power-up"
   | "skill"
-  | "wish";
+  | "wish"
+  | "market";
 
 /** One line in the admin activity log. */
 export interface ActivityEntry {

@@ -28,6 +28,7 @@ export const ACTIVITY_KINDS: Record<ActivityKind, string> = {
   "power-up": "power-ups",
   skill: "skills",
   wish: "wishes",
+  market: "marketplace",
 };
 
 export const isActivityKind = (value: string): value is ActivityKind =>
@@ -106,6 +107,7 @@ export function createActivityQueries(data: CompetitionData) {
       ...coins.crateOpens.map((o) => o.purchaseId),
       ...coins.itemGifts.map((g) => g.purchaseId),
       ...coins.skillUnlocks.flatMap((u) => u.purchaseId ?? []),
+      ...coins.market.sales.map((sale) => sale.buyerPurchaseId),
     ]);
     const miniTasks = new Map(coins.miniTasks.map((t) => [t.id, t]));
     return [
@@ -200,6 +202,20 @@ export function createActivityQueries(data: CompetitionData) {
         ...(g.message && { detail: `"${g.message}"` }),
         coins: g.amount,
         href: playerHref(g.fromPlayerId),
+      })),
+      ...coins.market.sales.map((sale): ActivityEntry => ({
+        id: `market:${sale.id}`,
+        kind: "market",
+        at: sale.at,
+        actor: nameOf(sale.buyerId),
+        byAdmin: false,
+        subjectIds: [sale.sellerId, sale.buyerId],
+        summary: `${nameOf(sale.buyerId)} bought ${itemOf(sale.itemId)} from ${nameOf(
+          sale.sellerId,
+        )} on the market`,
+        ...(sale.offerId !== undefined && { detail: "accepted offer" }),
+        coins: sale.price,
+        href: playerHref(sale.buyerId),
       })),
       ...coins.uses.map((u): ActivityEntry => ({
         id: `power-up:${u.id}`,

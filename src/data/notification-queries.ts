@@ -10,6 +10,7 @@ import type {
 import { withBase } from "../lib/url";
 import { ukDateFormat } from "../lib/time";
 import { SABOTAGE_POINTS } from "./coin-rules";
+import { listingExpiry, listingStatus } from "./market-mappers";
 
 const weekLabel = (weekNumber: number) =>
   `Week ${String(weekNumber).padStart(2, "0")}`;
@@ -382,6 +383,89 @@ export function createNotificationQueries(
         })
       : [];
 
+    // The marketplace: offers on the player's listings, their sales, how
+    // their own offers went and listings that lapsed unsold.
+    const market = data.coins.market;
+    const listings = new Map(market.listings.map((l) => [l.id, l]));
+    const itemOf = (itemId: string) => itemNames.get(itemId) ?? "an item";
+    const listingHref = (id: number) => withBase(`/market/${id}`);
+    const marketEvents: FeedEvent[] =
+      playerId && data.features.marketplace
+        ? [
+            ...market.offers.flatMap((offer): FeedEvent[] => {
+              const listing = listings.get(offer.listingId);
+              if (!listing) return [];
+              if (listing.sellerId === playerId) {
+                const time = new Date(offer.at).getTime();
+                if (Number.isNaN(time) || time > now) return [];
+                return [
+                  {
+                    id: `market-offer:${offer.id}:${offer.at}`,
+                    kind: "market-offer",
+                    title: `${playerName.get(offer.buyerId) ?? "Someone"} offered ${offer.amount} Clim Coin for your ${itemOf(listing.itemId)}`,
+                    detail: `listed at ${listing.price}`,
+                    href: listingHref(listing.id),
+                    at: offer.at,
+                    time,
+                  },
+                ];
+              }
+              if (offer.buyerId !== playerId || !offer.decidedAt) return [];
+              if (offer.status !== "accepted" && offer.status !== "declined") {
+                return [];
+              }
+              const time = new Date(offer.decidedAt).getTime();
+              if (Number.isNaN(time) || time > now) return [];
+              const accepted = offer.status === "accepted";
+              return [
+                {
+                  id: `market-offer-decided:${offer.id}`,
+                  kind: accepted ? "offer-accepted" : "offer-declined",
+                  title: accepted
+                    ? `Your ${offer.amount} Clim Coin offer for ${itemOf(listing.itemId)} was accepted`
+                    : `Your offer for ${itemOf(listing.itemId)} was declined`,
+                  ...(!accepted && { detail: "your coins are free again" }),
+                  href: listingHref(listing.id),
+                  at: offer.decidedAt,
+                  time,
+                },
+              ];
+            }),
+            ...market.sales.flatMap((sale): FeedEvent[] => {
+              if (sale.sellerId !== playerId) return [];
+              const time = new Date(sale.at).getTime();
+              if (Number.isNaN(time) || time > now) return [];
+              return [
+                {
+                  id: `market-sold:${sale.id}`,
+                  kind: "market-sold",
+                  title: `${playerName.get(sale.buyerId) ?? "Someone"} bought your ${itemOf(sale.itemId)} for ${sale.price} Clim Coin`,
+                  href: listingHref(sale.listingId),
+                  at: sale.at,
+                  time,
+                },
+              ];
+            }),
+            ...market.listings.flatMap((listing): FeedEvent[] => {
+              if (listing.sellerId !== playerId) return [];
+              if (listingStatus(listing, now) !== "expired") return [];
+              const time = listingExpiry(listing);
+              if (time > now) return [];
+              return [
+                {
+                  id: `listing-expired:${listing.id}`,
+                  kind: "listing-expired",
+                  title: `Your ${itemOf(listing.itemId)} listing expired unsold`,
+                  detail: "it's back in your inventory",
+                  href: withBase("/account/market"),
+                  at: new Date(time).toISOString(),
+                  time,
+                },
+              ];
+            }),
+          ]
+        : [];
+
     const opened: FeedEvent[] = polls.flatMap((poll) => {
       const time = new Date(poll.opensAt).getTime();
       if (!poll.published || Number.isNaN(time) || time > now) return [];
@@ -413,6 +497,7 @@ export function createNotificationQueries(
       ...adminGifts,
       ...miniTaskDone,
       ...wishes,
+      ...marketEvents,
       ...opened,
     ];
   }

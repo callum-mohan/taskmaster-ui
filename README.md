@@ -300,8 +300,8 @@ along with the weekly runbook:
 | seasons   | `/admin/seasons`  | Part of the weeks area. Create seasons, make one current, close one to crown its champion (or reopen it), rename, and delete empty ones. Editor at `/admin/seasons/<id>`.                                                                                                                                                                                                       |
 | weeks     | `/admin/weeks`    | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
 | roster    | `/admin/roster`   | Players (with sign-in accounts) and squads, per season; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                               |
-| site      | `/admin/site`     | Feature flags, [polls](#️-polls), [mini-tasks](#-mini-tasks--achievements), the homepage changelog and the shop; editors at `/admin/polls/<id>`, `/admin/mini-tasks/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                           |
-| activity  | `/admin/activity` | One season's timeline of everything that moved points or Clim Coin (score changes, coin grants, gifts, purchases, crates, power-ups, skills, wishes, mini-tasks), filterable by kind and player, for disputes.                                                                                                                                                                  |
+| site      | `/admin/site`     | Feature flags, [polls](#️-polls), [mini-tasks](#-mini-tasks--achievements), the homepage changelog and the shop; editors at `/admin/polls/<id>`, `/admin/mini-tasks/<id>` and `/admin/changelog/<id>`; marketplace moderation at `/admin/market`.                                                                                                                                |
+| activity  | `/admin/activity` | One season's timeline of everything that moved points or Clim Coin (score changes, coin grants, gifts, purchases, crates, power-ups, skills, wishes, mini-tasks, marketplace sales), filterable by kind and player, for disputes.                                                                                                                                               |
 | guide     | `/admin/guide`    | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
 
 The weeks and roster lists, the activity log, and the new week / player / squad forms, work on
@@ -650,6 +650,40 @@ never sold or hatched, are seeded by the `0027_skill_trees` migration and
 Turning the flag off hides the page, its links and the pathway sigils. Anything
 already unlocked keeps working.
 
+**Marketplace** (`/market`, behind the `marketplace` [feature flag](#-feature-flags))
+lets players resell what they own to other players in their season. Pets,
+avatars, cosmetics, egg exclusives and unused power-up charges can be listed
+(`isTradeable` in `coin-rules.ts`). Skill tree rewards can't, and nor can
+Shield, Mirror or Insurance, because their charges are spent by derived
+effects that a sale couldn't re-check. The seller sets a price between 50% and
+300% of the shop price (5–60 for egg exclusives, `marketPriceRange`). Buyers
+pay that price or make a lower offer. There's no fee, and listings lapse after
+7 days (`MARKET_LISTING_DAYS`).
+
+- **Stored facts:** `market_listings` (one owned copy, the seller's
+  `coin_purchases` row, at a price), `market_offers` and `market_sales`.
+- **Ownership:** a sale writes the buyer a zero-price `coin_purchases` row,
+  like an egg prize. The seller's copy stops counting because a sale names it
+  (`source_purchase_id`), so ownership, equipping and power-up charges ignore
+  sold copies. Listed copies can't be worn or used. The shop, eggs and admin
+  gifts still go by "ever had this season", so an item can't be bought from
+  the shop and resold over and over.
+- **Expiry and holds are derived:** an open listing older than 7 days reads
+  as expired, and a pending offer holds the buyer's coins only while its
+  listing is live. Nothing has to run when they lapse. `Wallet.balance` is
+  what a player can spend after holds (`held` shows them), and the SQL
+  `budget` used by every spending write subtracts them too.
+- **Writes** (`src/data/market.ts`): each is one statement under the wallet
+  lock. A sale (a buy, or a seller accepting an offer) takes both players'
+  locks in a fixed order. It then re-checks that the listing is live at that
+  price, the copy is the seller's and unused, the buyer doesn't hold the item
+  (or a charge of that power-up), and they can afford it.
+- **Moderation:** admins take listings down at `/admin/market`. Closing a
+  season takes its open listings down. A gifted item that's been sold can't be
+  revoked.
+- **Notifications:** the seller hears about offers, sales and expired
+  listings; the buyer hears whether their offer was accepted or declined.
+
 ## 🧩 Mini-tasks & achievements
 
 **Mini-tasks** are small daily or bonus challenges between the weekly tasks,
@@ -688,6 +722,7 @@ is purged and the change shows straight away. Read them from
 | `skill_trees`  | Hides `/skills`, its nav, shop and wallet links, the rules section and pathway sigils; nobody can unlock. Perks and rewards already unlocked keep working.                                                                                                               |
 | `mini_tasks`   | Hides the mini-task panels on the homepage and `/account`. Admins can still set mini-tasks and tick off completions, and coin already earned stays in wallets.                                                                                                           |
 | `achievements` | Hides `/account/achievements` (404) and its links.                                                                                                                                                                                                                       |
+| `marketplace`  | Hides `/market`, `/account/market` (404) and their links, the rules section and the wallet's sell links; nobody can list, buy or offer. Open listings and offers lapse on their own.                                                                                     |
 
 ## 🔔 Notifications
 

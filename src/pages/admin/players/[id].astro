@@ -128,7 +128,7 @@ if (Astro.request.method === "POST") {
     // A spent passive charge (a Shield, Mirror or Insurance that's already
     // paid out) has no stored use to protect it, so check the snapshot too.
     if (gift.spent || !(await revokeItemGift(id, rowId))) {
-      itemError = `${gift.item.name} has already been used, so it can't be taken back. Revoke the use in that week's judge tab first.`;
+      itemError = `${gift.item.name} has already been used or sold on the marketplace, so it can't be taken back. Revoke a use in that week's judge tab first.`;
     } else {
       return itemsDone("item-revoked");
     }

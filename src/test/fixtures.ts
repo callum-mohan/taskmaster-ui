@@ -224,6 +224,7 @@ export function competitionData(
       skill_trees: false,
       mini_tasks: false,
       achievements: false,
+      marketplace: false,
     },
     ...overrides,
   };
@@ -246,6 +247,7 @@ export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
     skillUnlocks: [],
     miniTasks: [],
     miniTaskCompletions: [],
+    market: { listings: [], offers: [], sales: [] },
     ...overrides,
   };
 }

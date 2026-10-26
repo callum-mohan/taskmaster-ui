@@ -17,6 +17,9 @@ import {
   equippedItems as equippedItemsTable,
   featureFlags as featureFlagsTable,
   itemGifts as itemGiftsTable,
+  marketListings as marketListingsTable,
+  marketOffers as marketOffersTable,
+  marketSales as marketSalesTable,
   miniTaskCompletions as miniTaskCompletionsTable,
   miniTasks as miniTasksTable,
   wishes as wishesTable,
@@ -70,6 +73,7 @@ import {
   resolveSabotages,
 } from "./coins";
 import { mapFeatureFlags } from "./feature-flags";
+import { mapMarket } from "./market-mappers";
 import { mapMiniTaskCompletions, mapMiniTasks } from "./mini-tasks";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
@@ -163,6 +167,9 @@ async function fetchCompetitionRows() {
     skillUnlockRows,
     miniTaskRows,
     miniTaskCompletionRows,
+    marketListingRows,
+    marketOfferRows,
+    marketSaleRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -228,6 +235,9 @@ async function fetchCompetitionRows() {
     db.select().from(skillUnlocksTable).orderBy(asc(skillUnlocksTable.id)),
     db.select().from(miniTasksTable),
     db.select().from(miniTaskCompletionsTable),
+    db.select().from(marketListingsTable),
+    db.select().from(marketOffersTable),
+    db.select().from(marketSalesTable),
   ]);
   return {
     seasonRows,
@@ -260,6 +270,9 @@ async function fetchCompetitionRows() {
     skillUnlockRows,
     miniTaskRows,
     miniTaskCompletionRows,
+    marketListingRows,
+    marketOfferRows,
+    marketSaleRows,
   };
 }
 
@@ -360,6 +373,9 @@ async function buildSeasonCompetition(
     skillUnlockRows,
     miniTaskRows,
     miniTaskCompletionRows,
+    marketListingRows,
+    marketOfferRows,
+    marketSaleRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -488,6 +504,7 @@ async function buildSeasonCompetition(
       skillUnlocks: mapSkillUnlocks(skillUnlockRows),
       miniTasks: mapMiniTasks(miniTaskRows),
       miniTaskCompletions: mapMiniTaskCompletions(miniTaskCompletionRows),
+      market: mapMarket(marketListingRows, marketOfferRows, marketSaleRows),
     },
     features: mapFeatureFlags(featureFlagRows),
   };

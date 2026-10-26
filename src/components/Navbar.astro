@@ -18,6 +18,8 @@ interface Props {
   skillTrees?: boolean;
   /** The achievements feature flag: links players' achievements when on. */
   achievements?: boolean;
+  /** The marketplace feature flag: links `/market` when on. */
+  market?: boolean;
 }
 
 const {
@@ -26,6 +28,7 @@ const {
   coinBalance,
   skillTrees = false,
   achievements = false,
+  market = false,
 } = Astro.props;
 
 interface NavItem {
@@ -54,6 +57,7 @@ const moreGroups: NavGroup[] = [
       { href: "/live", label: "live" },
       { href: "/recaps", label: "recaps" },
       ...(skillTrees ? [{ href: "/skills", label: "skill trees" }] : []),
+      ...(market ? [{ href: "/market", label: "marketplace" }] : []),
       { href: "/rules", label: "rules" },
     ],
   },

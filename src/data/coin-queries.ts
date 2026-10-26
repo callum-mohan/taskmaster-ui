@@ -47,6 +47,7 @@ import {
   getCrate,
   inSaleWindow,
 } from "./coin-rules";
+import { liveListingsByPurchase, soldPurchaseIds } from "./market-mappers";
 import {
   discountedPrice,
   eggPrice,
@@ -86,6 +87,11 @@ export function createCoinQueries(data: CompetitionData) {
     [...sabotages.values()].flatMap((r) => r.defencePurchaseId ?? []),
   );
   const resultsOut = (taskId: string) => taskId in data.resultsPostedAt;
+  // Marketplace: copies sold on are no longer the seller's, and a copy on
+  // sale can't be worn or used until its listing closes or lapses.
+  const sold = soldPurchaseIds(coins.market);
+  const heldPurchases = coins.purchases.filter((p) => !sold.has(p.id));
+  const liveListings = liveListingsByPurchase(coins.market, Date.now());
 
   /** Purchase ids of a player's power-up charges that are used up. */
   function spentChargeIds(playerId: string): Set<number> {
@@ -116,14 +122,24 @@ export function createCoinQueries(data: CompetitionData) {
       : item.price;
   }
 
-  /** Ids of the pets, avatars and cosmetics a player owns. */
-  function ownedItemIds(playerId: string): Set<string> {
-    return new Set(
-      coins.purchases
-        .filter((p) => p.playerId === playerId)
+  const wearableIds = (purchases: readonly { itemId: string }[]) =>
+    new Set(
+      purchases
         .map((p) => p.itemId)
         .filter((id) => itemById.get(id)?.category !== "power_up"),
     );
+
+  /** Ids of the pets, avatars and cosmetics a player owns now. */
+  function ownedItemIds(playerId: string): Set<string> {
+    return wearableIds(heldPurchases.filter((p) => p.playerId === playerId));
+  }
+
+  /**
+   * Ids of the pets, avatars and cosmetics a player has had this season,
+   * sold on or not: the shop, eggs and admin gifts never give one twice.
+   */
+  function everOwnedItemIds(playerId: string): Set<string> {
+    return wearableIds(coins.purchases.filter((p) => p.playerId === playerId));
   }
 
   /**
@@ -144,8 +160,9 @@ export function createCoinQueries(data: CompetitionData) {
   function chargesByItem(playerId: string): Map<string, number> {
     const spent = spentChargeIds(playerId);
     const charges = new Map<string, number>();
-    for (const p of coins.purchases) {
+    for (const p of heldPurchases) {
       if (p.playerId !== playerId || spent.has(p.id)) continue;
+      if (liveListings.has(p.id)) continue;
       if (itemById.get(p.itemId)?.category !== "power_up") continue;
       charges.set(p.itemId, (charges.get(p.itemId) ?? 0) + 1);
     }
@@ -166,6 +183,7 @@ export function createCoinQueries(data: CompetitionData) {
     const result = new Map<string, ShopItem>();
     for (const e of coins.equipped) {
       if (e.playerId !== playerId || !owned.has(e.itemId)) continue;
+      if (listedCopy(playerId, e.itemId)) continue;
       const item = itemById.get(e.itemId);
       if (item && slotOf(item) === e.slot) result.set(e.slot, item);
     }
@@ -224,6 +242,16 @@ export function createCoinQueries(data: CompetitionData) {
     return equippedItems(playerId).get("avatar")?.imageUrl;
   }
 
+  /** The live listing of a player's copy of `itemId`, if it's on sale. */
+  function listedCopy(playerId: string, itemId: string) {
+    for (const p of heldPurchases) {
+      if (p.playerId !== playerId || p.itemId !== itemId) continue;
+      const listing = liveListings.get(p.id);
+      if (listing) return listing;
+    }
+    return undefined;
+  }
+
   /** Every owned item, equippable ones first, then power-ups with charges. */
   function getInventory(playerId: string): InventoryItem[] {
     const owned = ownedItemIds(playerId);
@@ -236,12 +264,14 @@ export function createCoinQueries(data: CompetitionData) {
       }
       if (!owned.has(item.id)) return [];
       const slot = slotOf(item);
+      const listing = listedCopy(playerId, item.id);
       return [
         {
           item,
           ...(slot && { slot }),
           equipped: slot !== undefined && worn.get(slot)?.id === item.id,
           charges: 0,
+          ...(listing && { listingId: listing.id }),
         },
       ];
     });
@@ -254,7 +284,7 @@ export function createCoinQueries(data: CompetitionData) {
    * season (a second charge could never be used).
    */
   function getGiftableItems(playerId: string): GiftableItemGroup[] {
-    const owned = ownedItemIds(playerId);
+    const owned = everOwnedItemIds(playerId);
     const effects = boughtEffects(playerId);
     return SHOP_CATEGORIES.flatMap((category): GiftableItemGroup[] => {
       const items = coins.items.filter(
@@ -296,7 +326,7 @@ export function createCoinQueries(data: CompetitionData) {
     if (item.powerUp && boughtEffects(viewer.playerId).has(item.powerUp)) {
       return chargesFor(viewer.playerId, item.powerUp) > 0 ? "owned" : "used";
     }
-    if (ownedItemIds(viewer.playerId).has(item.id)) return "owned";
+    if (everOwnedItemIds(viewer.playerId).has(item.id)) return "owned";
     if (item.skillOnly) return "skill-only";
     if (!isOnSale(item, now)) return "unavailable";
     if (item.crateOnly) return "crate-only";
@@ -595,7 +625,7 @@ export function createCoinQueries(data: CompetitionData) {
         ? viewer.playerId
         : undefined;
     if (!eggsOn) return [];
-    const owned = playerId ? ownedItemIds(playerId) : new Set<string>();
+    const owned = playerId ? everOwnedItemIds(playerId) : new Set<string>();
     // Power-ups are once a season by effect, bought or hatched.
     const effects = playerId ? boughtEffects(playerId) : new Set<PowerUpKind>();
     const balance = playerId ? getWallet(playerId, now).balance : 0;

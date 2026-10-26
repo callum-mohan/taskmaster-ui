@@ -1,0 +1,247 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import Pagination from "../../components/Pagination.astro";
+import MarketStatusBadge from "../../components/MarketStatusBadge.astro";
+import MarketSalesFeed from "../../components/MarketSalesFeed.astro";
+import ConfirmDelete from "../../components/admin/ConfirmDelete.astro";
+import Notice from "../../components/admin/Notice.astro";
+import { tableCell, tableHead } from "../../components/admin/styles";
+import { cancelListing } from "../../data/market";
+import { selectedSeason } from "../../lib/admin-season";
+import {
+  LIST_PAGE_SIZE,
+  pageHref,
+  paginate,
+  parsePage,
+} from "../../lib/pagination";
+import { ukDateFormat } from "../../lib/time";
+import { withBase } from "../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const listingId = Number(form.get("listingId"));
+  const done =
+    form.get("intent") === "cancel-listing" &&
+    Number.isSafeInteger(listingId) &&
+    (await cancelListing(listingId, {
+      adminName: admin.name || admin.email,
+    }))
+      ? "cancelled"
+      : "stale";
+  const params = new URLSearchParams(Astro.url.search);
+  params.set("done", done);
+  return Astro.redirect(withBase(`/admin/market?${params}#listings`), 303);
+}
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+const queries = await Astro.locals.getQueries(season?.id);
+const listings = queries.getAllMarketListings();
+const open = listings.filter((l) => l.status === "open");
+const page = paginate(
+  listings,
+  parsePage(Astro.url.searchParams.get("page")),
+  LIST_PAGE_SIZE,
+);
+const sales = queries.getRecentMarketSales(LIST_PAGE_SIZE);
+
+const NOTICES: Record<string, { tone: "success" | "error"; message: string }> =
+  {
+    cancelled: {
+      tone: "success",
+      message:
+        "Listing taken down. The item's back with the seller and any offers were declined (their coins are free again).",
+    },
+    stale: {
+      tone: "error",
+      message: "That listing had already closed.",
+    },
+  };
+const notice = NOTICES[Astro.url.searchParams.get("done") ?? ""];
+const dateFmt = ukDateFormat({
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+---
+
+<AdminLayout title="Marketplace">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> market --moderate
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Every player-to-player listing in {season?.name ?? "the season"}, newest
+    first. Take down anything that shouldn't be up: the item goes back to the
+    seller and pending offers are declined. Sales can't be undone here; use a
+    coin grant on the player's page if one needs putting right.
+    {
+      !queries.marketEnabled && (
+        <>
+          {" "}
+          <strong class="text-amber">
+            The marketplace flag is off, so players can't trade right now.
+          </strong>{" "}
+          <a
+            href={withBase("/admin/site#flags")}
+            class="text-cyan hover:underline"
+          >
+            turn it on
+          </a>
+        </>
+      )
+    }
+  </p>
+
+  {
+    notice && (
+      <Notice tone={notice.tone} class="mt-6">
+        {notice.message}
+      </Notice>
+    )
+  }
+
+  <section
+    id="listings"
+    aria-labelledby="listings-heading"
+    class="mt-8 scroll-mt-24"
+  >
+    <h2
+      id="listings-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      listings ({listings.length}, {open.length} open)
+    </h2>
+    <TerminalWindow title="~/market/listings" bodyClass="p-0 sm:p-0">
+      {
+        listings.length === 0 ? (
+          <p class="p-6 text-sm text-ink-faint">nothing has been listed yet.</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr>
+                  <th scope="col" class={tableHead}>
+                    item
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    seller
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    price
+                  </th>
+                  <th
+                    scope="col"
+                    class:list={[tableHead, "hidden md:table-cell"]}
+                  >
+                    listed
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    state
+                  </th>
+                  <th scope="col" class={tableHead}>
+                    <span class="sr-only">actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {page.items.map((view) => (
+                  <tr>
+                    <td class={tableCell}>
+                      <a
+                        href={withBase(`/market/${view.listing.id}`)}
+                        class="font-bold text-ink hover:text-acid"
+                      >
+                        {view.item.name}
+                      </a>
+                      {view.offerCount > 0 && (
+                        <span class="block text-[11px] text-ink-faint">
+                          {view.offerCount} offer
+                          {view.offerCount === 1 ? "" : "s"} · best{" "}
+                          {view.bestOffer}
+                        </span>
+                      )}
+                    </td>
+                    <td class={tableCell}>
+                      <a
+                        href={withBase(`/admin/players/${view.seller.id}`)}
+                        class="text-cyan hover:underline"
+                      >
+                        {view.seller.name}
+                      </a>
+                    </td>
+                    <td class:list={[tableCell, "tabular-nums text-amber"]}>
+                      {view.listing.price}
+                    </td>
+                    <td
+                      class:list={[
+                        tableCell,
+                        "hidden text-xs text-ink-faint md:table-cell",
+                      ]}
+                    >
+                      <time datetime={view.listing.at}>
+                        {dateFmt.format(new Date(view.listing.at))}
+                      </time>
+                    </td>
+                    <td class={tableCell}>
+                      <MarketStatusBadge status={view.status} />
+                      {view.sale && (
+                        <span class="block text-[11px] text-ink-faint">
+                          to {view.sale.buyer.name}
+                        </span>
+                      )}
+                      {view.listing.cancelledByName && (
+                        <span class="block text-[11px] text-ink-faint">
+                          by {view.listing.cancelledByName}
+                        </span>
+                      )}
+                    </td>
+                    <td class:list={[tableCell, "text-right"]}>
+                      {view.status === "open" && (
+                        <ConfirmDelete
+                          subject={`${view.seller.name}'s ${view.item.name} listing`}
+                          impact={[
+                            { label: "pending offer", count: view.offerCount },
+                          ]}
+                          intent="cancel-listing"
+                          fields={{ listingId: view.listing.id }}
+                          label="take down"
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      }
+    </TerminalWindow>
+    <Pagination
+      info={page}
+      href={(n) =>
+        pageHref(Astro.url, "page", n, { hash: "listings", drop: ["done"] })}
+      label="Listing pages"
+      itemLabel="listings"
+      class="mt-4"
+    />
+  </section>
+
+  <section aria-labelledby="sales-heading" class="mt-10">
+    <h2
+      id="sales-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      recent sales
+    </h2>
+    <TerminalWindow title="~/market/sales.log">
+      <div class="p-4">
+        <MarketSalesFeed sales={sales} />
+      </div>
+    </TerminalWindow>
+  </section>
+</AdminLayout>

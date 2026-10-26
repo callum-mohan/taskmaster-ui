@@ -1,0 +1,86 @@
+---
+// One marketplace listing as a card: the item, its price, who's selling
+// and how long it has left. The whole card links to the listing's page,
+// where buying and offers happen.
+import type { MarketListingView } from "../types";
+import ShopItemArt from "./ShopItemArt.astro";
+import CoinAmount from "./CoinAmount.astro";
+import RarityBadge from "./RarityBadge.astro";
+import MarketStatusBadge from "./MarketStatusBadge.astro";
+import { rarityOf } from "../data/coin-rules";
+import { CATEGORY_INFO } from "../data/coins";
+import { timeLeftLabel } from "../lib/coin-ui";
+import { withBase } from "../lib/url";
+
+interface Props {
+  view: MarketListingView;
+  /** Show the state badge (lists that mix open and closed listings). */
+  showStatus?: boolean;
+  class?: string;
+}
+
+const { view, showStatus = false, class: className } = Astro.props;
+const { listing, item, seller, status, expiresAt, offerCount, bestOffer } =
+  view;
+const rarity = item.category === "power_up" ? undefined : rarityOf(item.price);
+const href = withBase(`/market/${listing.id}`);
+---
+
+<article
+  class:list={[
+    "group relative flex min-w-0 flex-col gap-3 rounded-lg border border-grid bg-term-panel/60 p-4 transition-colors hover:border-acid/60",
+    className,
+  ]}
+>
+  <div class="flex items-start gap-3">
+    <ShopItemArt item={item} />
+    <div class="min-w-0 flex-1">
+      <h3 class="truncate text-sm font-extrabold text-ink">
+        <a
+          href={href}
+          class="after:absolute after:inset-0 group-hover:text-acid"
+        >
+          {item.name}
+        </a>
+      </h3>
+      <p class="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-ink-faint">
+        {CATEGORY_INFO[item.category].label}
+      </p>
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        <CoinAmount amount={listing.price} class="text-sm text-amber" />
+        {rarity && <RarityBadge rarity={rarity} />}
+        {showStatus && <MarketStatusBadge status={status} />}
+      </div>
+    </div>
+  </div>
+  <dl class="mt-auto grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+    <dt class="text-ink-faint">seller</dt>
+    <dd class="truncate text-right text-ink-dim">{seller.name}</dd>
+    {
+      status === "open" && (
+        <>
+          <dt class="text-ink-faint">ends</dt>
+          <dd class="text-right text-ink-dim">
+            <time datetime={expiresAt}>{timeLeftLabel(expiresAt)}</time>
+          </dd>
+          <dt class="text-ink-faint">offers</dt>
+          <dd class="text-right text-ink-dim">
+            {offerCount === 0
+              ? "none yet"
+              : `${offerCount} · best ${bestOffer}`}
+          </dd>
+        </>
+      )
+    }
+    {
+      view.sale && (
+        <>
+          <dt class="text-ink-faint">bought by</dt>
+          <dd class="truncate text-right text-ink-dim">
+            {view.sale.buyer.name} · {view.sale.sale.price}
+          </dd>
+        </>
+      )
+    }
+  </dl>
+</article>

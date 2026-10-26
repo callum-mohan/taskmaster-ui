@@ -48,6 +48,7 @@ import { createRulesQueries } from "./rules-queries";
 import { createStreakQueries } from "./streak-queries";
 import { createWrappedQueries } from "./wrapped-queries";
 import { createCoinQueries } from "./coin-queries";
+import { createMarketQueries } from "./market-queries";
 import { createSkillQueries } from "./skill-queries";
 import { createMiniTaskQueries } from "./mini-task-queries";
 import { createAchievementQueries } from "./achievement-queries";
@@ -1301,9 +1302,24 @@ export function createQueries(data: CompetitionData) {
         ]
       : [];
 
+    const marketItems: CommandPaletteItem[] = data.features.marketplace
+      ? [
+          {
+            id: "page-market",
+            label: "Marketplace",
+            group: "page",
+            href: withBase("/market"),
+            hint: "buy and sell items with other players",
+            keywords:
+              "market marketplace trade sell buy offer listing clim coin cosmetics power-ups hint",
+          },
+        ]
+      : [];
+
     return [
       ...PALETTE_PAGES,
       ...skillItems,
+      ...marketItems,
       ...seasonItems,
       ...wrappedItems,
       ...taskItems,
@@ -1731,6 +1747,7 @@ export function createQueries(data: CompetitionData) {
     ...streakQueries,
     ...wrappedQueries,
     ...coinQueries,
+    ...createMarketQueries(data, { getWallet: coinQueries.getWallet }),
     ...createSkillQueries(data, {
       getBalance: (playerId) => coinQueries.getWallet(playerId).balance,
       getSkillPerks: coinQueries.getSkillPerks,

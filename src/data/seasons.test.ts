@@ -146,6 +146,9 @@ describe("rowsForSeason", () => {
     skillUnlockRows: [],
     miniTaskRows: [],
     miniTaskCompletionRows: [],
+    marketListingRows: [],
+    marketOfferRows: [],
+    marketSaleRows: [],
   };
   const player = (id: string, seasonId: string) => ({
     id,

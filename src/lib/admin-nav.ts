@@ -35,14 +35,15 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     href: ADMIN_SITE,
     label: "site",
     title: "Polls, mini-tasks, changelog & shop",
-    hint: "feature flags, homepage polls, mini-tasks, the what's new list and the Clim Coin shop",
+    hint: "feature flags, homepage polls, mini-tasks, the what's new list, the Clim Coin shop and marketplace",
     keywords:
-      "feature flags toggles switches enable disable polls votes questions mini-tasks daily bonus side quests tick off completions changelog whats new release notes clim coin shop pets avatars cosmetics power-ups items prices mystery eggs crates",
+      "feature flags toggles switches enable disable polls votes questions mini-tasks daily bonus side quests tick off completions changelog whats new release notes clim coin shop pets avatars cosmetics power-ups items prices mystery eggs crates marketplace market listings offers trades take down",
     match: [
       "/admin/polls",
       "/admin/mini-tasks",
       "/admin/changelog",
       "/admin/shop",
+      "/admin/market",
     ],
   },
   {

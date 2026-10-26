@@ -597,7 +597,21 @@ const link = "text-cyan hover:underline";
               class={link}>roster</a
             >, with a reason they'll see. Gifts are free for them and they're
             notified. You can take an item back unless it's a power-up they've
-            already used.
+            already used, or they've sold it on the marketplace.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> The
+            <a href={withBase("/market")} class={link}>marketplace</a> is behind the
+            <span class="text-ink">marketplace</span> flag. Players list what they
+            own (not skill rewards, Shield, Mirror or Insurance) at between half and
+            three times its shop price, and other players buy it or make a lower offer,
+            which holds their coins until it's answered. Listings lapse after 7 days
+            and there's no fee. Moderate it on the
+            <a href={withBase("/admin/market")} class={link}>market screen</a>:
+            taking a listing down returns the item and declines its offers.
+            Sales are final, so fix a bad one with a coin grant on the player's
+            page. Closing the season takes every open listing down. Trades show
+            in the activity log as <span class="text-ink">marketplace</span>.
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Power-ups used

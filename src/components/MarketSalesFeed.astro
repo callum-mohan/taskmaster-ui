@@ -1,0 +1,67 @@
+---
+// The season's newest marketplace sales (or one item's price history).
+import type { MarketSaleView } from "../types";
+import CoinAmount from "./CoinAmount.astro";
+import { ukDateFormat } from "../lib/time";
+import { withBase } from "../lib/url";
+
+interface Props {
+  sales: MarketSaleView[];
+  /** Shown when there are none. */
+  empty?: string;
+  /** Hide the item name (a single item's history). */
+  hideItem?: boolean;
+  class?: string;
+}
+
+const {
+  sales,
+  empty = "no sales yet.",
+  hideItem = false,
+  class: className = "",
+} = Astro.props;
+
+const dateFmt = ukDateFormat({ day: "2-digit", month: "short" });
+---
+
+{
+  sales.length === 0 ? (
+    <p class:list={["text-sm text-ink-faint", className]}>
+      <span class="text-cyan" aria-hidden="true">
+        &gt;{" "}
+      </span>
+      {empty}
+    </p>
+  ) : (
+    <ol class:list={["divide-y divide-grid/60 text-xs", className]}>
+      {sales.map(({ sale, item, seller, buyer }) => (
+        <li class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2">
+          <span class="min-w-0 text-ink-dim">
+            {!hideItem && (
+              <a
+                href={withBase(`/market/${sale.listingId}`)}
+                class="font-bold text-ink hover:text-acid"
+              >
+                {item.name}
+              </a>
+            )}
+            {!hideItem && " · "}
+            <span class="text-ink-faint">{seller.name}</span>
+            <span aria-hidden="true"> → </span>
+            <span class="sr-only"> sold to </span>
+            <span>{buyer.name}</span>
+            {sale.offerId !== undefined && (
+              <span class="text-ink-faint"> (offer)</span>
+            )}
+          </span>
+          <span class="flex items-baseline gap-3">
+            <CoinAmount amount={sale.price} class="text-amber" />
+            <time datetime={sale.at} class="text-ink-faint tabular-nums">
+              {dateFmt.format(new Date(sale.at))}
+            </time>
+          </span>
+        </li>
+      ))}
+    </ol>
+  )
+}

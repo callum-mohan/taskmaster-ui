@@ -387,7 +387,8 @@ export interface LeaderboardRow {
 
 export interface TaskResult {
   task: Task;
-  winner: Player;
+  /** The winning player, or the winning squad for a team task. */
+  winnerName: string;
   winningScore: number;
   completionDate: string;
 }

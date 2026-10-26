@@ -331,6 +331,18 @@ export function createQueries(data: CompetitionData) {
 
     const results: TaskResult[] = [];
     for (const task of completed) {
+      if (task.format === "team") {
+        const [top] = getTeamResults(task.id);
+        if (top) {
+          results.push({
+            task,
+            winnerName: top.team.name,
+            winningScore: top.points,
+            completionDate: task.deadline,
+          });
+        }
+        continue;
+      }
       const winnerScore = scores.find(
         (s) => s.taskId === task.id && s.position === 1,
       );
@@ -340,7 +352,7 @@ export function createQueries(data: CompetitionData) {
       if (winnerScore && winner) {
         results.push({
           task,
-          winner,
+          winnerName: winner.name,
           winningScore: winnerScore.points,
           completionDate: task.deadline,
         });

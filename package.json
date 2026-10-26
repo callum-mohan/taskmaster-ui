@@ -14,9 +14,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
     "db:check": "node --env-file=.env.local scripts/db-check.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -44,29 +44,18 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@eslint/js": "^10.0.0",
+    "@biomejs/biome": "2.6.3",
     "@types/pg": "^8.23.1",
     "@vitest/coverage-v8": "^5.0.5",
     "drizzle-kit": "^0.31.11",
-    "eslint": "^10.13.0",
-    "eslint-plugin-astro": "^3.2.1",
-    "eslint-plugin-jsx-a11y-x": "^0.2.0",
-    "globals": "^17.13.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
-    "prettier": "^3.9.9",
-    "prettier-plugin-astro": "^0.14.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2",
     "vitest": "^5.0.5",
     "wrangler": "^4.151.0"
   },
   "lint-staged": {
-    "*.{js,mjs,cjs,ts,astro}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,jsonc,md,css,yml,yaml,html}": "prettier --write"
+    "*": "biome check --write --no-errors-on-unmatched --files-ignore-unknown=true"
   }
 }

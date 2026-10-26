@@ -394,8 +394,8 @@ const bonusRows: BonusRow[] = [
         {
           /* Stacks into cards on phones; explicit roles keep the table semantics
             when the display type changes. */
-          /* eslint-disable astro/jsx-a11y/no-redundant-roles, astro/jsx-a11y/no-interactive-element-to-noninteractive-role */
         }
+        {/* biome-ignore-start lint/a11y/noRedundantRoles: explicit roles survive the display change */}
         <table
           role="table"
           class="mt-4 block w-full text-left text-sm sm:table"
@@ -457,6 +457,7 @@ const bonusRows: BonusRow[] = [
             }
           </tbody>
         </table>
+        {/* biome-ignore-end lint/a11y/noRedundantRoles: explicit roles survive the display change */}
         {
           /* eslint-enable astro/jsx-a11y/no-redundant-roles, astro/jsx-a11y/no-interactive-element-to-noninteractive-role */
         }

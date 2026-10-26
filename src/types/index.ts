@@ -120,7 +120,8 @@ export interface Task {
  * `admin` never redacts (admins edit the real content).
  */
 export type TaskRevealContext =
-  { mode: "public"; unlockedTaskIds: ReadonlySet<string> } | { mode: "admin" };
+  | { mode: "public"; unlockedTaskIds: ReadonlySet<string> }
+  | { mode: "admin" };
 
 /** Why a reveal-password attempt on a task page failed. */
 export type RevealError = "denied" | "throttled";
@@ -312,7 +313,10 @@ export type PollStatus = "scheduled" | "open" | "closed";
  *   "admin_only"  → never published.
  */
 export type PollResultsVisibility =
-  "always" | "after_vote" | "after_close" | "admin_only";
+  | "always"
+  | "after_vote"
+  | "after_close"
+  | "admin_only";
 
 export interface PollOption {
   id: number;
@@ -601,7 +605,12 @@ export interface PlayerComparison {
  * `"admin"` entries are only included for signed-in admins.
  */
 export type CommandPaletteGroup =
-  "page" | "task" | "team" | "player" | "admin" | "action";
+  | "page"
+  | "task"
+  | "team"
+  | "player"
+  | "admin"
+  | "action";
 
 /** One area of the admin panel (sub-nav tab, dashboard shortcut, palette entry). */
 export interface AdminSection {
@@ -753,7 +762,10 @@ export interface Achievement {
 
 /** Which shelf an achievement sits on in the account page. */
 export type AchievementCategory =
-  "results" | "streaks" | "taking-part" | "coin";
+  | "results"
+  | "streaks"
+  | "taking-part"
+  | "coin";
 
 /** One achievement in the catalogue, with a player's progress towards it. */
 export interface AchievementProgress {
@@ -1170,7 +1182,8 @@ export interface TaskSubmission {
 
 /** Whose entry slots a submission uses: the player's, or their squad's. */
 export type SubmissionOwnerRef =
-  { type: "player"; id: string } | { type: "team"; id: string };
+  | { type: "player"; id: string }
+  | { type: "team"; id: string };
 
 /** A submission owner ready to render. */
 export interface SubmissionOwner {
@@ -1371,7 +1384,8 @@ export type GalleryOutcome =
 
 /** Who a prediction backs: a player, or a squad on team tasks. */
 export type PredictionPick =
-  { type: "player"; id: string } | { type: "team"; id: string };
+  | { type: "player"; id: string }
+  | { type: "team"; id: string };
 
 /** A player's call on who wins a week (`predictions`). */
 export interface Prediction {
@@ -1429,7 +1443,11 @@ export interface PredictionPanel {
 
 /** What happened to a player's prediction (shown on the task page). */
 export type PredictionOutcome =
-  "saved" | "changed" | "withdrawn" | "closed" | "invalid";
+  | "saved"
+  | "changed"
+  | "withdrawn"
+  | "closed"
+  | "invalid";
 
 // ── Live results night ────────────────────────────────────────────────
 
@@ -1614,13 +1632,18 @@ export type ShopCategory = "pet" | "avatar" | "cosmetic" | "power_up";
 export type CosmeticKind = "title" | "name_colour" | "theme";
 /** Power-ups a player spends on a live week (a `power_up_uses` row). */
 export type ActivePowerUpKind =
-  "double_down" | "hint" | "golden_week" | "sabotage";
+  | "double_down"
+  | "hint"
+  | "golden_week"
+  | "sabotage";
 /** Power-ups that work by themselves once bought (effects derived). */
 export type PassivePowerUpKind = "shield" | "mirror" | "insurance";
 /** The One Wish Willow: spent by making a wish (a `wishes` row). */
 export type WishPowerUpKind = "wish";
 export type PowerUpKind =
-  ActivePowerUpKind | PassivePowerUpKind | WishPowerUpKind;
+  | ActivePowerUpKind
+  | PassivePowerUpKind
+  | WishPowerUpKind;
 /** Whether the Taskmaster has answered a wish, and how. */
 export type WishStatus = "pending" | "granted" | "declined";
 /** Where an owned item is worn: one item per slot. */
@@ -1940,7 +1963,11 @@ export interface ClimCoinData {
 export type MarketListingStatus = "open" | "sold" | "cancelled" | "expired";
 /** An offer's state; a pending offer on a closed listing reads as `expired`. */
 export type MarketOfferStatus =
-  "pending" | "accepted" | "declined" | "withdrawn" | "expired";
+  | "pending"
+  | "accepted"
+  | "declined"
+  | "withdrawn"
+  | "expired";
 
 /** One owned copy of an item for sale (the seller's purchase). */
 export interface MarketListing {
@@ -2356,7 +2383,10 @@ export type CoinOutcome =
 
 /** Why a player can't send a gift right now. */
 export type GiftBlock =
-  "season-closed" | "limit" | "unaffordable" | "no-recipients";
+  | "season-closed"
+  | "limit"
+  | "unaffordable"
+  | "no-recipients";
 
 /** The wallet's "send coins" form. */
 export interface GiftPanel {

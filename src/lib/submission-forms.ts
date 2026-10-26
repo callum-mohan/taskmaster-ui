@@ -80,7 +80,10 @@ export function sniffImage(bytes: Uint8Array): ImageType | "heic" | undefined {
 }
 
 export type SubmissionIntent =
-  "create-photo" | "create-text" | "edit" | "delete";
+  | "create-photo"
+  | "create-text"
+  | "edit"
+  | "delete";
 
 /**
  * An admin adding an entry for a player (the week's judge tab,
@@ -104,7 +107,8 @@ export function parseSubmissionIntent(
 }
 
 type Parsed<T> =
-  { ok: true; data: T } | { ok: false; outcome: SubmissionOutcome };
+  | { ok: true; data: T }
+  | { ok: false; outcome: SubmissionOutcome };
 
 const caption = z
   .string()

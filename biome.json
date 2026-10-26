@@ -1,0 +1,79 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/dist",
+      "!**/.astro",
+      "!**/.wrangler",
+      "!**/coverage",
+      "!**/drizzle",
+      "!**/.agents",
+      "!**/.github",
+      "!**/skills-lock.json",
+      "!**/package-lock.json",
+      "!**/*.svg"
+    ]
+  },
+  "html": {
+    "experimentalFullSupportEnabled": true
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noAssignInExpressions": "off",
+        "useIterableCallbackReturn": "off",
+        "noCommentText": "off"
+      }
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.jsonc"],
+      "json": {
+        "parser": {
+          "allowTrailingCommas": true
+        },
+        "formatter": {
+          "trailingCommas": "all"
+        }
+      }
+    }
+  ]
+}

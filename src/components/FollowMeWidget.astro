@@ -181,12 +181,13 @@ const btnGhost =
             {
               /* The script fills in both links' href before the widget shows. */
             }
-            {/* eslint-disable-next-line astro/jsx-a11y/anchor-is-valid */}
+            {/* biome-ignore-start lint/a11y/useValidAnchor: href set by script */}
             Catch <a
               data-me-rival-link
               href="#"
               class="font-bold text-ink hover:text-acid">—</a
             >
+            {/* biome-ignore-end lint/a11y/useValidAnchor: href set by script */}
             <span data-me-rival-rank class="text-ink-faint"></span> —
             <span data-me-rival-gap class="font-semibold text-amber"></span>
           </p>
@@ -201,7 +202,7 @@ const btnGhost =
 
       <!-- Actions -->
       <div class="mt-5 flex flex-wrap items-center gap-3">
-        {/* eslint-disable-next-line astro/jsx-a11y/anchor-is-valid */}
+        {/* biome-ignore lint/a11y/useValidAnchor: href set by script */}
         <a data-me-profile href="#" class={btnPrimary}>[ MY PROFILE ]</a>
         <button type="button" data-follow-change class={btnGhost}>
           not you?

@@ -410,9 +410,11 @@ a[data-me-row].is-me {
   *,
   *::before,
   *::after {
+    /* biome-ignore-start lint/complexity/noImportantStyles: reduced motion must win */
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* biome-ignore-end lint/complexity/noImportantStyles: reduced motion must win */
   }
 }
 

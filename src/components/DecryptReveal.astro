@@ -20,7 +20,7 @@ const storageKey = `tm-decrypted-${taskId}`;
   reduced motion) nothing is hidden and the task simply shows.
 -->
 <script is:inline define:vars={{ storageKey, play }}>
-  (function () {
+  (() => {
     try {
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         localStorage.setItem(storageKey, "1");
@@ -34,7 +34,7 @@ const storageKey = `tm-decrypted-${taskId}`;
     root.classList.add("decrypt-pending");
     root.dataset.decryptKey = storageKey;
     // Safety net: never leave the content hidden if the animation can't run.
-    setTimeout(function () {
+    setTimeout(() => {
       root.classList.remove("decrypt-pending");
     }, 4000);
   })();

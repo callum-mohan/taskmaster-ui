@@ -591,7 +591,7 @@ export function deriveEarnings(
   );
   for (const taskId of enteredTaskIds) {
     const task = taskById.get(taskId);
-    if (!task || task.status !== "completed") continue;
+    if (task?.status !== "completed") continue;
     entries.push({
       kind: "entry",
       amount: ENTRY_COINS,
@@ -631,7 +631,7 @@ export function deriveEarnings(
   for (const call of data.predictions) {
     if (call.playerId !== playerId) continue;
     const task = taskById.get(call.taskId);
-    if (!task || task.status !== "completed") continue;
+    if (task?.status !== "completed") continue;
     entries.push({
       kind: "prediction",
       amount: PREDICTION_COINS,
@@ -745,22 +745,26 @@ export function deriveWallet(
   const purchases: CoinLedgerEntry[] = [
     ...data.coins.purchases
       .filter((p) => p.playerId === playerId && !freeItems.has(p.id))
-      .map((p): CoinLedgerEntry => ({
-        kind: "purchase",
-        amount: -p.price,
-        label: `Bought ${itemNames.get(p.itemId) ?? p.itemId}`,
-        at: p.at,
-      })),
+      .map(
+        (p): CoinLedgerEntry => ({
+          kind: "purchase",
+          amount: -p.price,
+          label: `Bought ${itemNames.get(p.itemId) ?? p.itemId}`,
+          at: p.at,
+        }),
+      ),
     ...data.coins.crateOpens
       .filter((o) => o.playerId === playerId)
-      .map((o): CoinLedgerEntry => ({
-        kind: "crate",
-        amount: -o.price,
-        label: `${getCrate(o.crateId)?.name ?? "Crate"} → ${
-          itemNames.get(o.itemId) ?? o.itemId
-        } (${o.rarity === "power_up" ? "power-up" : o.rarity})`,
-        at: o.at,
-      })),
+      .map(
+        (o): CoinLedgerEntry => ({
+          kind: "crate",
+          amount: -o.price,
+          label: `${getCrate(o.crateId)?.name ?? "Crate"} → ${
+            itemNames.get(o.itemId) ?? o.itemId
+          } (${o.rarity === "power_up" ? "power-up" : o.rarity})`,
+          at: o.at,
+        }),
+      ),
     ...data.coins.skillUnlocks
       .filter((u) => u.playerId === playerId)
       .map((u): CoinLedgerEntry => {

@@ -232,10 +232,7 @@ export const tasks = pgTable(
     // How many entries each player (or squad, on team tasks) may submit;
     // 0 keeps on-site submissions closed. See `task_submissions`.
     maxSubmissions: integer().notNull().default(0),
-    submissionKinds: submissionKind()
-      .array()
-      .notNull()
-      .default(sql`'{}'`),
+    submissionKinds: submissionKind().array().notNull().default(sql`'{}'`),
     // Results night: while held, the week's scores and recorded bonuses stay
     // off the public site; `/live` reveals them one by one (bottom first) up
     // to `resultsRevealCount`, then publishing clears the hold.

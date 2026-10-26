@@ -103,7 +103,8 @@ export function temporaryPassword(): string {
 }
 
 export type PasswordResetResult =
-  { ok: true; signedOut: boolean } | { ok: false; message: string };
+  | { ok: true; signedOut: boolean }
+  | { ok: false; message: string };
 
 export type CreateAccountResult =
   | { ok: true; userId: string }

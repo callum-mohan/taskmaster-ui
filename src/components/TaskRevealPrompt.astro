@@ -53,7 +53,7 @@ const message = error ? errors[error] : undefined;
         <span class="text-acid" aria-hidden="true">&gt;</span>
         {
           /* Autofocus only after a failed guess, so the retry is a keystroke away. */
-          /* eslint-disable astro/jsx-a11y/no-autofocus */
+          /* biome-ignore-start lint/a11y/noAutofocus: retry after a failed guess */
         }
         <input
           id="reveal-password"
@@ -70,7 +70,7 @@ const message = error ? errors[error] : undefined;
           class="w-full bg-transparent py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none"
           placeholder="enter password"
         />
-        {/* eslint-enable astro/jsx-a11y/no-autofocus */}
+        {/* biome-ignore-end lint/a11y/noAutofocus: retry after a failed guess */}
         <PasswordToggle for="reveal-password" />
       </div>
       <button

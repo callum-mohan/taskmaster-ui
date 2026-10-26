@@ -795,29 +795,35 @@ function scoreAuditRows(
 ): AuditRow[] {
   const base = { ...actorFields(actor), taskId, entity };
   return [
-    ...diff.created.map((row): AuditRow => ({
-      ...base,
-      action: "created",
-      subjectId: row.id,
-      pointsAfter: row.points,
-      noteAfter: row.comment,
-    })),
-    ...diff.updated.map(({ before, after }): AuditRow => ({
-      ...base,
-      action: "updated",
-      subjectId: after.id,
-      pointsBefore: before.points,
-      pointsAfter: after.points,
-      noteBefore: before.comment,
-      noteAfter: after.comment,
-    })),
-    ...diff.deleted.map((row): AuditRow => ({
-      ...base,
-      action: "deleted",
-      subjectId: row.id,
-      pointsBefore: row.points,
-      noteBefore: row.comment,
-    })),
+    ...diff.created.map(
+      (row): AuditRow => ({
+        ...base,
+        action: "created",
+        subjectId: row.id,
+        pointsAfter: row.points,
+        noteAfter: row.comment,
+      }),
+    ),
+    ...diff.updated.map(
+      ({ before, after }): AuditRow => ({
+        ...base,
+        action: "updated",
+        subjectId: after.id,
+        pointsBefore: before.points,
+        pointsAfter: after.points,
+        noteBefore: before.comment,
+        noteAfter: after.comment,
+      }),
+    ),
+    ...diff.deleted.map(
+      (row): AuditRow => ({
+        ...base,
+        action: "deleted",
+        subjectId: row.id,
+        pointsBefore: row.points,
+        noteBefore: row.comment,
+      }),
+    ),
   ];
 }
 
@@ -1939,7 +1945,7 @@ export { violatedConstraint } from "./db-errors";
  * Returns `undefined` for anything unexpected so callers can rethrow.
  */
 export function describeWriteError(error: unknown): string | undefined {
-  for (let e: unknown = error; e && typeof e === "object";) {
+  for (let e: unknown = error; e && typeof e === "object"; ) {
     const { code, constraint } = e as { code?: string; constraint?: string };
     if (constraint && CONSTRAINT_MESSAGES[constraint]) {
       return CONSTRAINT_MESSAGES[constraint];

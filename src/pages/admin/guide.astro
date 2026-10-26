@@ -379,7 +379,9 @@ const link = "text-cyan hover:underline";
         weeks as usual. The public site doesn't see any of it yet.
       </li>
       <li>
-        <span class="font-bold text-acid">4.</span> Open the new season and press
+        <span class="font-bold text-acid">4.</span> Open the new season and press{
+          " "
+        }
         <span class="text-ink">make current</span> to launch it. The old season's
         player, squad, task and recap pages stay online as an archive.
       </li>
@@ -454,9 +456,11 @@ const link = "text-cyan hover:underline";
       <span class="text-acid">#</span> polls, mini-tasks, changelog and the shop
     </h2>
     <p class={lead}>
-      All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>. Its
-      <a href={withBase("/admin/site#flags")} class={link}>feature flags</a>
-      switch features on or off for everyone at once. Turn on
+      All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>. Its{" "}
+      <a href={withBase("/admin/site#flags")} class={link}>feature flags</a>{
+        " "
+      }
+      switch features on or off for everyone at once. Turn on{" "}
       <span class="text-ink">storm mode</span> to put the public site in the middle
       of a hurricane (&ldquo;A Storm Is Brewing&rdquo;); admin pages stay calm, and
       turning it off clears the weather straight away.
@@ -476,8 +480,8 @@ const link = "text-cyan hover:underline";
             (read-only) in that week's judge tab.
           </li>
           <li>
-            <span class="text-cyan" aria-hidden="true">&gt;</span> Use
-            <span class="text-ink">+ every player</span> or
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Use{" "}
+            <span class="text-ink">+ every player</span> or{" "}
             <span class="text-ink">+ every team</span> to fill in the options quickly.
             Duplicate copies a poll without its votes.
           </li>
@@ -488,14 +492,14 @@ const link = "text-cyan hover:underline";
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Small daily or
             bonus extras between the weekly tasks, worth 1–5 Clim Coin each. Add one
-            with <span class="text-ink">+ new mini-task</span> in
+            with <span class="text-ink">+ new mini-task</span> in{" "}
             <a href={withBase("/admin/site#mini-tasks")} class={link}>site</a>:
             a title, the reward and the first and last day it runs (UK dates;
             the same day for a daily one). They belong to the current season.
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Open a mini-task
-            and tick everyone who did it, then
+            and tick everyone who did it, then{" "}
             <span class="text-ink">save completions</span>. The coin lands in
             their wallet straight away and they're notified; unticking someone
             takes it back. Deleting a mini-task removes its completions and
@@ -503,9 +507,9 @@ const link = "text-cyan hover:underline";
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Players only see
-            mini-tasks (on the homepage and their account) while the
+            mini-tasks (on the homepage and their account) while the{" "}
             <span class="text-ink">mini-tasks</span> flag is on. You can set them
-            up and tick them off with it off. The
+            up and tick them off with it off. The{" "}
             <span class="text-ink">achievements</span> flag opens each player's achievements
             page (<code class="text-ink">/account/achievements</code>), with
             progress towards every goal; there's nothing to manage.
@@ -537,18 +541,20 @@ const link = "text-cyan hover:underline";
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span>
             <span class="text-ink">+ new item</span> adds a pet, avatar, cosmetic
-            or power-up. Commit pet and avatar images under
+            or power-up. Commit pet and avatar images under{" "}
             <code class="text-ink">public/shop</code> and enter their path. The category
-            and effect are fixed once created; untick
+            and effect are fixed once created; untick{" "}
             <span class="text-ink">for sale</span> to retire an item (owners keep
-            it, and it stops hatching from eggs). Tick
+            it, and it stops hatching from eggs). Tick{" "}
             <span class="text-ink">egg exclusive</span> for a pet, avatar or cosmetic
             that should only hatch from mystery eggs; its price still sets its rarity.
             Only items nobody owns can be deleted.
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Mystery eggs are
-            behind a feature flag and start off: turn them on (or off again) under
+            behind a feature flag and start off: turn them on (or off again) under{
+              " "
+            }
             <a href={withBase("/admin/site#flags")} class={link}
               >feature flags</a
             >. While off, the eggs, recent hatches and egg-exclusive items are
@@ -559,30 +565,30 @@ const link = "text-cyan hover:underline";
             <span class="text-cyan" aria-hidden="true">&gt;</span> Skill trees (<a
               href={withBase("/skills")}
               class={link}>/skills</a
-            >) are behind the
+            >) are behind the{" "}
             <span class="text-ink">skill trees</span> flag. Players commit to one
             pathway a season and unlock its four skills with Clim Coin for coin perks,
             a title and a name colour; it never changes points. There's nothing to
             manage: the pathways live in code (<code class="text-ink"
               >src/data/skill-trees.ts</code
-            >), their rewards are listed in the shop editor as
+            >), their rewards are listed in the shop editor as{" "}
             <span class="text-ink">skill reward</span> (never for sale), and each
             player's pathway shows on their edit page. Choices are final for the season;
             turning the flag off hides the page and sigils, but perks and rewards
             already unlocked keep working.
           </li>
           <li>
-            <span class="text-cyan" aria-hidden="true">&gt;</span> Set
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Set{" "}
             <span class="text-ink">on sale from / until</span> (UK time) for limited-time
             stock: it shows on the shop's limited-time shelf and disappears (and stops
             hatching) after it ends. For a seasonal egg's exclusive, tick egg exclusive
             and pick the egg: only that egg hatches it, and only while the egg's on
             sale. Seasonal eggs themselves (like the Haunted Egg) and their dates
-            are defined in code, in
+            are defined in code, in{" "}
             <code class="text-ink">src/data/coin-rules.ts</code>.
           </li>
           <li>
-            <span class="text-cyan" aria-hidden="true">&gt;</span> Set
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Set{" "}
             <span class="text-ink">stock per season</span> to limit how many the shop
             sells each season (blank: unlimited). The shop card shows how many are
             left. Only shop purchases use it up: eggs can still hatch a sold-out item,
@@ -612,17 +618,19 @@ const link = "text-cyan hover:underline";
             lands unopened in their inventory with a notification, and they crack
             it there for free, with their own odds, getting the usual reveal. You
             can take an egg back until it's cracked. Gifted eggs stay hidden while
-            the
+            the{" "}
             <span class="text-ink">shop_eggs</span> flag is off.
           </li>
           <li>
-            <span class="text-cyan" aria-hidden="true">&gt;</span> The
-            <a href={withBase("/market")} class={link}>marketplace</a> is behind the
+            <span class="text-cyan" aria-hidden="true">&gt;</span> The{" "}
+            <a href={withBase("/market")} class={link}>marketplace</a> is behind the{
+              " "
+            }
             <span class="text-ink">marketplace</span> flag. Players list what they
             own (not skill rewards, Shield, Mirror or Insurance) at between half and
             three times its shop price, and other players buy it or make a lower offer,
             which holds their coins until it's answered. Listings lapse after 7 days
-            and there's no fee. Moderate it on the
+            and there's no fee. Moderate it on the{" "}
             <a href={withBase("/admin/market")} class={link}>market screen</a>:
             taking a listing down returns the item and declines its offers.
             Sales are final, so fix a bad one with a coin grant on the player's
@@ -633,13 +641,15 @@ const link = "text-cyan hover:underline";
             <span class="text-cyan" aria-hidden="true">&gt;</span> Power-ups used
             on a week are listed in its judge tab, where you can revoke one (its effect
             goes and the player gets that power-up back to use again; they can't buy
-            a second one). Write the week's
+            a second one). Write the week's{" "}
             <span class="text-ink">taskmaster's hint</span> on its brief tab.
           </li>
           <li>
             <span class="text-cyan" aria-hidden="true">&gt;</span> Wishes made with
-            the <span class="text-ink">One Wish Willow</span> power-up land in the
-            <a href={withBase(ADMIN_HOME + "#wishes")} class={link}>dashboard</a
+            the <span class="text-ink">One Wish Willow</span> power-up land in the{
+              " "
+            }
+            <a href={withBase(`${ADMIN_HOME}#wishes`)} class={link}>dashboard</a
             >'s wish inbox (private to the player and admins). Grant or decline
             each one, with an optional reply; the decision is final, the wish is
             spent either way, and the player is notified. Granting is just a

@@ -65,7 +65,7 @@ const egg = eggArt(crate);
         slow script never spoils it. Reduced motion skips the whole show.
       -->
       <script is:inline>
-        (function () {
+        (() => {
           const root = document.getElementById("crate-reveal");
           if (
             !root ||
@@ -75,7 +75,7 @@ const egg = eggArt(crate);
           }
           root.setAttribute("data-phase", "wobble");
           // Safety net: never leave the prize hidden if the animation stalls.
-          setTimeout(function () {
+          setTimeout(() => {
             root.removeAttribute("data-phase");
           }, 5000);
         })();

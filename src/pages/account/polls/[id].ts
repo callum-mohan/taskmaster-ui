@@ -27,7 +27,7 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
 
   const { getPollById, getPollCard } = await locals.getQueries();
   const poll = getPollById(params.id ?? "");
-  if (!poll || !poll.published) return redirect(withBase("/"));
+  if (!poll?.published) return redirect(withBase("/"));
 
   const form = await request.formData();
   const card = getPollCard(poll, { kind: "player", playerId: player.playerId });

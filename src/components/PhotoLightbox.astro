@@ -170,7 +170,7 @@ const navBtn =
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>(
         "a[data-lightbox-item]",
       );
-      if (!link || !link.dataset.lightboxItem) return;
+      if (!link?.dataset.lightboxItem) return;
       event.preventDefault();
       opener = link;
       items = groupOf(link);

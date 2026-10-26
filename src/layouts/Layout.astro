@@ -87,7 +87,7 @@ const notifications = viewer?.playerId
       // Dark is the default when nothing valid is stored. The exotic CRT
       // phosphor themes (amber/cyan/magenta) are summoned from the command
       // palette but persist here like any other.
-      (function () {
+      (() => {
         const valid = ["dark", "light", "amber", "cyan", "magenta"];
         try {
           const saved = localStorage.getItem("eayl-theme");

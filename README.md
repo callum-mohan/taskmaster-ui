@@ -32,7 +32,7 @@ on request on **Cloudflare Workers**.
 - [Neon Object Storage](https://neon.com/docs/storage/overview)
   (S3-compatible) for task submission photos, via
   [`aws4fetch`](https://github.com/mhart/aws4fetch)
-- Prettier (with `prettier-plugin-astro`)
+- [Biome](https://biomejs.dev) for linting (incl. a11y) and formatting
 
 ## 📁 Project structure
 
@@ -300,7 +300,7 @@ along with the weekly runbook:
 | seasons   | `/admin/seasons`  | Part of the weeks area. Create seasons, make one current, close one to crown its champion (or reopen it), rename, and delete empty ones. Editor at `/admin/seasons/<id>`.                                                                                                                                                                                                       |
 | weeks     | `/admin/weeks`    | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
 | roster    | `/admin/roster`   | Players (with sign-in accounts) and squads, per season; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                               |
-| site      | `/admin/site`     | Feature flags, [polls](#️-polls), [mini-tasks](#-mini-tasks--achievements), the homepage changelog and the shop; editors at `/admin/polls/<id>`, `/admin/mini-tasks/<id>` and `/admin/changelog/<id>`; marketplace moderation at `/admin/market`.                                                                                                                                |
+| site      | `/admin/site`     | Feature flags, [polls](#️-polls), [mini-tasks](#-mini-tasks--achievements), the homepage changelog and the shop; editors at `/admin/polls/<id>`, `/admin/mini-tasks/<id>` and `/admin/changelog/<id>`; marketplace moderation at `/admin/market`.                                                                                                                               |
 | activity  | `/admin/activity` | One season's timeline of everything that moved points or Clim Coin (score changes, coin grants, gifts, purchases, crates, power-ups, skills, wishes, mini-tasks, marketplace sales), filterable by kind and player, for disputes.                                                                                                                                               |
 | guide     | `/admin/guide`    | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
 
@@ -906,8 +906,8 @@ Run from the project root:
 | `npm test`                 | Run the unit tests (Vitest)                             |
 | `npm run test:watch`       | Run the unit tests in watch mode                        |
 | `npm run test:coverage`    | Run the unit tests with a coverage report (`coverage/`) |
-| `npm run lint`             | Lint TypeScript and Astro files (ESLint, incl. a11y)    |
-| `npm run format`           | Format the codebase with Prettier                       |
+| `npm run lint`             | Lint TypeScript and Astro files (Biome, incl. a11y)     |
+| `npm run format`           | Format the codebase with Biome                          |
 | `npm run format:check`     | Check formatting without writing changes                |
 | `npm run db:check`         | Run a test query against `DATABASE_URL`                 |
 | `npm run db:generate`      | Generate a SQL migration from the schema                |
@@ -917,8 +917,8 @@ Run from the project root:
 
 Before committing, keep `npm run check`, `npm run lint`, `npm test` and
 `npm run format:check` clean. [Husky](https://typicode.github.io/husky/) git
-hooks (installed by `npm install`) enforce this: `pre-commit` runs ESLint and
-Prettier on staged files via lint-staged, and `pre-push` runs
+hooks (installed by `npm install`) enforce this: `pre-commit` runs `biome check
+--write` on staged files via lint-staged, and `pre-push` runs
 `format:check`, `lint`, `check` and `test`. Bypass in an emergency with
 `--no-verify`. Unit tests sit next to the code they cover
 (`src/data/*.test.ts`, `src/lib/*.test.ts`) and build their records with the

@@ -32,44 +32,50 @@ export function mapMarket(
   saleRows: SaleRow[],
 ): MarketData {
   return {
-    listings: byId(listingRows).map((row): MarketListing => ({
-      id: row.id,
-      sellerId: row.sellerId,
-      purchaseId: row.purchaseId,
-      itemId: row.itemId,
-      price: row.price,
-      status: row.status,
-      ...(row.cancelledByName !== null && {
-        cancelledByName: row.cancelledByName,
+    listings: byId(listingRows).map(
+      (row): MarketListing => ({
+        id: row.id,
+        sellerId: row.sellerId,
+        purchaseId: row.purchaseId,
+        itemId: row.itemId,
+        price: row.price,
+        status: row.status,
+        ...(row.cancelledByName !== null && {
+          cancelledByName: row.cancelledByName,
+        }),
+        at: timestamptzToIso(row.createdAt),
+        ...(row.closedAt !== null && {
+          closedAt: timestamptzToIso(row.closedAt),
+        }),
       }),
-      at: timestamptzToIso(row.createdAt),
-      ...(row.closedAt !== null && {
-        closedAt: timestamptzToIso(row.closedAt),
+    ),
+    offers: byId(offerRows).map(
+      (row): MarketOffer => ({
+        id: row.id,
+        listingId: row.listingId,
+        buyerId: row.buyerId,
+        amount: row.amount,
+        status: row.status,
+        at: timestamptzToIso(row.createdAt),
+        ...(row.decidedAt !== null && {
+          decidedAt: timestamptzToIso(row.decidedAt),
+        }),
       }),
-    })),
-    offers: byId(offerRows).map((row): MarketOffer => ({
-      id: row.id,
-      listingId: row.listingId,
-      buyerId: row.buyerId,
-      amount: row.amount,
-      status: row.status,
-      at: timestamptzToIso(row.createdAt),
-      ...(row.decidedAt !== null && {
-        decidedAt: timestamptzToIso(row.decidedAt),
+    ),
+    sales: byId(saleRows).map(
+      (row): MarketSale => ({
+        id: row.id,
+        listingId: row.listingId,
+        sellerId: row.sellerId,
+        buyerId: row.buyerId,
+        itemId: row.itemId,
+        price: row.price,
+        sourcePurchaseId: row.sourcePurchaseId,
+        buyerPurchaseId: row.buyerPurchaseId,
+        ...(row.offerId !== null && { offerId: row.offerId }),
+        at: timestamptzToIso(row.createdAt),
       }),
-    })),
-    sales: byId(saleRows).map((row): MarketSale => ({
-      id: row.id,
-      listingId: row.listingId,
-      sellerId: row.sellerId,
-      buyerId: row.buyerId,
-      itemId: row.itemId,
-      price: row.price,
-      sourcePurchaseId: row.sourcePurchaseId,
-      buyerPurchaseId: row.buyerPurchaseId,
-      ...(row.offerId !== null && { offerId: row.offerId }),
-      at: timestamptzToIso(row.createdAt),
-    })),
+    ),
   };
 }
 

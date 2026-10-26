@@ -34,7 +34,8 @@ export type FormValues = Record<string, string>;
 export type FieldErrors = Record<string, string>;
 
 export type ParseResult<T> = { values: FormValues } & (
-  { ok: true; data: T } | { ok: false; errors: FieldErrors }
+  | { ok: true; data: T }
+  | { ok: false; errors: FieldErrors }
 );
 
 /** Raw string values from a form (first value per name). */
@@ -583,7 +584,8 @@ export function parseChangelogForm(
 // ── Entries added for a player ────────────────────────────────────────
 
 export type AddEntryInput = { playerId: string } & (
-  { kind: "text"; text: string } | { kind: "photo"; photo: PhotoEntryInput }
+  | { kind: "text"; text: string }
+  | { kind: "photo"; photo: PhotoEntryInput }
 );
 
 const photoErrors: Partial<Record<SubmissionOutcome, string>> = {

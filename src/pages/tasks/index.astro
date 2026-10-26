@@ -124,6 +124,7 @@ const clearSearchHref = withBase(
         Upcoming briefs stay encrypted until release.
       </p>
 
+      {/* biome-ignore lint/a11y/useSemanticElements: a fieldset would restyle the filter row */}
       <div
         class="mt-6 flex flex-wrap gap-2 text-xs"
         role="group"
@@ -175,6 +176,7 @@ const clearSearchHref = withBase(
         </button>
       </div>
 
+      {/* biome-ignore lint/a11y/useSemanticElements: role="search" on the form itself */}
       <form
         method="get"
         role="search"

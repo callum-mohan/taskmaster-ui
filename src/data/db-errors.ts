@@ -3,7 +3,7 @@
 
 /** The name of the Postgres constraint a write violated, if any. */
 export function violatedConstraint(error: unknown): string | undefined {
-  for (let e: unknown = error; e && typeof e === "object";) {
+  for (let e: unknown = error; e && typeof e === "object"; ) {
     const { constraint } = e as { constraint?: string };
     if (constraint) return constraint;
     e = (e as { cause?: unknown }).cause;

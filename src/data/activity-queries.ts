@@ -111,31 +111,35 @@ export function createActivityQueries(data: CompetitionData) {
     ]);
     const miniTasks = new Map(coins.miniTasks.map((t) => [t.id, t]));
     return [
-      ...coins.adjustments.map((a): ActivityEntry => ({
-        id: `coin-adjustment:${a.id}`,
-        kind: "coin-adjustment",
-        at: a.at,
-        actor: a.actorName,
-        byAdmin: true,
-        subjectIds: [a.playerId],
-        summary: `${a.amount > 0 ? "Granted" : "Deducted"} ${Math.abs(
-          a.amount,
-        )} Clim Coin ${a.amount > 0 ? "to" : "from"} ${nameOf(a.playerId)}`,
-        detail: a.reason,
-        coins: a.amount,
-        href: playerHref(a.playerId),
-      })),
-      ...coins.itemGifts.map((g): ActivityEntry => ({
-        id: `item-gift:${g.id}`,
-        kind: "item-gift",
-        at: g.at,
-        actor: g.actorName,
-        byAdmin: true,
-        subjectIds: [g.playerId],
-        summary: `Gifted ${itemOf(g.itemId)} to ${nameOf(g.playerId)}`,
-        detail: g.reason,
-        href: playerHref(g.playerId),
-      })),
+      ...coins.adjustments.map(
+        (a): ActivityEntry => ({
+          id: `coin-adjustment:${a.id}`,
+          kind: "coin-adjustment",
+          at: a.at,
+          actor: a.actorName,
+          byAdmin: true,
+          subjectIds: [a.playerId],
+          summary: `${a.amount > 0 ? "Granted" : "Deducted"} ${Math.abs(
+            a.amount,
+          )} Clim Coin ${a.amount > 0 ? "to" : "from"} ${nameOf(a.playerId)}`,
+          detail: a.reason,
+          coins: a.amount,
+          href: playerHref(a.playerId),
+        }),
+      ),
+      ...coins.itemGifts.map(
+        (g): ActivityEntry => ({
+          id: `item-gift:${g.id}`,
+          kind: "item-gift",
+          at: g.at,
+          actor: g.actorName,
+          byAdmin: true,
+          subjectIds: [g.playerId],
+          summary: `Gifted ${itemOf(g.itemId)} to ${nameOf(g.playerId)}`,
+          detail: g.reason,
+          href: playerHref(g.playerId),
+        }),
+      ),
       ...coins.miniTaskCompletions.flatMap((done): ActivityEntry[] => {
         const task = miniTasks.get(done.miniTaskId);
         if (!task) return [];
@@ -155,96 +159,108 @@ export function createActivityQueries(data: CompetitionData) {
       }),
       ...coins.purchases
         .filter((p) => !freePurchases.has(p.id))
-        .map((p): ActivityEntry => ({
-          id: `purchase:${p.id}`,
-          kind: "purchase",
-          at: p.at,
-          actor: nameOf(p.playerId),
+        .map(
+          (p): ActivityEntry => ({
+            id: `purchase:${p.id}`,
+            kind: "purchase",
+            at: p.at,
+            actor: nameOf(p.playerId),
+            byAdmin: false,
+            subjectIds: [p.playerId],
+            // A zero-price row outside crates, gifts and skills was granted
+            // directly (e.g. by a migration), so it wasn't really bought.
+            ...(p.price > 0
+              ? {
+                  summary: `${nameOf(p.playerId)} bought ${itemOf(p.itemId)}`,
+                  coins: -p.price,
+                }
+              : {
+                  summary: `${nameOf(p.playerId)} was given ${itemOf(p.itemId)}`,
+                  detail: "free",
+                }),
+            href: playerHref(p.playerId),
+          }),
+        ),
+      ...coins.crateOpens.map(
+        (o): ActivityEntry => ({
+          id: `crate:${o.id}`,
+          kind: "crate",
+          at: o.at,
+          actor: nameOf(o.playerId),
           byAdmin: false,
-          subjectIds: [p.playerId],
-          // A zero-price row outside crates, gifts and skills was granted
-          // directly (e.g. by a migration), so it wasn't really bought.
-          ...(p.price > 0
-            ? {
-                summary: `${nameOf(p.playerId)} bought ${itemOf(p.itemId)}`,
-                coins: -p.price,
-              }
-            : {
-                summary: `${nameOf(p.playerId)} was given ${itemOf(p.itemId)}`,
-                detail: "free",
-              }),
-          href: playerHref(p.playerId),
-        })),
-      ...coins.crateOpens.map((o): ActivityEntry => ({
-        id: `crate:${o.id}`,
-        kind: "crate",
-        at: o.at,
-        actor: nameOf(o.playerId),
-        byAdmin: false,
-        subjectIds: [o.playerId],
-        summary: `${nameOf(o.playerId)} opened ${
-          getCrate(o.crateId)?.name ?? o.crateId
-        } → ${itemOf(o.itemId)}`,
-        detail: o.rarity === "power_up" ? "power-up" : o.rarity,
-        coins: -o.price,
-        href: playerHref(o.playerId),
-      })),
-      ...coins.gifts.map((g): ActivityEntry => ({
-        id: `gift:${g.id}`,
-        kind: "gift",
-        at: g.at,
-        actor: nameOf(g.fromPlayerId),
-        byAdmin: false,
-        subjectIds: [g.fromPlayerId, g.toPlayerId],
-        summary: `${nameOf(g.fromPlayerId)} sent ${g.amount} Clim Coin to ${nameOf(
-          g.toPlayerId,
-        )}`,
-        ...(g.message && { detail: `"${g.message}"` }),
-        coins: g.amount,
-        href: playerHref(g.fromPlayerId),
-      })),
-      ...coins.market.sales.map((sale): ActivityEntry => ({
-        id: `market:${sale.id}`,
-        kind: "market",
-        at: sale.at,
-        actor: nameOf(sale.buyerId),
-        byAdmin: false,
-        subjectIds: [sale.sellerId, sale.buyerId],
-        summary: `${nameOf(sale.buyerId)} bought ${itemOf(sale.itemId)} from ${nameOf(
-          sale.sellerId,
-        )} on the market`,
-        ...(sale.offerId !== undefined && { detail: "accepted offer" }),
-        coins: sale.price,
-        href: playerHref(sale.buyerId),
-      })),
-      ...coins.uses.map((u): ActivityEntry => ({
-        id: `power-up:${u.id}`,
-        kind: "power-up",
-        at: u.at,
-        actor: nameOf(u.playerId),
-        byAdmin: false,
-        subjectIds: [
-          u.playerId,
-          ...(u.targetPlayerId ? [u.targetPlayerId] : []),
-        ],
-        summary: `${nameOf(u.playerId)} used ${POWER_UP_INFO[u.effect].label}${
-          u.targetPlayerId ? ` on ${nameOf(u.targetPlayerId)}` : ""
-        } · ${weekLabel(u.taskId)}`,
-        href: weekHref(u.taskId, "judge"),
-      })),
-      ...coins.skillUnlocks.map((u): ActivityEntry => ({
-        id: `skill:${u.id}`,
-        kind: "skill",
-        at: u.at,
-        actor: nameOf(u.playerId),
-        byAdmin: false,
-        subjectIds: [u.playerId],
-        summary: `${nameOf(u.playerId)} unlocked ${
-          getSkillNode(u.nodeId)?.name ?? u.nodeId
-        } (${getSkillPath(u.pathId)?.name ?? u.pathId})`,
-        coins: -u.price,
-        href: playerHref(u.playerId),
-      })),
+          subjectIds: [o.playerId],
+          summary: `${nameOf(o.playerId)} opened ${
+            getCrate(o.crateId)?.name ?? o.crateId
+          } → ${itemOf(o.itemId)}`,
+          detail: o.rarity === "power_up" ? "power-up" : o.rarity,
+          coins: -o.price,
+          href: playerHref(o.playerId),
+        }),
+      ),
+      ...coins.gifts.map(
+        (g): ActivityEntry => ({
+          id: `gift:${g.id}`,
+          kind: "gift",
+          at: g.at,
+          actor: nameOf(g.fromPlayerId),
+          byAdmin: false,
+          subjectIds: [g.fromPlayerId, g.toPlayerId],
+          summary: `${nameOf(g.fromPlayerId)} sent ${g.amount} Clim Coin to ${nameOf(
+            g.toPlayerId,
+          )}`,
+          ...(g.message && { detail: `"${g.message}"` }),
+          coins: g.amount,
+          href: playerHref(g.fromPlayerId),
+        }),
+      ),
+      ...coins.market.sales.map(
+        (sale): ActivityEntry => ({
+          id: `market:${sale.id}`,
+          kind: "market",
+          at: sale.at,
+          actor: nameOf(sale.buyerId),
+          byAdmin: false,
+          subjectIds: [sale.sellerId, sale.buyerId],
+          summary: `${nameOf(sale.buyerId)} bought ${itemOf(sale.itemId)} from ${nameOf(
+            sale.sellerId,
+          )} on the market`,
+          ...(sale.offerId !== undefined && { detail: "accepted offer" }),
+          coins: sale.price,
+          href: playerHref(sale.buyerId),
+        }),
+      ),
+      ...coins.uses.map(
+        (u): ActivityEntry => ({
+          id: `power-up:${u.id}`,
+          kind: "power-up",
+          at: u.at,
+          actor: nameOf(u.playerId),
+          byAdmin: false,
+          subjectIds: [
+            u.playerId,
+            ...(u.targetPlayerId ? [u.targetPlayerId] : []),
+          ],
+          summary: `${nameOf(u.playerId)} used ${POWER_UP_INFO[u.effect].label}${
+            u.targetPlayerId ? ` on ${nameOf(u.targetPlayerId)}` : ""
+          } · ${weekLabel(u.taskId)}`,
+          href: weekHref(u.taskId, "judge"),
+        }),
+      ),
+      ...coins.skillUnlocks.map(
+        (u): ActivityEntry => ({
+          id: `skill:${u.id}`,
+          kind: "skill",
+          at: u.at,
+          actor: nameOf(u.playerId),
+          byAdmin: false,
+          subjectIds: [u.playerId],
+          summary: `${nameOf(u.playerId)} unlocked ${
+            getSkillNode(u.nodeId)?.name ?? u.nodeId
+          } (${getSkillPath(u.pathId)?.name ?? u.pathId})`,
+          coins: -u.price,
+          href: playerHref(u.playerId),
+        }),
+      ),
       ...coins.wishes.flatMap((w): ActivityEntry[] => [
         {
           id: `wish:${w.id}`,

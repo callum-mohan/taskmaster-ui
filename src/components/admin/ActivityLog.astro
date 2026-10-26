@@ -128,8 +128,9 @@ const kindConfig: Record<ActivityKind, { label: string; class: string }> = {
                   ]}
                 >
                   {entry.coins === undefined ? (
-                    <span class="text-ink-faint" aria-label="none">
-                      —
+                    <span class="text-ink-faint">
+                      <span aria-hidden="true">—</span>
+                      <span class="sr-only">none</span>
                     </span>
                   ) : (
                     <CoinAmount

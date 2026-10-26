@@ -63,11 +63,11 @@ const { items, class: className = "" } = Astro.props;
         aria-expanded="true"
         aria-controls="command-palette-list"
         aria-autocomplete="list"
-        aria-activedescendant=""
       />
     </div>
 
     <!-- Results -->
+    {/* biome-ignore-start lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA combobox listbox pattern */}
     <ul
       id="command-palette-list"
       role="listbox"
@@ -75,6 +75,7 @@ const { items, class: className = "" } = Astro.props;
       class="max-h-[50vh] overflow-y-auto py-2"
     >
     </ul>
+    {/* biome-ignore-end lint/a11y/noNoninteractiveElementToInteractiveRole: ARIA combobox listbox pattern */}
     <p
       data-palette-empty
       class="hidden px-4 py-6 text-center text-sm text-ink-faint"
@@ -475,7 +476,7 @@ const { items, class: className = "" } = Astro.props;
             ],
           };
         case "date":
-          return { echo: raw, lines: ["> " + new Date().toString()] };
+          return { echo: raw, lines: [`> ${new Date().toString()}`] };
         case "coffee":
         case "make coffee":
           return {

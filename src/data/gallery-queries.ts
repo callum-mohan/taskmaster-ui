@@ -123,26 +123,29 @@ export function createGalleryQueries(data: CompetitionData) {
     const winners = new Set(choice.winners);
     return groups.map((group) => ({
       owner: group.owner,
-      entries: group.entries.map((entry): GalleryEntry => ({
-        ...entry,
-        social: {
-          reactions: tallyReactions(entry.id, reactions, viewer.playerId),
-          canReact,
-          canVote:
-            choice.canVote &&
-            viewer.playerId !== undefined &&
-            canVoteForEntry(task, entry, viewer.playerId),
-          votedFor: choice.myVote === entry.id,
-          ...(choice.status === "closed" && {
-            votes: votes.filter(
-              (v) => v.submissionId === entry.id && !v.entryHidden,
-            ).length,
-          }),
-          winner: winners.has(entry.id),
-          own:
-            viewer.playerId !== undefined && isOwnEntry(entry, viewer.playerId),
-        },
-      })),
+      entries: group.entries.map(
+        (entry): GalleryEntry => ({
+          ...entry,
+          social: {
+            reactions: tallyReactions(entry.id, reactions, viewer.playerId),
+            canReact,
+            canVote:
+              choice.canVote &&
+              viewer.playerId !== undefined &&
+              canVoteForEntry(task, entry, viewer.playerId),
+            votedFor: choice.myVote === entry.id,
+            ...(choice.status === "closed" && {
+              votes: votes.filter(
+                (v) => v.submissionId === entry.id && !v.entryHidden,
+              ).length,
+            }),
+            winner: winners.has(entry.id),
+            own:
+              viewer.playerId !== undefined &&
+              isOwnEntry(entry, viewer.playerId),
+          },
+        }),
+      ),
     }));
   }
 

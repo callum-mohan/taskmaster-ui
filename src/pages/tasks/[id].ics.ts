@@ -27,10 +27,10 @@ const foldLine = (line: string) => {
   chunks.push(rest.slice(0, 73));
   rest = rest.slice(73);
   while (rest.length > 72) {
-    chunks.push(" " + rest.slice(0, 72));
+    chunks.push(` ${rest.slice(0, 72)}`);
     rest = rest.slice(72);
   }
-  if (rest.length > 0) chunks.push(" " + rest);
+  if (rest.length > 0) chunks.push(` ${rest}`);
   return chunks.join("\r\n");
 };
 
@@ -84,7 +84,7 @@ export const GET: APIRoute = async ({ params, site, locals }) => {
   ];
 
   // RFC 5545 requires CRLF line endings and folded long lines.
-  const body = lines.map(foldLine).join("\r\n") + "\r\n";
+  const body = `${lines.map(foldLine).join("\r\n")}\r\n`;
 
   return new Response(body, {
     headers: {

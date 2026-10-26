@@ -1037,7 +1037,7 @@ export function createQueries(data: CompetitionData) {
     const climber = [...leaderboard]
       .filter((row) => typeof row.movement === "number" && row.movement > 0)
       .sort((a, b) => (b.movement ?? 0) - (a.movement ?? 0))[0];
-    if (climber && climber.movement) {
+    if (climber?.movement) {
       awards.push({
         id: "climber",
         title: "Biggest Climber",

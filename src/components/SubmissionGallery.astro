@@ -43,6 +43,11 @@ const { taskId, groups, page = 1, formatStamp, class: className } = Astro.props;
             entry={entry}
             formatStamp={formatStamp}
             showSubmitter={group.owner.type === "team"}
+            showTiming
+            lightboxGroup={`gallery-${taskId}`}
+            {...(entry.social.own && {
+              ownLabel: group.owner.type === "team" ? "your squad" : "yours",
+            })}
             class={
               entry.social.winner ? "flex-1 ring-1 ring-amber/40" : "flex-1"
             }

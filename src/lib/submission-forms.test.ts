@@ -5,6 +5,7 @@ import {
   MAX_PHOTO_BYTES,
   MAX_SUBMISSION_REQUEST_BYTES,
   MAX_TEXT_LENGTH,
+  parseEntryEdit,
   parsePhotoEntry,
   parseSubmissionId,
   parseSubmissionIntent,
@@ -238,9 +239,12 @@ describe("parseTextEntry", () => {
 });
 
 describe("parseSubmissionIntent", () => {
-  it.each(["create-photo", "create-text", "delete"])("accepts %s", (intent) => {
-    expect(parseSubmissionIntent(formData({ intent }))).toBe(intent);
-  });
+  it.each(["create-photo", "create-text", "edit", "delete"])(
+    "accepts %s",
+    (intent) => {
+      expect(parseSubmissionIntent(formData({ intent }))).toBe(intent);
+    },
+  );
 
   it.each(["add-photo", "DELETE", ""])("rejects %j", (intent) => {
     expect(parseSubmissionIntent(formData({ intent }))).toBeUndefined();
@@ -311,5 +315,34 @@ describe("limits", () => {
       (data) => (sniffImage(data) as { contentType: string }).contentType,
     );
     expect(PHOTO_ACCEPT.split(",").sort()).toEqual(sniffed.sort());
+  });
+});
+
+describe("parseEntryEdit", () => {
+  it("requires a text entry's body", () => {
+    expect(
+      parseEntryEdit(formData({ text: "  new\r\nbody " }), "text"),
+    ).toEqual({ ok: true, data: "new\nbody" });
+    expect(parseEntryEdit(formData({ text: "   " }), "text")).toEqual({
+      ok: false,
+      outcome: "invalid",
+    });
+  });
+
+  it("lets a photo's caption be changed or cleared", () => {
+    expect(parseEntryEdit(formData({ caption: " hi " }), "photo")).toEqual({
+      ok: true,
+      data: "hi",
+    });
+    expect(parseEntryEdit(formData({ caption: "" }), "photo")).toEqual({
+      ok: true,
+      data: null,
+    });
+    expect(
+      parseEntryEdit(
+        formData({ caption: "x".repeat(MAX_CAPTION_LENGTH + 1) }),
+        "photo",
+      ),
+    ).toEqual({ ok: false, outcome: "invalid" });
   });
 });

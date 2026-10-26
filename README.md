@@ -62,6 +62,10 @@ src/
 │   ├── hall-of-fame-queries.ts # closed seasons' podiums, squads, awards + all-time records
 │   ├── streak-queries.ts # win / podium / scoring streaks, one-week climbs, comebacks
 │   ├── wrapped-queries.ts # the season wrapped + each player's wrapped (personas, highs, rivals)
+│   ├── mini-tasks.ts  # rows → MiniTask (status derived from UK dates) + completions
+│   ├── mini-task-queries.ts # what's running, a player's ticks and tally
+│   ├── achievement-queries.ts # the achievements catalogue and a player's progress
+│   ├── activity-queries.ts # the admin activity log (score history + coin records)
 │   ├── players.ts     # rows → Player ─┐
 │   ├── teams.ts       # rows → Team    ├─ pure mappers
 │   ├── tasks.ts       # rows → Task    │  (status derived from dates)
@@ -287,19 +291,20 @@ they're public URLs: blank week ids in later seasons default to
 
 ## 🔐 Admin
 
-`/admin` is grouped into five areas, and `/admin/guide` explains each one
+`/admin` is grouped into six areas, and `/admin/guide` explains each one
 along with the weekly runbook:
 
-| Area      | Path             | What it's for                                                                                                                                                                                                                                                                                                                                                                   |
-| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| dashboard | `/admin`         | What needs doing now: the live week, finished weeks still to judge or publish, and the next week to be released, each with a button for its next step. Prompts to close a finished season or launch the next one.                                                                                                                                                               |
-| seasons   | `/admin/seasons` | Part of the weeks area. Create seasons, make one current, close one to crown its champion (or reopen it), rename, and delete empty ones. Editor at `/admin/seasons/<id>`.                                                                                                                                                                                                       |
-| weeks     | `/admin/weeks`   | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
-| roster    | `/admin/roster`  | Players (with sign-in accounts) and squads, per season; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                               |
-| site      | `/admin/site`    | [Polls](#️-polls) and the homepage changelog; editors at `/admin/polls/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                                                                                                                        |
-| guide     | `/admin/guide`   | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
+| Area      | Path              | What it's for                                                                                                                                                                                                                                                                                                                                                                   |
+| --------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dashboard | `/admin`          | What needs doing now: the live week, finished weeks still to judge or publish, and the next week to be released, each with a button for its next step. Prompts to close a finished season or launch the next one.                                                                                                                                                               |
+| seasons   | `/admin/seasons`  | Part of the weeks area. Create seasons, make one current, close one to crown its champion (or reopen it), rename, and delete empty ones. Editor at `/admin/seasons/<id>`.                                                                                                                                                                                                       |
+| weeks     | `/admin/weeks`    | One row per task with its progress. Each week is a workspace with four tabs: **brief** (`/admin/weeks/<id>`: the task form, reveal password, delete), **judge** (`…/judge`: entries gallery with a points box per player or squad, or a plain grid when the task takes no entries, plus bonuses and the score history), **results night** (`…/live`) and **recap** (`…/recap`). |
+| roster    | `/admin/roster`   | Players (with sign-in accounts) and squads, per season; editors at `/admin/players/<id>` and `/admin/teams/<id>`.                                                                                                                                                                                                                                                               |
+| site      | `/admin/site`     | Feature flags, [polls](#️-polls), [mini-tasks](#-mini-tasks--achievements), the homepage changelog and the shop; editors at `/admin/polls/<id>`, `/admin/mini-tasks/<id>` and `/admin/changelog/<id>`.                                                                                                                                                                           |
+| activity  | `/admin/activity` | One season's timeline of everything that moved points or Clim Coin (score changes, coin grants, gifts, purchases, crates, power-ups, skills, wishes, mini-tasks), filterable by kind and player, for disputes.                                                                                                                                                                  |
+| guide     | `/admin/guide`    | How to use the admin.                                                                                                                                                                                                                                                                                                                                                           |
 
-The weeks and roster lists, and the new week / player / squad forms, work on
+The weeks and roster lists, the activity log, and the new week / player / squad forms, work on
 one season: the current one, or another picked with the season switcher
 (`?season=<id>`, see `src/lib/admin-season.ts`). Screens about a single week,
 player or squad use that record's season.
@@ -319,6 +324,13 @@ plain HTML posts, so they work without JavaScript.
   of that week's judge tab. Saving the grid only touches rows that
   changed, so each score keeps its `created_at` (when it was first recorded)
   and gets a fresh `updated_at` when edited.
+- **Activity log:** `/admin/activity` merges the season's `score_audit_log`
+  with its coin records (`coin_adjustments`, `item_gifts`,
+  `mini_task_completions`, purchases, crates, gifts, power-up uses, skill
+  unlocks and wishes) into one newest-first timeline
+  (`src/data/activity-queries.ts`), filterable by kind (`?kind=`) and by the
+  player or squad affected (`?who=`). Rows deleted outright (a removed coin
+  grant, a revoked power-up) leave no entry.
 
 - The admin panel is part of the site: admin pages keep the normal navbar,
   footer and command palette, with an admin sub-nav underneath (areas and
@@ -414,15 +426,21 @@ default) and which **kinds**:
 - **Text:** up to 5000 characters.
 
 On **team tasks** entries belong to the squad: any member can submit or
-withdraw them, and the limit is per squad. Players can withdraw an entry
-(freeing the slot) until the deadline, but not edit it. The entry form is a
-plain `POST` to `/account/submissions/<task>`, so it needs a signed-in player
-and works without JavaScript. The entry count and the insert are one
-statement, so double-submits can't go over the limit.
+withdraw them, and the limit is per squad. Until the deadline players can
+withdraw an entry (freeing the slot) or edit a text entry or photo caption
+(the photo itself can't be swapped; withdraw it and upload another). The
+entry form is a plain `POST` to `/account/submissions/<task>`, so it needs a
+signed-in player and works without JavaScript. With JS, photo uploads show a
+progress bar: the script posts with an `x-upload-progress` header and the
+endpoint answers with JSON naming the page to go back to, instead of a
+redirect. The entry count and the insert are one statement, so double-submits
+can't go over the limit.
 
 Until the deadline only the player (or squad) and admins can see an entry.
 Afterwards every entry shows in a gallery on the task page, unless an admin
-hid it. Photos are served through `/submissions/<id>/media`, which checks
+hid it. Clicking a photo opens a full-size viewer (arrow keys or swipe
+between entries, Esc to close); without JS it opens the image. Photos are
+served through `/submissions/<id>/media`, which checks
 access and redirects to a short-lived presigned URL, so the bucket stays
 private.
 
@@ -495,7 +513,8 @@ prediction bonuses, so a corrected score or withdrawn vote can't leave stale
 coins behind. Results pay once published (1st 10 · 2nd 7 · 3rd 5 · anyone else
 scored 2); activity pays once it locks in (entry 2 at the deadline, winner call
 1 at the deadline, People's Choice vote 1 when voting closes, poll vote 1 when
-the poll closes). Every number lives in `src/data/coin-rules.ts`, which `/rules`
+the poll closes) and [mini-tasks](#-mini-tasks--achievements) pay 1–5 when an
+admin ticks the player off. Every number lives in `src/data/coin-rules.ts`, which `/rules`
 reads too. Wallets are per season: they belong to the season's player rows.
 
 **Stored facts:** `shop_items` (the site-wide catalogue, edited in
@@ -631,6 +650,27 @@ never sold or hatched, are seeded by the `0027_skill_trees` migration and
 Turning the flag off hides the page, its links and the pathway sigils. Anything
 already unlocked keeps working.
 
+## 🧩 Mini-tasks & achievements
+
+**Mini-tasks** are small daily or bonus challenges between the weekly tasks,
+worth 1–5 Clim Coin (`MINI_TASK_MAX_REWARD` in `src/data/mini-tasks.ts`, also
+a check on `mini_tasks.reward`). Each belongs to a season and runs from
+`starts_on` to `ends_on` (UK dates, inclusive); its status (upcoming, active,
+ended) is derived on every request. Admins create them in
+`/admin/site#mini-tasks` and tick off who did each one at
+`/admin/mini-tasks/<id>`, which writes `mini_task_completions` (with the
+admin's name, like `coin_adjustments`). The coin is **derived** from those
+rows in `deriveEarnings`, so unticking someone or deleting the mini-task
+takes it back. Players see what's running on the homepage and in their
+account (behind the `mini_tasks` flag) and get a notification when ticked.
+
+**Achievements** (`/account/achievements`, behind the `achievements` flag)
+are the season's long-term goals: 20 milestones in four groups (results,
+streaks, taking part, Clim Coin), each with a progress bar. The catalogue
+lives in `src/data/achievement-queries.ts` and is derived from the snapshot
+like everything else; nothing is stored. The public profile keeps its own
+smaller set of "current form" badges (`getPlayerAchievements`).
+
 ## 🚩 Feature flags
 
 Site-wide switches an admin flips in `/admin/site#flags`, with no deploy.
@@ -641,11 +681,13 @@ feature ships disabled. Flags load with the rest of the competition rows
 is purged and the change shows straight away. Read them from
 `getQueries().features`.
 
-| Flag          | Off (default)                                                                                                                                                                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `shop_eggs`   | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened.                                                                                                                                                              |
-| `storm_mode`  | Clear skies. On: the public site (not `/admin`) is hit by a hurricane — rain, lightning, gusts, shake and "A Storm Is Brewing" blown across the screen. Pure CSS (`StormMode.astro` + `:root[data-storm]` in `global.css`), click-through, and still for reduced motion. |
-| `skill_trees` | Hides `/skills`, its nav, shop and wallet links, the rules section and pathway sigils; nobody can unlock. Perks and rewards already unlocked keep working.                                                                                                               |
+| Flag           | Off (default)                                                                                                                                                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `shop_eggs`    | Hides the mystery eggs, recent hatches and egg-exclusive items in the shop and rules; eggs can't be opened.                                                                                                                                                              |
+| `storm_mode`   | Clear skies. On: the public site (not `/admin`) is hit by a hurricane — rain, lightning, gusts, shake and "A Storm Is Brewing" blown across the screen. Pure CSS (`StormMode.astro` + `:root[data-storm]` in `global.css`), click-through, and still for reduced motion. |
+| `skill_trees`  | Hides `/skills`, its nav, shop and wallet links, the rules section and pathway sigils; nobody can unlock. Perks and rewards already unlocked keep working.                                                                                                               |
+| `mini_tasks`   | Hides the mini-task panels on the homepage and `/account`. Admins can still set mini-tasks and tick off completions, and coin already earned stays in wallets.                                                                                                           |
+| `achievements` | Hides `/account/achievements` (404) and its links.                                                                                                                                                                                                                       |
 
 ## 🔔 Notifications
 
@@ -669,6 +711,7 @@ a dropdown (a full-height drawer on phones) listing the newest 20 events:
 - **Gifts** of Clim Coin from another player, and Clim Coin grants or
   items an admin gifted them.
 - **Wishes** granted or declined by the Taskmaster, with their reply.
+- **Mini-tasks** an admin ticked them off for, with the coin it paid.
 
 Guests and admin accounts without a player profile don't see it.
 
@@ -820,7 +863,11 @@ Run from the project root:
 | `npm run db:studio`        | Browse and edit data in Drizzle Studio                  |
 
 Before committing, keep `npm run check`, `npm run lint`, `npm test` and
-`npm run format:check` clean. Unit tests sit next to the code they cover
+`npm run format:check` clean. [Husky](https://typicode.github.io/husky/) git
+hooks (installed by `npm install`) enforce this: `pre-commit` runs ESLint and
+Prettier on staged files via lint-staged, and `pre-push` runs
+`format:check`, `lint`, `check` and `test`. Bypass in an emergency with
+`--no-verify`. Unit tests sit next to the code they cover
 (`src/data/*.test.ts`, `src/lib/*.test.ts`) and build their records with the
 helpers in `src/test/fixtures.ts`.
 

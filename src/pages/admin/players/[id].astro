@@ -242,12 +242,23 @@ const statusHelp: Record<typeof status, string> = {
 <AdminLayout title={`Edit ${player.name}`}>
   <div class="flex flex-wrap items-center justify-between gap-3">
     <a href={rosterHref()} class={btnGhost}>&larr; ROSTER</a>
-    <a
-      href={withBase(`/players/${player.id}`)}
-      class="text-xs text-cyan hover:underline"
-      target="_blank"
-      rel="noopener">view public profile ↗</a
-    >
+    <div class="flex flex-wrap items-center gap-4">
+      <a
+        href={withBase(
+          withSeason(
+            `/admin/activity?${new URLSearchParams({ who: player.id })}`,
+            season,
+          ),
+        )}
+        class="text-xs text-cyan hover:underline">activity log →</a
+      >
+      <a
+        href={withBase(`/players/${player.id}`)}
+        class="text-xs text-cyan hover:underline"
+        target="_blank"
+        rel="noopener">view public profile ↗</a
+      >
+    </div>
   </div>
   <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> vim ~/players/{player.id}.md

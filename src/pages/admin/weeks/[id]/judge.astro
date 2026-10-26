@@ -13,6 +13,7 @@ import ScoreHistory from "../../../../components/admin/ScoreHistory.astro";
 import BonusForm from "../../../../components/admin/BonusForm.astro";
 import ConfirmDelete from "../../../../components/admin/ConfirmDelete.astro";
 import SubmissionReviewCard from "../../../../components/admin/SubmissionReviewCard.astro";
+import PhotoLightbox from "../../../../components/PhotoLightbox.astro";
 import AddEntryForms from "../../../../components/admin/AddEntryForms.astro";
 import Pagination from "../../../../components/Pagination.astro";
 import { btnPrimary, btnGhost } from "../../../../components/admin/styles";
@@ -693,4 +694,5 @@ const historyHref = (page: number) =>
       />
     </TerminalWindow>
   </section>
+  <PhotoLightbox />
 </AdminLayout>

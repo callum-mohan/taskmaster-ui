@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatDeadlineOffset,
   timestamptzToIso,
   toWallClock,
   ukDateFormat,
@@ -83,5 +84,19 @@ describe("ukDateFormat", () => {
     const fmt = ukDateFormat(options);
     expect(fmt.format(new Date("2026-07-15T08:30:00Z"))).toBe("09:30");
     expect(ukDateFormat({ ...options })).toBe(fmt);
+  });
+});
+
+describe("formatDeadlineOffset", () => {
+  const min = 60_000;
+  it.each([
+    [0, "after deadline"],
+    [-5 * min, "after deadline"],
+    [30_000, "under 1m before deadline"],
+    [7 * min, "7m before deadline"],
+    [125 * min, "2h 05m before deadline"],
+    [(2 * 1440 + 4 * 60 + 59) * min, "2d 4h before deadline"],
+  ])("%d ms → %s", (ms, label) => {
+    expect(formatDeadlineOffset(ms)).toBe(label);
   });
 });

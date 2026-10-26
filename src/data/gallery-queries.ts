@@ -139,6 +139,8 @@ export function createGalleryQueries(data: CompetitionData) {
             ).length,
           }),
           winner: winners.has(entry.id),
+          own:
+            viewer.playerId !== undefined && isOwnEntry(entry, viewer.playerId),
         },
       })),
     }));

@@ -11,6 +11,7 @@ import {
   MAX_PHOTO_BYTES,
   MAX_TEXT_LENGTH,
   PHOTO_ACCEPT,
+  UPLOAD_PROGRESS_HEADER,
 } from "../lib/submission-forms";
 import { withBase } from "../lib/url";
 
@@ -25,8 +26,16 @@ interface Props {
 }
 
 const { taskId, panel, outcome, formatStamp, class: className } = Astro.props;
-const { settings, owner, entries, remaining, canSubmit, canDelete, blockedBy } =
-  panel;
+const {
+  settings,
+  owner,
+  entries,
+  remaining,
+  canSubmit,
+  canDelete,
+  canEdit,
+  blockedBy,
+} = panel;
 
 const action = withBase(`/account/submissions/${taskId}`);
 const signInHref = withBase(
@@ -40,6 +49,10 @@ const outcomes: Record<
   { tone: "success" | "error"; message: string }
 > = {
   submitted: { tone: "success", message: "Entry received. Good luck." },
+  edited: {
+    tone: "success",
+    message: "Entry updated. You can keep tweaking it until the deadline.",
+  },
   deleted: {
     tone: "success",
     message: "Entry withdrawn. The slot is free again.",
@@ -91,6 +104,8 @@ const slotsLabel = `${settings.max} ${settings.max === 1 ? "entry" : "entries"} 
 
 const btnPrimary =
   "inline-flex items-center justify-center gap-2 rounded-md border border-acid bg-acid/10 px-4 py-2 text-xs font-bold tracking-widest text-acid transition-colors hover:bg-acid hover:text-term-bg disabled:cursor-wait disabled:opacity-60";
+const btnGhost =
+  "rounded border border-grid px-2 py-0.5 text-[10px] font-bold tracking-widest text-ink-dim transition-colors hover:border-acid hover:text-acid";
 const btnDanger =
   "rounded border border-danger/50 px-2 py-0.5 text-[10px] font-bold tracking-widest text-danger transition-colors hover:bg-danger hover:text-term-bg";
 const label =
@@ -142,6 +157,23 @@ const field =
   }
 
   {
+    owner && entries.length === 0 && (
+      <div class="rounded-md border border-dashed border-grid bg-term-bg/40 px-4 py-3 text-sm">
+        <p class="text-ink-dim">
+          <span class="text-acid">$</span> ls ./
+          {isTeam ? "squad-entries" : "my-entries"}
+        </p>
+        <p class="mt-1 text-ink-faint">
+          <span class="text-cyan">&gt;</span> 0 results.{" "}
+          {canSubmit
+            ? `Nothing in yet. You have ${remaining} ${remaining === 1 ? "slot" : "slots"} to fill below.`
+            : "Nothing submitted."}
+        </p>
+      </div>
+    )
+  }
+
+  {
     entries.length > 0 && (
       <div>
         <h3 class={label}>
@@ -158,6 +190,8 @@ const field =
                 entry={entry}
                 formatStamp={formatStamp}
                 showSubmitter={isTeam}
+                showTiming
+                lightboxGroup={`entries-${taskId}`}
                 class="h-full"
               >
                 {canDelete && (
@@ -175,6 +209,55 @@ const field =
                       <span class="sr-only">{entry.kind} entry</span>
                     </button>
                   </form>
+                )}
+                {canEdit && (
+                  <details slot="footer" class="border-t border-grid-soft">
+                    <summary class="cursor-pointer px-3 py-2 text-[10px] font-bold tracking-widest text-ink-faint uppercase transition-colors hover:text-acid">
+                      edit {entry.kind === "text" ? "entry" : "caption"}
+                    </summary>
+                    <form
+                      method="post"
+                      action={action}
+                      class="space-y-2 px-3 pb-3"
+                    >
+                      <input type="hidden" name="intent" value="edit" />
+                      <input
+                        type="hidden"
+                        name="submissionId"
+                        value={entry.id}
+                      />
+                      <label for={`edit-${entry.id}`} class="sr-only">
+                        {entry.kind === "text"
+                          ? "Your text entry"
+                          : "Photo caption (leave blank to remove it)"}
+                      </label>
+                      {entry.kind === "text" ? (
+                        <textarea
+                          id={`edit-${entry.id}`}
+                          name="text"
+                          required
+                          rows={5}
+                          maxlength={MAX_TEXT_LENGTH}
+                          class:list={[field, "mt-0"]}
+                          set:text={entry.text ?? ""}
+                        />
+                      ) : (
+                        <input
+                          id={`edit-${entry.id}`}
+                          name="caption"
+                          type="text"
+                          maxlength={MAX_CAPTION_LENGTH}
+                          value={entry.text ?? ""}
+                          placeholder="no caption"
+                          class:list={[field, "mt-0"]}
+                        />
+                      )}
+                      <button type="submit" class={btnGhost}>
+                        SAVE
+                        <span class="sr-only">changes to this entry</span>
+                      </button>
+                    </form>
+                  </details>
                 )}
               </SubmissionEntryCard>
             </li>
@@ -200,6 +283,7 @@ const field =
             class="rounded-lg border border-grid bg-term-bg/60 p-4"
             data-photo-form
             data-max-bytes={MAX_PHOTO_BYTES}
+            data-progress-header={UPLOAD_PROGRESS_HEADER}
           >
             <input type="hidden" name="intent" value="create-photo" />
             <label for={`photo-${taskId}`} class={label}>
@@ -236,6 +320,20 @@ const field =
               aria-live="polite"
               data-photo-status
             />
+            <div
+              class="mt-2 hidden h-1.5 overflow-hidden rounded-full border border-grid bg-term-bg"
+              role="progressbar"
+              aria-label="Upload progress"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+              data-photo-progress
+            >
+              <div
+                class="h-full w-0 bg-acid transition-[width]"
+                data-photo-progress-bar
+              />
+            </div>
             <button type="submit" class:list={[btnPrimary, "mt-2"]}>
               [ UPLOAD PHOTO ]
             </button>
@@ -278,9 +376,9 @@ const field =
   } from "../lib/photo-optimize";
 
   // Progressive enhancement: shrink the chosen photo to WebP in the browser,
-  // preview it, catch oversized files before uploading, show a busy state
-  // while it uploads, and confirm withdrawals. The forms work without any of
-  // this.
+  // preview it with its final size, catch oversized files before uploading,
+  // upload with a progress bar, and confirm withdrawals. The forms work
+  // without any of this.
   document
     .querySelectorAll<HTMLFormElement>("form[data-photo-form]")
     .forEach((form) => {
@@ -292,14 +390,25 @@ const field =
       const button = form.querySelector<HTMLButtonElement>(
         'button[type="submit"]',
       );
+      const progress = form.querySelector<HTMLElement>("[data-photo-progress]");
+      const progressBar = form.querySelector<HTMLElement>(
+        "[data-photo-progress-bar]",
+      );
       const maxBytes = Number(form.dataset.maxBytes);
+      const progressHeader = form.dataset.progressHeader;
       if (!input || !preview || !status || !button) return;
       const buttonLabel = button.textContent;
       let previewUrl: string | undefined;
       // Ignores a slow optimisation once a newer file has been picked.
       let selection = 0;
 
+      // Appended once the preview has decoded, so it describes what uploads.
+      let summary = "";
       preview.addEventListener("error", () => preview.classList.add("hidden"));
+      preview.addEventListener("load", () => {
+        if (!summary) return;
+        status.textContent = `${summary} · ${preview.naturalWidth}×${preview.naturalHeight} · ready to upload`;
+      });
 
       input.addEventListener("change", async () => {
         const current = ++selection;
@@ -308,6 +417,7 @@ const field =
         preview.classList.add("hidden");
         input.setCustomValidity("");
         status.textContent = "";
+        summary = "";
         button.disabled = false;
         button.textContent = buttonLabel;
         const original = input.files?.[0];
@@ -332,16 +442,41 @@ const field =
           input.reportValidity();
           return;
         }
-        status.textContent =
+        summary =
           file === original
             ? `${file.name} · ${formatBytes(file.size)}`
             : `${original.name} · ${formatBytes(original.size)} → ${formatBytes(file.size)} ${file.type === "image/webp" ? "WebP" : "JPEG"}`;
+        status.textContent = summary;
         if (file.type.startsWith("image/")) {
           previewUrl = URL.createObjectURL(file);
           preview.src = previewUrl;
           preview.classList.remove("hidden");
         }
       });
+
+      const setProgress = (fraction: number) => {
+        const percent = Math.round(fraction * 100);
+        progress?.setAttribute("aria-valuenow", String(percent));
+        if (progressBar) progressBar.style.width = `${percent}%`;
+        button.textContent =
+          percent < 100 ? `[ UPLOADING ${percent}% ]` : "[ SAVING… ]";
+      };
+
+      // Goes to the task page the endpoint names, reloading if it's the
+      // page we're already on (a hash-only change wouldn't navigate).
+      const go = (location: string) => {
+        const target = new URL(location, window.location.href);
+        const here = new URL(window.location.href);
+        if (
+          target.pathname === here.pathname &&
+          target.search === here.search
+        ) {
+          window.location.hash = target.hash;
+          window.location.reload();
+        } else {
+          window.location.assign(target.href);
+        }
+      };
 
       form.addEventListener("submit", (event) => {
         if (button.disabled) {
@@ -351,6 +486,37 @@ const field =
         button.disabled = true;
         button.textContent = "[ UPLOADING… ]";
         status.textContent = "Uploading. Keep this page open.";
+        if (!progressHeader || !progress) return;
+
+        event.preventDefault();
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", form.action);
+        xhr.setRequestHeader(progressHeader, "1");
+        xhr.responseType = "json";
+        progress.classList.remove("hidden");
+        setProgress(0);
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) setProgress(e.loaded / e.total);
+        });
+        xhr.addEventListener("load", () => {
+          const location = (xhr.response as { location?: unknown } | null)
+            ?.location;
+          if (xhr.status === 200 && typeof location === "string") {
+            go(location);
+          } else {
+            // Something other than the endpoint answered (e.g. the sign-in
+            // page): post the form normally so its response is shown.
+            HTMLFormElement.prototype.submit.call(form);
+          }
+        });
+        xhr.addEventListener("error", () => {
+          progress.classList.add("hidden");
+          button.disabled = false;
+          button.textContent = buttonLabel;
+          status.textContent =
+            "✗ The upload didn't go through. Check your connection and try again.";
+        });
+        xhr.send(new FormData(form));
       });
     });
 

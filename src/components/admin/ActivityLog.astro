@@ -1,0 +1,148 @@
+---
+import type { ActivityEntry, ActivityKind } from "../../types";
+import CoinAmount from "../CoinAmount.astro";
+import { ukDateFormat } from "../../lib/time";
+import { withBase } from "../../lib/url";
+import { tableCell, tableHead } from "./styles";
+
+interface Props {
+  entries: ActivityEntry[];
+  class?: string;
+}
+
+const { entries, class: className = "" } = Astro.props;
+
+const dateFmt = ukDateFormat({
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+const kindConfig: Record<ActivityKind, { label: string; class: string }> = {
+  score: { label: "SCORE", class: "border-acid/40 text-acid" },
+  "coin-adjustment": { label: "COIN", class: "border-amber/40 text-amber" },
+  "item-gift": { label: "ITEM", class: "border-amber/40 text-amber" },
+  "mini-task": { label: "MINI", class: "border-acid/40 text-acid" },
+  purchase: { label: "SHOP", class: "border-cyan/40 text-cyan" },
+  crate: { label: "CRATE", class: "border-cyan/40 text-cyan" },
+  gift: { label: "GIFT", class: "border-magenta/40 text-magenta" },
+  "power-up": { label: "POWER-UP", class: "border-magenta/40 text-magenta" },
+  skill: { label: "SKILL", class: "border-cyan/40 text-cyan" },
+  wish: { label: "WISH", class: "border-magenta/40 text-magenta" },
+};
+---
+
+{
+  entries.length === 0 ? (
+    <p class:list={["p-6 text-sm text-ink-faint", className]}>
+      <span class="text-cyan" aria-hidden="true">
+        &gt;{" "}
+      </span>
+      Nothing logged here yet.
+    </p>
+  ) : (
+    <div class:list={["overflow-x-auto", className]}>
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class={tableHead}>
+              when
+            </th>
+            <th scope="col" class={tableHead}>
+              what
+            </th>
+            <th scope="col" class={tableHead}>
+              change
+            </th>
+            <th scope="col" class={tableHead}>
+              by
+            </th>
+            <th scope="col" class:list={[tableHead, "text-right"]}>
+              coin
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const kind = kindConfig[entry.kind];
+            return (
+              <tr class="transition-colors hover:bg-term-panel-2">
+                <td
+                  class:list={[
+                    tableCell,
+                    "whitespace-nowrap align-top text-ink-faint",
+                  ]}
+                >
+                  <time datetime={entry.at} class="tabular-nums">
+                    {dateFmt.format(new Date(entry.at))}
+                  </time>
+                </td>
+                <td class:list={[tableCell, "align-top"]}>
+                  <span
+                    class:list={[
+                      "inline-block whitespace-nowrap rounded border px-1.5 py-0.5 text-[10px] font-bold tracking-widest",
+                      kind.class,
+                    ]}
+                  >
+                    {kind.label}
+                  </span>
+                </td>
+                <td class:list={[tableCell, "align-top"]}>
+                  {entry.href ? (
+                    <a
+                      href={withBase(entry.href)}
+                      class="text-ink hover:text-cyan hover:underline"
+                    >
+                      {entry.summary}
+                    </a>
+                  ) : (
+                    <span class="text-ink">{entry.summary}</span>
+                  )}
+                  {entry.detail && (
+                    <span class="mt-0.5 block max-w-prose text-xs text-ink-faint">
+                      {entry.detail}
+                    </span>
+                  )}
+                </td>
+                <td
+                  class:list={[
+                    tableCell,
+                    "whitespace-nowrap align-top text-xs",
+                    entry.byAdmin ? "text-amber" : "text-ink-dim",
+                  ]}
+                >
+                  {entry.actor}
+                  {entry.byAdmin && (
+                    <span class="ml-1 text-[10px] tracking-widest text-ink-faint">
+                      ADMIN
+                    </span>
+                  )}
+                </td>
+                <td
+                  class:list={[
+                    tableCell,
+                    "whitespace-nowrap text-right align-top",
+                  ]}
+                >
+                  {entry.coins === undefined ? (
+                    <span class="text-ink-faint" aria-label="none">
+                      —
+                    </span>
+                  ) : (
+                    <CoinAmount
+                      amount={entry.coins}
+                      signed
+                      class={entry.coins < 0 ? "text-danger" : "text-acid"}
+                    />
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}

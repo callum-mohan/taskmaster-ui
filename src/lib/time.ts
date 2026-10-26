@@ -135,3 +135,25 @@ export function ukDateFormat(
   }
   return format;
 }
+
+/**
+ * How far ahead of a deadline something happened, compactly: "2d 4h before
+ * deadline", "2h 05m before deadline", "under 1m before deadline". Anything
+ * at or after the deadline (e.g. an entry an admin added later) reads
+ * "after deadline".
+ */
+export function formatDeadlineOffset(msBeforeDeadline: number): string {
+  if (msBeforeDeadline <= 0) return "after deadline";
+  const minutes = Math.floor(msBeforeDeadline / 60_000);
+  if (minutes < 1) return "under 1m before deadline";
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  const mins = minutes % 60;
+  const span =
+    days > 0
+      ? `${days}d ${hours}h`
+      : hours > 0
+        ? `${hours}h ${String(mins).padStart(2, "0")}m`
+        : `${mins}m`;
+  return `${span} before deadline`;
+}

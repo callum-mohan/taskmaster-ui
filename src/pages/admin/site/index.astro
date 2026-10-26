@@ -13,9 +13,13 @@ import {
 import {
   listChangelog,
   listFeatureFlags,
+  listMiniTasks,
   listShopItems,
   setFeatureFlag,
 } from "../../../data/admin";
+import { deriveMiniTaskStatus, ukToday } from "../../../data/mini-tasks";
+import CoinAmount from "../../../components/CoinAmount.astro";
+import type { MiniTaskStatus } from "../../../types";
 import { FEATURE_FLAGS } from "../../../data/feature-flags";
 import { parseFeatureFlagForm } from "../../../lib/admin-forms";
 import {
@@ -48,13 +52,33 @@ if (Astro.request.method === "POST") {
   return Astro.redirect(withBase(`/admin/site?${query}#flags`), 303);
 }
 
-const [{ getPollSummaries, players }, changelog, shop, flags] =
+// Mini-tasks belong to a season: this screen lists the current one's.
+const currentSeason = (await Astro.locals.getSeasons()).current;
+const [{ getPollSummaries, players }, changelog, shop, flags, miniTasks] =
   await Promise.all([
     Astro.locals.getQueries(),
     listChangelog(),
     listShopItems(),
     listFeatureFlags(),
+    currentSeason ? listMiniTasks(currentSeason.id) : Promise.resolve([]),
   ]);
+const today = ukToday();
+const miniTaskPage = paginate(
+  miniTasks,
+  parsePage(Astro.url.searchParams.get("minitasks")),
+  LIST_PAGE_SIZE,
+);
+const miniTaskHref = (page: number) =>
+  pageHref(Astro.url, "minitasks", page, {
+    hash: "mini-tasks",
+    drop: ["done", "name"],
+  });
+const miniTaskState: Record<MiniTaskStatus, { label: string; class: string }> =
+  {
+    active: { label: "● RUNNING", class: "text-amber" },
+    upcoming: { label: "UPCOMING", class: "text-ink-faint" },
+    ended: { label: "✓ ENDED", class: "text-acid" },
+  };
 const summaries = getPollSummaries();
 const changelogPage = paginate(
   changelog,
@@ -97,13 +121,13 @@ const stamp = ukDateFormat({
 const fmt = (iso: string) => stamp.format(new Date(iso));
 ---
 
-<AdminLayout title="Polls, changelog & shop">
+<AdminLayout title="Polls, mini-tasks, changelog & shop">
   <h1 class="text-2xl font-extrabold tracking-tight text-ink">
     <span class="text-acid">$</span> ls ~/site
   </h1>
   <p class="mt-1 max-w-prose text-sm text-ink-dim">
     The extras around the competition: feature flags, polls for players to vote
-    on, the "what's new" list, and the Clim Coin shop.
+    on, mini-tasks, the "what's new" list, and the Clim Coin shop.
   </p>
 
   {
@@ -284,6 +308,124 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
         }
       </div>
     </TerminalWindow>
+  </section>
+
+  <section
+    id="mini-tasks"
+    aria-labelledby="mini-tasks-heading"
+    class="mt-10 scroll-mt-24"
+  >
+    <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2
+          id="mini-tasks-heading"
+          class="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          mini-tasks ({miniTasks.length})
+        </h2>
+        <p class="mt-1 max-w-prose text-xs text-ink-faint">
+          Daily and bonus extras for {currentSeason?.name ?? "the season"},
+          worth 1–5 Clim Coin. Open one to tick off who did it; players see them
+          while the "Mini-tasks" flag is on.
+        </p>
+      </div>
+      {
+        currentSeason && currentSeason.status !== "closed" && (
+          <a href={withBase("/admin/mini-tasks/new")} class={btnGhost}>
+            + new mini-task
+          </a>
+        )
+      }
+    </div>
+    <TerminalWindow title="~/site/mini-tasks" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class={tableHead}>runs</th>
+              <th scope="col" class={tableHead}>status</th>
+              <th scope="col" class={tableHead}>mini-task</th>
+              <th scope="col" class={tableHead}>reward</th>
+              <th scope="col" class={tableHead}>done</th>
+              <th scope="col" class={tableHead}
+                ><span class="sr-only">actions</span></th
+              >
+            </tr>
+          </thead>
+          <tbody>
+            {
+              miniTaskPage.items.map((row) => {
+                const state = miniTaskState[deriveMiniTaskStatus(row, today)];
+                return (
+                  <tr class="transition-colors hover:bg-term-panel-2">
+                    <td
+                      class:list={[
+                        tableCell,
+                        "whitespace-nowrap tabular-nums text-ink-faint",
+                      ]}
+                    >
+                      {row.startsOn === row.endsOn
+                        ? row.startsOn
+                        : `${row.startsOn} → ${row.endsOn}`}
+                    </td>
+                    <td
+                      class:list={[
+                        tableCell,
+                        "whitespace-nowrap text-[10px] font-bold tracking-widest",
+                        state.class,
+                      ]}
+                    >
+                      {state.label}
+                    </td>
+                    <td class={tableCell}>
+                      <span class="text-ink">{row.title}</span>
+                      {row.description && (
+                        <span class="block max-w-prose text-xs text-ink-faint">
+                          {row.description}
+                        </span>
+                      )}
+                    </td>
+                    <td
+                      class:list={[tableCell, "whitespace-nowrap text-amber"]}
+                    >
+                      <CoinAmount amount={row.reward} />
+                    </td>
+                    <td class:list={[tableCell, "tabular-nums text-ink-dim"]}>
+                      {row.completions}
+                    </td>
+                    <td
+                      class:list={[tableCell, "text-right whitespace-nowrap"]}
+                    >
+                      <a
+                        href={withBase(`/admin/mini-tasks/${row.id}`)}
+                        class="text-cyan hover:underline"
+                        aria-label={`Tick off or edit ${row.title}`}
+                      >
+                        tick off
+                      </a>
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+        {
+          miniTasks.length === 0 && (
+            <p class="p-6 text-sm text-ink-dim">
+              No mini-tasks this season yet.
+            </p>
+          )
+        }
+      </div>
+    </TerminalWindow>
+    <Pagination
+      info={miniTaskPage}
+      href={miniTaskHref}
+      label="Mini-task pages"
+      itemLabel="mini-tasks"
+      class="mt-3"
+    />
   </section>
 
   <section

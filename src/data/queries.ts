@@ -49,6 +49,9 @@ import { createStreakQueries } from "./streak-queries";
 import { createWrappedQueries } from "./wrapped-queries";
 import { createCoinQueries } from "./coin-queries";
 import { createSkillQueries } from "./skill-queries";
+import { createMiniTaskQueries } from "./mini-task-queries";
+import { createAchievementQueries } from "./achievement-queries";
+import { createActivityQueries } from "./activity-queries";
 import { isWrappedLive } from "./seasons";
 import { assetUrl, withBase } from "../lib/url";
 import { ADMIN_HOME, ADMIN_SECTIONS } from "../lib/admin-nav";
@@ -1662,6 +1665,8 @@ export function createQueries(data: CompetitionData) {
     ...streakQueries,
   });
 
+  const miniTaskQueries = createMiniTaskQueries(data);
+
   return {
     season: data.season,
     /** Site-wide feature flags (off unless an admin turned them on). */
@@ -1729,6 +1734,14 @@ export function createQueries(data: CompetitionData) {
     ...createSkillQueries(data, {
       getBalance: (playerId) => coinQueries.getWallet(playerId).balance,
       getSkillPerks: coinQueries.getSkillPerks,
+    }),
+    ...miniTaskQueries,
+    ...createActivityQueries(data),
+    ...createAchievementQueries(data, {
+      getLeaderboardWithMovement,
+      getPlayerResults,
+      getWallet: coinQueries.getWallet,
+      getMiniTaskCount: miniTaskQueries.getMiniTaskCount,
     }),
   };
 }

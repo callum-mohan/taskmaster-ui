@@ -1,0 +1,133 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import AchievementBadge from "../../components/AchievementBadge.astro";
+import AchievementProgressCard from "../../components/AchievementProgressCard.astro";
+import { btnGhost } from "../../components/admin/styles";
+import { withBase } from "../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+const player = Astro.locals.player;
+if (!player || player.mustChangePassword) {
+  return Astro.redirect(withBase("/login"));
+}
+
+// Achievements are per season: the season the player's roster row is in.
+const season = (await Astro.locals.getSeasons()).seasonOfPlayer(
+  player.playerId,
+);
+const queries = await Astro.locals.getQueries(season?.id);
+if (!queries.features.achievements) return Astro.rewrite("/404");
+
+const board = queries.getAchievementBoard(player.playerId);
+const unlocked = board.groups.flatMap((g) => g.items.filter((i) => i.unlocked));
+const overall = Math.round((board.unlockedCount / board.total) * 100);
+---
+
+<Layout title="Achievements">
+  <div class="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-14">
+    <header class="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p
+          class="prompt text-xs font-bold uppercase tracking-[0.3em] text-ink-dim"
+        >
+          achievements --all
+        </p>
+        <h1 class="mt-1 text-3xl font-extrabold tracking-tight text-ink">
+          Achievements
+        </h1>
+        <p class="mt-2 max-w-prose text-sm text-ink-dim">
+          Long-term goals for {season?.name ?? "the season"}. Progress updates
+          as results, votes and Clim Coin come in.
+        </p>
+      </div>
+      <a href={withBase("/account")} class={btnGhost}>← your account</a>
+    </header>
+
+    <TerminalWindow
+      title={`~/players/${player.playerId}/achievements`}
+      meta={`${board.unlockedCount}/${board.total} unlocked`}
+      class="mt-8"
+    >
+      <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <p class="text-sm text-ink-dim">
+          <span class="text-acid" aria-hidden="true">$</span>{" "}
+          <span class="text-3xl font-extrabold tabular-nums text-acid text-glow"
+            >{board.unlockedCount}</span
+          >
+          <span class="text-ink-faint"> / {board.total} unlocked</span>
+        </p>
+        <p class="text-xs tabular-nums text-ink-faint">{overall}% complete</p>
+      </div>
+      <div
+        class="mt-3 h-2 overflow-hidden rounded-full bg-term-bg"
+        role="progressbar"
+        aria-label="Achievements unlocked"
+        aria-valuemin="0"
+        aria-valuemax={board.total}
+        aria-valuenow={board.unlockedCount}
+        aria-valuetext={`${board.unlockedCount} of ${board.total} unlocked`}
+      >
+        <span
+          class="block h-full rounded-full bg-acid"
+          style={`width: ${overall}%`}></span>
+      </div>
+      {
+        unlocked.length > 0 ? (
+          <ul
+            class="mt-5 flex flex-wrap gap-2"
+            aria-label="Unlocked achievements"
+          >
+            {unlocked.map((item) => (
+              <li>
+                <AchievementBadge achievement={item.achievement} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="mt-5 text-sm text-ink-faint">
+            <span class="text-cyan" aria-hidden="true">
+              &gt;{" "}
+            </span>
+            Nothing unlocked yet. Get scored on a task, call a winner or vote in
+            a poll to start ticking these off.
+          </p>
+        )
+      }
+    </TerminalWindow>
+
+    {
+      board.groups.map((group) => {
+        const done = group.items.filter((i) => i.unlocked).length;
+        return (
+          <section
+            class="mt-12"
+            aria-labelledby={`achievements-${group.category}`}
+          >
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2
+                id={`achievements-${group.category}`}
+                class="text-lg font-extrabold tracking-tight text-ink"
+              >
+                {group.label}
+              </h2>
+              <p class="text-[11px] uppercase tracking-[0.2em] text-ink-faint">
+                <span class="text-acid" aria-hidden="true">
+                  ${" "}
+                </span>
+                {group.command} · {done}/{group.items.length}
+              </p>
+            </div>
+            <ul class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {group.items.map((item) => (
+                <li class="flex">
+                  <AchievementProgressCard progress={item} class="w-full" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })
+    }
+  </div>
+</Layout>

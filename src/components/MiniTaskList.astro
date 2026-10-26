@@ -1,0 +1,90 @@
+---
+import type { MiniTaskView } from "../types";
+import CoinAmount from "./CoinAmount.astro";
+import { ukDateFormat } from "../lib/time";
+
+interface Props {
+  items: MiniTaskView[];
+  /** Mark each one done or to-do (a signed-in player's own view). */
+  showProgress?: boolean;
+  /** Shown when there's nothing to list. */
+  emptyText?: string;
+  class?: string;
+}
+
+const {
+  items,
+  showProgress = false,
+  emptyText = "No mini-tasks running right now.",
+  class: className = "",
+} = Astro.props;
+
+const day = ukDateFormat({ weekday: "short", day: "numeric", month: "short" });
+// Dates are UK calendar days; midday UTC stays on the same day all year.
+const fmtDay = (date: string) => day.format(new Date(`${date}T12:00:00Z`));
+const windowLabel = (view: MiniTaskView) => {
+  const { startsOn, endsOn, status } = view.task;
+  if (status === "upcoming") return `starts ${fmtDay(startsOn)}`;
+  return startsOn === endsOn ? "today only" : `until ${fmtDay(endsOn)}`;
+};
+---
+
+{
+  items.length === 0 ? (
+    <p class:list={["text-sm text-ink-faint", className]}>
+      <span class="text-cyan" aria-hidden="true">
+        &gt;{" "}
+      </span>
+      {emptyText}
+    </p>
+  ) : (
+    <ul class:list={["divide-y divide-grid/60", className]}>
+      {items.map((view) => (
+        <li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+          <div class="min-w-0 flex-1">
+            <p class="flex flex-wrap items-center gap-2 text-sm font-bold text-ink">
+              {showProgress && (
+                <span
+                  class:list={[
+                    "text-[10px] font-bold tracking-widest",
+                    view.completed ? "text-acid" : "text-ink-faint",
+                  ]}
+                >
+                  {view.completed ? "✓ DONE" : "○ TO DO"}
+                </span>
+              )}
+              <span class:list={[view.completed && "text-ink-dim"]}>
+                {view.task.title}
+              </span>
+            </p>
+            {view.task.description && (
+              <p class="mt-1 text-xs text-ink-dim">{view.task.description}</p>
+            )}
+            <p class="mt-1 text-[11px] text-ink-faint">
+              <span
+                class:list={[
+                  view.task.status === "active"
+                    ? "text-amber"
+                    : "text-ink-faint",
+                ]}
+              >
+                {windowLabel(view)}
+              </span>
+              {view.completions > 0 && (
+                <>
+                  {" · "}
+                  {view.completions} done
+                </>
+              )}
+            </p>
+          </div>
+          <CoinAmount
+            amount={view.task.reward}
+            signed
+            class="shrink-0 text-sm text-amber"
+          />
+        </li>
+      ))}
+    </ul>
+  )
+}

@@ -12,6 +12,8 @@ import {
   parseChangelogForm,
   parseCoinAdjustmentForm,
   parseItemGiftForm,
+  parseMiniTaskCompletionsForm,
+  parseMiniTaskForm,
   parseWishDecisionForm,
   parseFeatureFlagForm,
   parseNewPlayerForm,
@@ -1668,5 +1670,64 @@ describe("parseFeatureFlagForm", () => {
     expect(
       parseFeatureFlagForm(formData({ key: "shop_eggs", enabled: "yes" })),
     ).toBeUndefined();
+  });
+});
+
+describe("parseMiniTaskForm", () => {
+  const valid = {
+    title: "  Bring a plant  ",
+    description: "",
+    reward: "3",
+    startsOn: "2026-10-26",
+    endsOn: "2026-10-27",
+  };
+
+  it("parses a valid mini-task", () => {
+    const result = parseMiniTaskForm(formData(valid));
+    expect(result.ok && result.data).toEqual({
+      title: "Bring a plant",
+      description: "",
+      reward: 3,
+      startsOn: "2026-10-26",
+      endsOn: "2026-10-27",
+    });
+  });
+
+  it("keeps rewards between 1 and 5 Clim Coin", () => {
+    expect(
+      errorsOf(parseMiniTaskForm(formData({ ...valid, reward: "0" }))),
+    ).toHaveProperty("reward");
+    expect(
+      errorsOf(parseMiniTaskForm(formData({ ...valid, reward: "6" }))).reward,
+    ).toMatch(/at most 5/);
+    expect(
+      errorsOf(parseMiniTaskForm(formData({ ...valid, reward: "1.5" }))),
+    ).toHaveProperty("reward");
+  });
+
+  it("rejects a last day before the first, and unreal dates", () => {
+    expect(
+      errorsOf(parseMiniTaskForm(formData({ ...valid, endsOn: "2026-10-25" })))
+        .endsOn,
+    ).toMatch(/before the first/);
+    expect(
+      errorsOf(
+        parseMiniTaskForm(formData({ ...valid, startsOn: "2026-02-30" })),
+      ),
+    ).toHaveProperty("startsOn");
+  });
+});
+
+describe("parseMiniTaskCompletionsForm", () => {
+  it("returns the ticked player ids, trimmed and deduplicated", () => {
+    expect(
+      parseMiniTaskCompletionsForm(
+        formData({
+          intent: "completions",
+          playerId: ["ann", " bob ", "ann", ""],
+        }),
+      ),
+    ).toEqual(["ann", "bob"]);
+    expect(parseMiniTaskCompletionsForm(formData({}))).toEqual([]);
   });
 });

@@ -16,6 +16,7 @@ import TaskRevealPrompt from "../../components/TaskRevealPrompt.astro";
 import DecryptReveal from "../../components/DecryptReveal.astro";
 import SubmissionPanel from "../../components/SubmissionPanel.astro";
 import SubmissionGallery from "../../components/SubmissionGallery.astro";
+import PhotoLightbox from "../../components/PhotoLightbox.astro";
 import PeoplesChoiceBar from "../../components/PeoplesChoiceBar.astro";
 import PredictionPanel from "../../components/PredictionPanel.astro";
 import PowerUpFeed from "../../components/PowerUpFeed.astro";
@@ -149,6 +150,7 @@ const submissionViewer = {
   isAdmin: viewer?.isAdmin ?? false,
   ...(viewer?.playerId && { playerId: viewer.playerId }),
 };
+const tookEntries = task.submissions.max > 0;
 const takesEntries =
   task.status === "live" && !task.locked && task.submissions.max > 0;
 const showGallery = task.status === "completed" && viewer !== undefined;
@@ -229,6 +231,7 @@ const entrantsLabel = [
 // The submission endpoint redirects back with `?entry=<outcome>`.
 const submissionOutcomes: SubmissionOutcome[] = [
   "submitted",
+  "edited",
   "deleted",
   "closed",
   "full",
@@ -862,6 +865,42 @@ const medal = (position: number) =>
       )
     }
 
+    <!-- Entries — public once the deadline has passed. Empty or signed-out
+         visitors get a placeholder instead. -->
+    {
+      task.status === "completed" && tookEntries && gallery.length === 0 && (
+        <section id="entries" class="mt-10 scroll-mt-24">
+          <h2 class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+            entries --gallery
+          </h2>
+          <div class="rounded-lg border border-dashed border-grid bg-term-bg/40 px-4 py-4 text-sm">
+            <p class="text-ink-dim">
+              <span class="text-acid">$</span> ls ~/tasks/{task.id}/entries
+            </p>
+            {viewer ? (
+              <p class="mt-1 text-ink-faint">
+                <span class="text-cyan">&gt;</span> 0 results. No entries to
+                show for this task.
+              </p>
+            ) : (
+              <p class="mt-1 text-ink-faint">
+                <span class="text-amber">!</span> permission denied.{" "}
+                <a
+                  href={withBase(
+                    `/login?${new URLSearchParams({ next: `/tasks/${task.id}` })}`,
+                  )}
+                  class="font-bold text-acid hover:underline"
+                >
+                  Sign in
+                </a>{" "}
+                to see everyone's entries.
+              </p>
+            )}
+          </div>
+        </section>
+      )
+    }
+
     <!-- Entries — public once the deadline has passed -->
     {
       gallery.length > 0 && (
@@ -964,5 +1003,6 @@ const medal = (position: number) =>
 
     <!-- Previous / next task pager -->
     <TaskPager prev={pager.prev} next={pager.next} class="mt-12" />
+    {(gallery.length > 0 || submissionPanel) && <PhotoLightbox />}
   </div>
 </Layout>

@@ -3,6 +3,7 @@ import type { PollRecord } from "../data/admin";
 import { toWallClock } from "./time";
 import type { FeatureFlagKey, SubmissionOutcome } from "../types";
 import { FEATURE_FLAG_KEYS } from "../data/feature-flags";
+import { MINI_TASK_MAX_REWARD } from "../data/mini-tasks";
 import {
   COSMETIC_KINDS,
   CRATES,
@@ -1151,6 +1152,71 @@ export function parseCoinAdjustmentForm(
     { amount: values.amount ?? "", reason: values.reason ?? "" },
     values,
   );
+}
+
+// ── Mini-tasks ────────────────────────────────────────────────────────
+
+const calendarDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date.")
+  .refine(
+    (v) =>
+      !Number.isNaN(Date.parse(v)) &&
+      new Date(v).toISOString().slice(0, 10) === v,
+    "Pick a real date.",
+  );
+
+const miniTaskSchema = z
+  .object({
+    title: requiredText(80),
+    description: z.string().trim().max(300, "Keep it under 300 characters."),
+    reward: integer().pipe(
+      z
+        .number()
+        .min(1, "Pay at least 1 Clim Coin.")
+        .max(
+          MINI_TASK_MAX_REWARD,
+          `Mini-tasks pay at most ${MINI_TASK_MAX_REWARD} Clim Coin.`,
+        ),
+    ),
+    startsOn: calendarDate,
+    endsOn: calendarDate,
+  })
+  .refine((v) => v.endsOn >= v.startsOn, {
+    path: ["endsOn"],
+    message: "The last day can't be before the first.",
+  });
+
+export type MiniTaskInput = z.output<typeof miniTaskSchema>;
+
+/** A mini-task's title, reward and the days it runs. */
+export function parseMiniTaskForm(form: FormData): ParseResult<MiniTaskInput> {
+  const values = formValues(form);
+  return parseWith(
+    miniTaskSchema,
+    {
+      title: values.title ?? "",
+      description: values.description ?? "",
+      reward: values.reward ?? "",
+      startsOn: values.startsOn ?? "",
+      endsOn: values.endsOn ?? "",
+    },
+    values,
+  );
+}
+
+/** The players ticked on a mini-task's completion checklist (deduplicated). */
+export function parseMiniTaskCompletionsForm(form: FormData): string[] {
+  return [
+    ...new Set(
+      form
+        .getAll("playerId")
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => v.trim())
+        .filter((v) => v !== ""),
+    ),
+  ];
 }
 
 const itemGiftSchema = z.object({

@@ -205,6 +205,11 @@ export interface ScoreAuditEntry {
   noteAfter?: string;
 }
 
+/** A score change together with the week it was made on. */
+export interface WeekScoreAuditEntry extends ScoreAuditEntry {
+  taskId: string;
+}
+
 /**
  * Where a player's sign-in account is up to:
  *   "none"    → no email set, so no account can be made.
@@ -745,6 +750,35 @@ export interface Achievement {
   accent: Exclude<ChartAccent, "ink-dim">;
 }
 
+/** Which shelf an achievement sits on in the account page. */
+export type AchievementCategory =
+  "results" | "streaks" | "taking-part" | "coin";
+
+/** One achievement in the catalogue, with a player's progress towards it. */
+export interface AchievementProgress {
+  /** The badge as it shows once unlocked; `detail` describes the goal. */
+  achievement: Achievement;
+  category: AchievementCategory;
+  /** Progress so far, capped at `target`. */
+  current: number;
+  target: number;
+  unlocked: boolean;
+  /** 0–100, for the progress bar. */
+  percent: number;
+}
+
+/** A player's whole achievement catalogue, grouped by category. */
+export interface AchievementBoard {
+  unlockedCount: number;
+  total: number;
+  groups: {
+    category: AchievementCategory;
+    label: string;
+    command: string;
+    items: AchievementProgress[];
+  }[];
+}
+
 /** A single Hall of Fame / superlative award for the stats page. */
 export interface Award {
   id: string;
@@ -1069,7 +1103,8 @@ export type NotificationKind =
   | "reflected"
   | "gift-received"
   | "wish-granted"
-  | "wish-declined";
+  | "wish-declined"
+  | "mini-task";
 
 /** One entry in a player's notification feed. */
 export interface NotificationItem {
@@ -1145,6 +1180,8 @@ export interface SubmissionEntry extends TaskSubmission {
   submitterName: string;
   /** Base-prefixed, access-checked image URL (photos only). */
   mediaUrl?: string;
+  /** How long before the task's deadline it came in (≤ 0 = at or after). */
+  msBeforeDeadline: number;
 }
 
 /** Who is looking at a task's submissions. */
@@ -1186,6 +1223,8 @@ export interface SubmissionPanel {
   blockedBy?: SubmissionBlockReason;
   /** Entries can still be withdrawn (the task is live). */
   canDelete: boolean;
+  /** Text entries and photo captions can still be edited (the task is live). */
+  canEdit: boolean;
 }
 
 /** One player's or squad's entries in a gallery. */
@@ -1210,6 +1249,7 @@ export interface SubmitterOptionGroup {
 /** What happened to a player's submission attempt (shown on the task page). */
 export type SubmissionOutcome =
   | "submitted"
+  | "edited"
   | "deleted"
   | "closed"
   | "full"
@@ -1295,6 +1335,8 @@ export interface GalleryEntrySocial {
   votes?: number;
   /** Won (or tied for) People's Choice. */
   winner: boolean;
+  /** The viewer's own entry (or their squad's). */
+  own: boolean;
 }
 
 /** A gallery entry with its reactions and People's Choice state. */
@@ -1538,7 +1580,8 @@ export type PageLinkSlot = number | "gap";
 // ── Feature flags ─────────────────────────────────────────────────────
 
 /** A site feature an admin can switch on or off (see `feature-flags.ts`). */
-export type FeatureFlagKey = "shop_eggs" | "storm_mode" | "skill_trees";
+export type FeatureFlagKey =
+  "shop_eggs" | "storm_mode" | "skill_trees" | "mini_tasks" | "achievements";
 
 /** Whether each feature is on. */
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;
@@ -1795,6 +1838,8 @@ export interface Wish {
   response?: string;
   /** ISO 8601, once decided. */
   decidedAt?: string;
+  /** The admin who decided it (shown only in the admin activity log). */
+  deciderName?: string;
   /** ISO 8601. */
   at: string;
 }
@@ -1828,6 +1873,10 @@ export interface ClimCoinData {
   skillPaths: SkillPathPick[];
   /** Skill nodes this season's players unlocked, oldest first. */
   skillUnlocks: SkillUnlock[];
+  /** This season's mini-tasks, newest start first. */
+  miniTasks: MiniTask[];
+  /** Who completed which mini-task, oldest first. */
+  miniTaskCompletions: MiniTaskCompletion[];
 }
 
 /** The payout table, as `/rules` and the shop explain it. */
@@ -1859,7 +1908,9 @@ export type CoinLedgerKind =
   /** Coins spent unlocking a skill node. */
   | "skill"
   /** Extra coins from a skill node's earning perk. */
-  | "skill-perk";
+  | "skill-perk"
+  /** A mini-task an admin marked as completed. */
+  | "mini-task";
 
 /** One line in a wallet's history. */
 export interface CoinLedgerEntry {
@@ -2244,3 +2295,90 @@ export type SkillOutcome =
   | "season-closed"
   | "unavailable"
   | "invalid";
+
+// ── Mini-tasks ────────────────────────────────────────────────────────
+
+/** Where a mini-task's window is relative to today (UK dates). */
+export type MiniTaskStatus = "upcoming" | "active" | "ended";
+
+/** A small daily or bonus challenge worth a little Clim Coin. */
+export interface MiniTask {
+  id: number;
+  title: string;
+  description?: string;
+  /** Clim Coin paid to each player who completes it (1–5). */
+  reward: number;
+  /** First and last day it runs (YYYY-MM-DD, UK, inclusive). */
+  startsOn: string;
+  endsOn: string;
+  status: MiniTaskStatus;
+}
+
+/** A player an admin marked as having completed a mini-task. */
+export interface MiniTaskCompletion {
+  miniTaskId: number;
+  playerId: string;
+  actorName: string;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A mini-task as a player sees it, with whether they've done it. */
+export interface MiniTaskView {
+  task: MiniTask;
+  completed: boolean;
+  /** When it was ticked off for them (ISO 8601). */
+  completedAt?: string;
+  /** How many players have completed it. */
+  completions: number;
+}
+
+/** The mini-tasks panel: what's on now and coming up, and a player's tally. */
+export interface MiniTaskBoard {
+  /** Running today, soonest-ending first. */
+  active: MiniTaskView[];
+  /** Starting later, soonest first. */
+  upcoming: MiniTaskView[];
+  /** Mini-tasks the player has completed this season. */
+  completedCount: number;
+  /** Clim Coin those completions paid. */
+  coinsEarned: number;
+}
+
+// ── Admin activity log ────────────────────────────────────────────────
+
+/** The kinds of change the admin activity log lists. */
+export type ActivityKind =
+  | "score"
+  | "coin-adjustment"
+  | "item-gift"
+  | "mini-task"
+  | "purchase"
+  | "crate"
+  | "gift"
+  | "power-up"
+  | "skill"
+  | "wish";
+
+/** One line in the admin activity log. */
+export interface ActivityEntry {
+  /** Unique within the log (kind + source row id). */
+  id: string;
+  kind: ActivityKind;
+  /** ISO 8601. */
+  at: string;
+  /** Who made the change: an admin's name, or the player who acted. */
+  actor: string;
+  /** Whether `actor` is an admin (rather than the player themselves). */
+  byAdmin: boolean;
+  /** Player or squad ids the change affected, for filtering. */
+  subjectIds: string[];
+  /** Plain-text description, e.g. "Week 03 score · Sam: 4 → 5". */
+  summary: string;
+  /** Extra context: a reason, note or before/after detail. */
+  detail?: string;
+  /** Coins moved, when the change was about Clim Coin (signed). */
+  coins?: number;
+  /** Root-relative admin link to where the change can be inspected. */
+  href?: string;
+}

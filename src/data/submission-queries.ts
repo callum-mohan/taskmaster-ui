@@ -76,8 +76,13 @@ export function createSubmissionQueries(data: CompetitionData) {
     };
   }
 
-  const toEntry = (submission: TaskSubmission): SubmissionEntry => ({
+  const toEntry = (
+    task: Task,
+    submission: TaskSubmission,
+  ): SubmissionEntry => ({
     ...submission,
+    msBeforeDeadline:
+      Date.parse(task.deadline) - Date.parse(submission.createdAt),
     submitterName:
       playersById.get(submission.playerId)?.name ?? submission.playerId,
     ...(submission.kind === "photo" && {
@@ -116,6 +121,7 @@ export function createSubmissionQueries(data: CompetitionData) {
       remaining: 0,
       canSubmit: false,
       canDelete: false,
+      canEdit: false,
     };
     if (task.status === "upcoming") return { ...panel, blockedBy: "upcoming" };
     if (task.status === "completed") {
@@ -130,7 +136,7 @@ export function createSubmissionQueries(data: CompetitionData) {
 
     const entries = submissions
       .filter((s) => sameOwner(ownerOf(s), ref))
-      .map(toEntry);
+      .map((s) => toEntry(task, s));
     const remaining = Math.max(0, settings.max - entries.length);
     return {
       ...panel,
@@ -139,6 +145,7 @@ export function createSubmissionQueries(data: CompetitionData) {
       remaining,
       canSubmit: remaining > 0,
       canDelete: true,
+      canEdit: true,
       ...(remaining === 0 && { blockedBy: "full" as const }),
     };
   }
@@ -172,7 +179,7 @@ export function createSubmissionQueries(data: CompetitionData) {
     }
     for (const submission of submissions) {
       if (submission.hidden && !includeHidden) continue;
-      ensure(ownerOf(submission)).entries.push(toEntry(submission));
+      ensure(ownerOf(submission)).entries.push(toEntry(task, submission));
     }
     // Squads before players (only mixed if a task changed format), each in
     // roster order.

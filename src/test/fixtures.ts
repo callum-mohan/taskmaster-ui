@@ -218,7 +218,13 @@ export function competitionData(
     changelog: [],
     coins: coinData(),
     // Every flag off, as on a fresh site.
-    features: { shop_eggs: false, storm_mode: false, skill_trees: false },
+    features: {
+      shop_eggs: false,
+      storm_mode: false,
+      skill_trees: false,
+      mini_tasks: false,
+      achievements: false,
+    },
     ...overrides,
   };
 }
@@ -238,6 +244,8 @@ export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
     hints: {},
     skillPaths: [],
     skillUnlocks: [],
+    miniTasks: [],
+    miniTaskCompletions: [],
     ...overrides,
   };
 }

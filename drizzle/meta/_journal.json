@@ -204,6 +204,13 @@
       "when": 1792689290585,
       "tag": "0028_whats_new_clim_coin",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793008443630,
+      "tag": "0029_mini_tasks",
+      "breakpoints": true
     }
   ]
 }

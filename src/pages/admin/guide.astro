@@ -6,6 +6,7 @@ import AdminLayout from "../../layouts/AdminLayout.astro";
 import TerminalWindow from "../../components/TerminalWindow.astro";
 import { weekStepState } from "../../components/admin/styles";
 import {
+  ADMIN_ACTIVITY,
   ADMIN_GUIDE,
   ADMIN_HOME,
   ADMIN_ROSTER,
@@ -25,7 +26,8 @@ const contents = [
   { id: "markers", label: "reading the progress markers" },
   { id: "seasons", label: "seasons and the Hall of Fame" },
   { id: "roster", label: "players, accounts and squads" },
-  { id: "site", label: "polls, changelog and the shop" },
+  { id: "site", label: "polls, mini-tasks, changelog and the shop" },
+  { id: "activity", label: "the activity log" },
   { id: "good-to-know", label: "good to know" },
 ];
 
@@ -53,7 +55,12 @@ const areas = [
   {
     href: ADMIN_SITE,
     label: "site",
-    what: "Homepage polls and the what's new changelog.",
+    what: "Feature flags, homepage polls, mini-tasks, the what's new changelog and the Clim Coin shop.",
+  },
+  {
+    href: ADMIN_ACTIVITY,
+    label: "activity",
+    what: "One timeline of everything that moved points or Clim Coin in a season, filterable by kind and player. Use it to settle disputes.",
   },
   {
     href: ADMIN_GUIDE,
@@ -444,7 +451,7 @@ const link = "text-cyan hover:underline";
 
   <section id="site" aria-labelledby="site-heading" class="mt-12 scroll-mt-24">
     <h2 id="site-heading" class={h2}>
-      <span class="text-acid">#</span> polls, changelog and the shop
+      <span class="text-acid">#</span> polls, mini-tasks, changelog and the shop
     </h2>
     <p class={lead}>
       All in <a href={withBase(ADMIN_SITE)} class={link}>site</a>. Its
@@ -473,6 +480,35 @@ const link = "text-cyan hover:underline";
             <span class="text-ink">+ every player</span> or
             <span class="text-ink">+ every team</span> to fill in the options quickly.
             Duplicate copies a poll without its votes.
+          </li>
+        </ul>
+      </TerminalWindow>
+      <TerminalWindow title="~/guide/mini-tasks" class="lg:col-span-2">
+        <ul class="space-y-2 text-sm text-ink-dim">
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Small daily or
+            bonus extras between the weekly tasks, worth 1–5 Clim Coin each. Add one
+            with <span class="text-ink">+ new mini-task</span> in
+            <a href={withBase("/admin/site#mini-tasks")} class={link}>site</a>:
+            a title, the reward and the first and last day it runs (UK dates;
+            the same day for a daily one). They belong to the current season.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Open a mini-task
+            and tick everyone who did it, then
+            <span class="text-ink">save completions</span>. The coin lands in
+            their wallet straight away and they're notified; unticking someone
+            takes it back. Deleting a mini-task removes its completions and
+            their coin.
+          </li>
+          <li>
+            <span class="text-cyan" aria-hidden="true">&gt;</span> Players only see
+            mini-tasks (on the homepage and their account) while the
+            <span class="text-ink">mini-tasks</span> flag is on. You can set them
+            up and tick them off with it off. The
+            <span class="text-ink">achievements</span> flag opens each player's achievements
+            page (<code class="text-ink">/account/achievements</code>), with
+            progress towards every goal; there's nothing to manage.
           </li>
         </ul>
       </TerminalWindow>
@@ -583,6 +619,27 @@ const link = "text-cyan hover:underline";
         </ul>
       </TerminalWindow>
     </div>
+  </section>
+
+  <section
+    id="activity"
+    aria-labelledby="activity-heading"
+    class="mt-12 scroll-mt-24"
+  >
+    <h2 id="activity-heading" class={h2}>
+      <span class="text-acid">#</span> the activity log
+    </h2>
+    <p class={lead}>
+      <a href={withBase(ADMIN_ACTIVITY)} class={link}>activity</a> lists everything
+      that moved points or Clim Coin in a season, newest first: score and bonus changes
+      (who changed what, from and to), coin grants and deductions, item gifts, mini-task
+      ticks, purchases, crates, player gifts, power-ups, skills and wishes. Pick a
+      player under <span class="text-ink">who</span> to see only what affected them
+      when someone queries their total, and use the season bar to look back at an
+      older season. Each line links to where you can check or fix it. Things removed
+      outright (a deleted coin grant, a revoked power-up) leave no line; score changes
+      are logged from when the history began.
+    </p>
   </section>
 
   <section

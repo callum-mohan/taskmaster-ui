@@ -10,6 +10,7 @@ import StatCard from "../components/StatCard.astro";
 import WalkingEgg from "../components/WalkingEgg.astro";
 import WhatsNewModal from "../components/WhatsNewModal.astro";
 import PollCard from "../components/PollCard.astro";
+import MiniTaskList from "../components/MiniTaskList.astro";
 import ChampionCard from "../components/ChampionCard.astro";
 import {
   describeVoteOutcome,
@@ -31,6 +32,8 @@ const {
   getHomePolls,
   getLiveTask,
   getPlayerFlairs,
+  getMiniTaskBoard,
+  features,
 } = await Astro.locals.getQueries();
 
 const currentTask = getCurrentTask();
@@ -60,6 +63,9 @@ const pollViewer: PollViewer = !viewer
     ? { kind: "player", playerId: viewer.playerId }
     : { kind: "non-player" };
 const polls = getHomePolls(pollViewer);
+const miniTasks = features.mini_tasks
+  ? getMiniTaskBoard(viewer?.playerId)
+  : undefined;
 
 // The vote endpoint redirects back with `?poll=<id>&vote=<outcome>`.
 const votedPoll = Astro.url.searchParams.get("poll");
@@ -400,6 +406,37 @@ const btnGhost =
               />
             ))}
           </div>
+        </section>
+      )
+    }
+
+    <!-- ========================= MINI-TASKS ========================= -->
+    {
+      miniTasks && miniTasks.active.length > 0 && (
+        <section
+          id="mini-tasks"
+          class="mt-14 scroll-mt-24"
+          aria-labelledby="mini-tasks-heading"
+        >
+          <h2
+            id="mini-tasks-heading"
+            class="prompt mb-4 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+          >
+            mini-tasks --today
+          </h2>
+          <TerminalWindow title="~/mini-tasks/today.md" meta="bonus clim coin">
+            <MiniTaskList
+              items={miniTasks.active}
+              showProgress={viewer?.playerId !== undefined}
+            />
+            <p class="mt-4 text-[11px] text-ink-faint">
+              <span class="text-acid" aria-hidden="true">
+                $
+              </span>{" "}
+              Small extras between the weekly tasks. Do one and the Taskmaster
+              ticks you off; the coin lands in your wallet.
+            </p>
+          </TerminalWindow>
         </section>
       )
     }

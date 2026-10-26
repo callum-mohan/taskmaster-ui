@@ -1,0 +1,74 @@
+---
+import AdminField from "./AdminField.astro";
+import Notice from "./Notice.astro";
+import { btnGhost, btnPrimary } from "./styles";
+import type { FieldErrors, FormValues } from "../../lib/admin-forms";
+import { MINI_TASK_MAX_REWARD } from "../../data/mini-tasks";
+import { withBase } from "../../lib/url";
+
+interface Props {
+  mode: "create" | "edit";
+  values: FormValues;
+  errors?: FieldErrors;
+  formError?: string;
+}
+
+const { mode, values, errors = {}, formError } = Astro.props;
+---
+
+<form method="post" class="space-y-5" novalidate>
+  <input type="hidden" name="intent" value="save" />
+  {formError && <Notice tone="error">{formError}</Notice>}
+  <AdminField
+    label="title"
+    name="title"
+    value={values.title}
+    error={errors.title}
+    required
+    placeholder="e.g. Bring a houseplant to the morning stand-up"
+  />
+  <AdminField
+    label="description"
+    name="description"
+    rows={3}
+    value={values.description}
+    error={errors.description}
+    hint="Optional. What counts as done, written for players."
+  />
+  <div class="grid gap-5 sm:grid-cols-3">
+    <AdminField
+      label="reward"
+      name="reward"
+      type="number"
+      min={1}
+      max={MINI_TASK_MAX_REWARD}
+      value={values.reward}
+      error={errors.reward}
+      required
+      hint={`Clim Coin per player, 1–${MINI_TASK_MAX_REWARD}.`}
+    />
+    <AdminField
+      label="first day"
+      name="startsOn"
+      type="date"
+      value={values.startsOn}
+      error={errors.startsOn}
+      required
+    />
+    <AdminField
+      label="last day"
+      name="endsOn"
+      type="date"
+      value={values.endsOn}
+      error={errors.endsOn}
+      required
+      hint="Same as the first day for a daily one."
+    />
+  </div>
+  <div class="flex flex-wrap gap-3 pt-2">
+    <button type="submit" class={btnPrimary}>
+      {mode === "create" ? "add mini-task" : "save changes"}
+    </button>
+    <a href={withBase("/admin/site#mini-tasks")} class={btnGhost}>cancel</a>
+  </div>
+</form>

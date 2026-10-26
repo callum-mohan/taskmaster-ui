@@ -1,0 +1,244 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import MiniTaskForm from "../../../components/admin/MiniTaskForm.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import CoinAmount from "../../../components/CoinAmount.astro";
+import { btnGhost, btnPrimary } from "../../../components/admin/styles";
+import {
+  deleteMiniTask,
+  describeWriteError,
+  getMiniTask,
+  getMiniTaskDeleteImpact,
+  listPlayers,
+  setMiniTaskCompletions,
+  updateMiniTask,
+} from "../../../data/admin";
+import {
+  parseMiniTaskCompletionsForm,
+  parseMiniTaskForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+const admin = Astro.locals.admin;
+if (!admin) return Astro.redirect(withBase("/login"));
+
+const id = Number(Astro.params.id);
+const task = Number.isInteger(id) && id > 0 ? await getMiniTask(id) : undefined;
+if (!task) return Astro.rewrite("/404");
+
+const season = (await Astro.locals.getSeasons()).getSeason(task.seasonId);
+const closed = season?.status === "closed";
+const self = withBase(`/admin/mini-tasks/${task.id}`);
+
+let values: FormValues = {
+  title: task.title,
+  description: task.description,
+  reward: String(task.reward),
+  startsOn: task.startsOn,
+  endsOn: task.endsOn,
+};
+let errors: FieldErrors = {};
+let formError: string | undefined;
+let completionsError: string | undefined;
+
+if (Astro.request.method === "POST") {
+  if (closed) return Astro.redirect(`${self}?done=closed`, 303);
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  if (intent === "delete") {
+    await deleteMiniTask(task.id);
+    const query = new URLSearchParams({ done: "deleted", name: task.title });
+    return Astro.redirect(withBase(`/admin/site?${query}#mini-tasks`), 303);
+  }
+  if (intent === "completions") {
+    try {
+      await setMiniTaskCompletions(
+        task,
+        parseMiniTaskCompletionsForm(form),
+        admin,
+      );
+      return Astro.redirect(`${self}?done=ticked#completions`, 303);
+    } catch (error) {
+      completionsError = describeWriteError(error);
+      if (!completionsError) throw error;
+    }
+  } else {
+    const parsed = parseMiniTaskForm(form);
+    values = parsed.values;
+    if (!parsed.ok) {
+      errors = parsed.errors;
+    } else {
+      try {
+        await updateMiniTask(task.id, parsed.data);
+        return Astro.redirect(`${self}?done=saved`, 303);
+      } catch (error) {
+        formError = describeWriteError(error);
+        if (!formError) throw error;
+      }
+    }
+  }
+}
+
+const [roster, impact] = await Promise.all([
+  listPlayers(task.seasonId),
+  getMiniTaskDeleteImpact(task.id),
+]);
+const completed = new Set(task.completedBy);
+
+const NOTICES: Record<string, { tone: "success" | "error"; text: string }> = {
+  created: {
+    tone: "success",
+    text: "Mini-task added. Tick off who did it below.",
+  },
+  saved: { tone: "success", text: "Mini-task saved." },
+  ticked: {
+    tone: "success",
+    text: "Completions saved. Wallets update straight away.",
+  },
+  closed: {
+    tone: "error",
+    text: "That season is closed, so its mini-tasks can't change.",
+  },
+};
+const notice = NOTICES[Astro.url.searchParams.get("done") ?? ""];
+---
+
+<AdminLayout title={`Mini-task: ${task.title}`}>
+  <a href={withBase("/admin/site#mini-tasks")} class={btnGhost}>&larr; SITE</a>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> vim mini-task-{task.id}.md
+  </h1>
+  <p class="mt-1 text-sm text-ink-dim">
+    {season?.name ?? task.seasonId} ·{" "}
+    <CoinAmount amount={task.reward} class="text-amber" /> each ·{" "}
+    {completed.size} done
+  </p>
+
+  {
+    notice && (
+      <Notice tone={notice.tone} class="mt-6">
+        {notice.text}
+      </Notice>
+    )
+  }
+  {
+    closed && !notice && (
+      <Notice tone="error" class="mt-6">
+        {season?.name} is closed: this mini-task is read-only.
+      </Notice>
+    )
+  }
+
+  <section
+    id="completions"
+    class="mt-8 scroll-mt-24"
+    aria-labelledby="completions-heading"
+  >
+    <h2
+      id="completions-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      who did it ({completed.size}/{roster.length})
+    </h2>
+    {
+      completionsError && (
+        <Notice tone="error" class="mb-3">
+          {completionsError}
+        </Notice>
+      )
+    }
+    <TerminalWindow title={`~/mini-tasks/${task.id}/done`}>
+      {
+        roster.length === 0 ? (
+          <p class="text-sm text-ink-faint">
+            <span class="text-cyan" aria-hidden="true">
+              &gt;{" "}
+            </span>
+            No players in this season yet.
+          </p>
+        ) : (
+          <form method="post" class="space-y-5">
+            <input type="hidden" name="intent" value="completions" />
+            <fieldset disabled={closed}>
+              <legend class="sr-only">Players who completed it</legend>
+              <ul class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {roster.map((p) => (
+                  <li>
+                    <label class="flex cursor-pointer items-center gap-2 rounded-md border border-grid px-3 py-2 text-sm transition-colors hover:border-ink-faint has-[:checked]:border-acid-dim has-[:checked]:bg-acid/5">
+                      <input
+                        type="checkbox"
+                        name="playerId"
+                        value={p.id}
+                        checked={completed.has(p.id)}
+                        class="h-4 w-4 accent-[var(--color-acid)]"
+                      />
+                      <span class="text-ink">{p.name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </fieldset>
+            {!closed && (
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="submit" class={btnPrimary}>
+                  save completions
+                </button>
+                <p class="text-xs text-ink-faint">
+                  Unticking someone takes their coin back.
+                </p>
+              </div>
+            )}
+          </form>
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  <section class="mt-10" aria-labelledby="edit-heading">
+    <h2
+      id="edit-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      details
+    </h2>
+    <TerminalWindow title={`~/mini-tasks/${task.id}.md`}>
+      {
+        closed ? (
+          <p class="text-sm text-ink-dim">
+            {task.title} · {task.startsOn} → {task.endsOn}
+          </p>
+        ) : (
+          <MiniTaskForm
+            mode="edit"
+            values={values}
+            errors={errors}
+            formError={formError}
+          />
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  {
+    !closed && (
+      <section aria-labelledby="danger-heading" class="mt-8">
+        <h2
+          id="danger-heading"
+          class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+        >
+          danger zone
+        </h2>
+        <ConfirmDelete
+          subject={`mini-task "${task.title}"`}
+          impact={impact}
+          label="delete mini-task"
+        />
+      </section>
+    )
+  }
+</AdminLayout>

@@ -37,6 +37,9 @@ describe("isAdminSectionActive", () => {
     expect(isAdminSectionActive("/admin/shop/new", site.href, site.match)).toBe(
       true,
     );
+    expect(
+      isAdminSectionActive("/admin/mini-tasks/4", site.href, site.match),
+    ).toBe(true);
   });
 });
 
@@ -69,6 +72,7 @@ describe("legacyAdminPath", () => {
     ["/admin/polls", "/admin/site"],
     ["/admin/changelog", "/admin/site#changelog"],
     ["/admin/shop", "/admin/site#shop"],
+    ["/admin/mini-tasks", "/admin/site#mini-tasks"],
   ])("sends %s to %s", (from, to) => {
     expect(legacyAdminPath(from)).toBe(to);
   });

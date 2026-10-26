@@ -80,7 +80,13 @@ function setup({
   return createCoinQueries(
     competitionData({
       season: season({ status: closed ? "closed" : "running" }),
-      features: { shop_eggs: eggs, storm_mode: false, skill_trees: false },
+      features: {
+        shop_eggs: eggs,
+        storm_mode: false,
+        skill_trees: false,
+        mini_tasks: false,
+        achievements: false,
+      },
       players: [player("ann", "Ann"), player("bob", "Bob"), player("cat")],
       tasks: [done, live],
       predictions: [
@@ -349,7 +355,13 @@ describe("crates", () => {
   it("lists pulls publicly and reveals one only to its opener", () => {
     const q = createCoinQueries(
       competitionData({
-        features: { shop_eggs: true, storm_mode: false, skill_trees: false },
+        features: {
+          shop_eggs: true,
+          storm_mode: false,
+          skill_trees: false,
+          mini_tasks: false,
+          achievements: false,
+        },
         players: [player("ann", "Ann"), player("bob")],
         coins: coinData({
           items: [exclusive],
@@ -480,7 +492,13 @@ describe("limited-time stock", () => {
   });
   const q = createCoinQueries(
     competitionData({
-      features: { shop_eggs: true, storm_mode: false, skill_trees: false },
+      features: {
+        shop_eggs: true,
+        storm_mode: false,
+        skill_trees: false,
+        mini_tasks: false,
+        achievements: false,
+      },
       players: [player("ann")],
       coins: coinData({
         items: [duck, later, hat, egged],

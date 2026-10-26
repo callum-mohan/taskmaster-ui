@@ -17,6 +17,11 @@ export const MAX_CAPTION_LENGTH = 280;
 export const MAX_SUBMISSION_REQUEST_BYTES = MAX_PHOTO_BYTES + 256 * 1024;
 /** Most entries an admin can allow per player or squad. */
 export const MAX_SUBMISSIONS_PER_TASK = 10;
+/**
+ * Sent by the upload script so the endpoint answers with JSON rather than a
+ * redirect. A custom header also can't be sent cross-site without CORS.
+ */
+export const UPLOAD_PROGRESS_HEADER = "x-upload-progress";
 /** For the file picker's `accept` attribute. */
 export const PHOTO_ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif,image/avif";
@@ -74,7 +79,8 @@ export function sniffImage(bytes: Uint8Array): ImageType | "heic" | undefined {
   return undefined;
 }
 
-export type SubmissionIntent = "create-photo" | "create-text" | "delete";
+export type SubmissionIntent =
+  "create-photo" | "create-text" | "edit" | "delete";
 
 /**
  * An admin adding an entry for a player (the week's judge tab,
@@ -91,6 +97,7 @@ export function parseSubmissionIntent(
   const intent = form.get("intent");
   return intent === "create-photo" ||
     intent === "create-text" ||
+    intent === "edit" ||
     intent === "delete"
     ? intent
     : undefined;
@@ -139,6 +146,22 @@ export async function parsePhotoEntry(
 
 export function parseTextEntry(form: FormData): Parsed<string> {
   const parsed = textEntry.safeParse(String(form.get("text") ?? ""));
+  return parsed.success
+    ? { ok: true, data: parsed.data }
+    : { ok: false, outcome: "invalid" };
+}
+
+/**
+ * A player's edit to one of their entries: a text entry's body (required)
+ * or a photo's caption (blank removes it). The photo itself can't change;
+ * withdraw it and upload another instead.
+ */
+export function parseEntryEdit(
+  form: FormData,
+  kind: SubmissionKind,
+): Parsed<string | null> {
+  if (kind === "text") return parseTextEntry(form);
+  const parsed = caption.safeParse(String(form.get("caption") ?? ""));
   return parsed.success
     ? { ok: true, data: parsed.data }
     : { ok: false, outcome: "invalid" };

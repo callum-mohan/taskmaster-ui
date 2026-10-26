@@ -1,0 +1,75 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import MiniTaskForm from "../../../components/admin/MiniTaskForm.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import { btnGhost } from "../../../components/admin/styles";
+import { createMiniTask, describeWriteError } from "../../../data/admin";
+import { ukToday } from "../../../data/mini-tasks";
+import {
+  parseMiniTaskForm,
+  type FieldErrors,
+  type FormValues,
+} from "../../../lib/admin-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+// Mini-tasks belong to the current season, and a closed one takes no more.
+const season = (await Astro.locals.getSeasons()).current;
+const open = season !== undefined && season.status !== "closed";
+
+const today = ukToday();
+let values: FormValues = { reward: "2", startsOn: today, endsOn: today };
+let errors: FieldErrors = {};
+let formError: string | undefined;
+
+if (Astro.request.method === "POST" && open) {
+  const parsed = parseMiniTaskForm(await Astro.request.formData());
+  values = parsed.values;
+  if (!parsed.ok) {
+    errors = parsed.errors;
+  } else {
+    try {
+      const id = await createMiniTask(season.id, parsed.data);
+      return Astro.redirect(withBase(`/admin/mini-tasks/${id}?done=created`));
+    } catch (error) {
+      formError = describeWriteError(error);
+      if (!formError) throw error;
+    }
+  }
+}
+---
+
+<AdminLayout title="New mini-task">
+  <a href={withBase("/admin/site#mini-tasks")} class={btnGhost}>&larr; SITE</a>
+  <h1 class="mt-6 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> touch mini-task.md
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    A small extra between the weekly tasks, worth a little Clim Coin. Once it's
+    saved, tick off who did it and the coin lands in their wallet.
+  </p>
+  {
+    open ? (
+      <TerminalWindow
+        title={`~/seasons/${season.id}/mini-tasks/new.md`}
+        class="mt-6"
+      >
+        <MiniTaskForm
+          mode="create"
+          values={values}
+          errors={errors}
+          formError={formError}
+        />
+      </TerminalWindow>
+    ) : (
+      <Notice tone="error" class="mt-6">
+        {season
+          ? `${season.name} is closed, so it can't take new mini-tasks.`
+          : "There's no current season yet. Start one in weeks first."}
+      </Notice>
+    )
+  }
+</AdminLayout>

@@ -17,6 +17,8 @@ import {
   equippedItems as equippedItemsTable,
   featureFlags as featureFlagsTable,
   itemGifts as itemGiftsTable,
+  miniTaskCompletions as miniTaskCompletionsTable,
+  miniTasks as miniTasksTable,
   wishes as wishesTable,
   powerUpUses as powerUpUsesTable,
   shopItems as shopItemsTable,
@@ -68,6 +70,7 @@ import {
   resolveSabotages,
 } from "./coins";
 import { mapFeatureFlags } from "./feature-flags";
+import { mapMiniTaskCompletions, mapMiniTasks } from "./mini-tasks";
 import { unlockedTaskIds } from "../lib/task-reveal";
 import { timestamptzToIso } from "../lib/time";
 import { cachedJson, purgeCached } from "../lib/edge-cache";
@@ -158,6 +161,8 @@ async function fetchCompetitionRows() {
     wishRows,
     skillPathRows,
     skillUnlockRows,
+    miniTaskRows,
+    miniTaskCompletionRows,
   ] = await db.batch([
     db.select().from(seasonsTable),
     db.select().from(playersTable).orderBy(asc(playersTable.sortOrder)),
@@ -221,6 +226,8 @@ async function fetchCompetitionRows() {
     db.select().from(wishesTable).orderBy(asc(wishesTable.id)),
     db.select().from(skillPathsTable),
     db.select().from(skillUnlocksTable).orderBy(asc(skillUnlocksTable.id)),
+    db.select().from(miniTasksTable),
+    db.select().from(miniTaskCompletionsTable),
   ]);
   return {
     seasonRows,
@@ -251,6 +258,8 @@ async function fetchCompetitionRows() {
     wishRows,
     skillPathRows,
     skillUnlockRows,
+    miniTaskRows,
+    miniTaskCompletionRows,
   };
 }
 
@@ -349,6 +358,8 @@ async function buildSeasonCompetition(
     wishRows,
     skillPathRows,
     skillUnlockRows,
+    miniTaskRows,
+    miniTaskCompletionRows,
   }: CompetitionRows,
   viewer: CompetitionViewer,
   season: Season,
@@ -475,6 +486,8 @@ async function buildSeasonCompetition(
       hints: mapHints(taskRows),
       skillPaths: mapSkillPaths(skillPathRows),
       skillUnlocks: mapSkillUnlocks(skillUnlockRows),
+      miniTasks: mapMiniTasks(miniTaskRows),
+      miniTaskCompletions: mapMiniTaskCompletions(miniTaskCompletionRows),
     },
     features: mapFeatureFlags(featureFlagRows),
   };

@@ -21,6 +21,8 @@ import {
   equippedItems,
   featureFlags,
   itemGifts,
+  miniTaskCompletions,
+  miniTasks,
   powerUpUses,
   shopItems,
   playerAccounts,
@@ -52,6 +54,7 @@ import type {
   Page,
   ScoreAuditEntry,
   SubmissionOwnerRef,
+  WeekScoreAuditEntry,
   WeekCounts,
 } from "../types";
 import { EMPTY_WEEK_COUNTS } from "./week-progress";
@@ -67,6 +70,7 @@ import type {
   ChangelogInput,
   CoinAdjustmentInput,
   ItemGiftInput,
+  MiniTaskInput,
   WishDecisionInput,
   PlayerInput,
   PollInput,
@@ -1058,21 +1062,38 @@ export async function getScoreAuditLog(
     info.page === page || info.total === 0
       ? requested
       : await selectPage(info.page);
+  return { ...info, items: rows.map(mapAuditRow) };
+}
+
+function mapAuditRow(row: typeof scoreAuditLog.$inferSelect): ScoreAuditEntry {
   return {
-    ...info,
-    items: rows.map((row) => ({
-      id: row.id,
-      at: timestamptzToIso(row.at),
-      actorName: row.actorName,
-      entity: row.entity,
-      action: row.action,
-      subjectId: row.subjectId,
-      ...(row.pointsBefore !== null && { pointsBefore: row.pointsBefore }),
-      ...(row.pointsAfter !== null && { pointsAfter: row.pointsAfter }),
-      ...(row.noteBefore !== null && { noteBefore: row.noteBefore }),
-      ...(row.noteAfter !== null && { noteAfter: row.noteAfter }),
-    })),
+    id: row.id,
+    at: timestamptzToIso(row.at),
+    actorName: row.actorName,
+    entity: row.entity,
+    action: row.action,
+    subjectId: row.subjectId,
+    ...(row.pointsBefore !== null && { pointsBefore: row.pointsBefore }),
+    ...(row.pointsAfter !== null && { pointsAfter: row.pointsAfter }),
+    ...(row.noteBefore !== null && { noteBefore: row.noteBefore }),
+    ...(row.noteAfter !== null && { noteAfter: row.noteAfter }),
   };
+}
+
+/**
+ * Every score and bonus change on `taskIds` (a season's weeks), newest
+ * first, for the activity log.
+ */
+export async function listScoreAuditForWeeks(
+  taskIds: readonly string[],
+): Promise<WeekScoreAuditEntry[]> {
+  if (taskIds.length === 0) return [];
+  const rows = await getDb()
+    .select()
+    .from(scoreAuditLog)
+    .where(inArray(scoreAuditLog.taskId, [...taskIds]))
+    .orderBy(desc(scoreAuditLog.at), desc(scoreAuditLog.id));
+  return rows.map((row) => ({ ...mapAuditRow(row), taskId: row.taskId }));
 }
 
 // ── Polls ─────────────────────────────────────────────────────────────
@@ -1677,6 +1698,8 @@ export async function revokePowerUpUse(
 // ── Errors ────────────────────────────────────────────────────────────
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
+  mini_tasks_reward_range: "A mini-task pays between 1 and 5 Clim Coin.",
+  mini_tasks_ends_after_start: "The last day can't be before the first.",
   players_pkey: "A player with that id already exists.",
   teams_pkey: "A team with that id already exists.",
   tasks_pkey: "A task with that id already exists.",
@@ -1717,6 +1740,120 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   crate_opens_item_id_shop_items_id_fk:
     "Players hatched this item from an egg, so it can't be deleted. Retire it instead.",
 };
+
+// ── Mini-tasks ────────────────────────────────────────────────────────
+
+export type MiniTaskRecord = typeof miniTasks.$inferSelect;
+
+/** A season's mini-tasks, newest start first, with how many completed each. */
+export async function listMiniTasks(
+  seasonId: string,
+): Promise<(MiniTaskRecord & { completions: number })[]> {
+  const db = getDb();
+  const [rows, counts] = await db.batch([
+    db
+      .select()
+      .from(miniTasks)
+      .where(eq(miniTasks.seasonId, seasonId))
+      .orderBy(desc(miniTasks.startsOn), desc(miniTasks.id)),
+    db
+      .select({ id: miniTaskCompletions.miniTaskId, n: count() })
+      .from(miniTaskCompletions)
+      .where(eq(miniTaskCompletions.seasonId, seasonId))
+      .groupBy(miniTaskCompletions.miniTaskId),
+  ]);
+  const done = new Map(counts.map((c) => [c.id, c.n]));
+  return rows.map((row) => ({ ...row, completions: done.get(row.id) ?? 0 }));
+}
+
+/** A mini-task with the ids of the players who completed it. */
+export async function getMiniTask(
+  id: number,
+): Promise<(MiniTaskRecord & { completedBy: string[] }) | undefined> {
+  const db = getDb();
+  const [[row], done] = await db.batch([
+    db.select().from(miniTasks).where(eq(miniTasks.id, id)),
+    db
+      .select({ playerId: miniTaskCompletions.playerId })
+      .from(miniTaskCompletions)
+      .where(eq(miniTaskCompletions.miniTaskId, id)),
+  ]);
+  return row && { ...row, completedBy: done.map((d) => d.playerId) };
+}
+
+/** Creates a mini-task in `seasonId`, returning its id. */
+export async function createMiniTask(
+  seasonId: string,
+  input: MiniTaskInput,
+): Promise<number> {
+  const [row] = await getDb()
+    .insert(miniTasks)
+    .values({ seasonId, ...input })
+    .returning({ id: miniTasks.id });
+  return row.id;
+}
+
+export async function updateMiniTask(
+  id: number,
+  input: MiniTaskInput,
+): Promise<void> {
+  await getDb().update(miniTasks).set(input).where(eq(miniTasks.id, id));
+}
+
+export async function getMiniTaskDeleteImpact(
+  id: number,
+): Promise<DeleteImpact[]> {
+  const [row] = await getDb()
+    .select({ n: count() })
+    .from(miniTaskCompletions)
+    .where(eq(miniTaskCompletions.miniTaskId, id));
+  return [{ label: "completion", count: row?.n ?? 0 }];
+}
+
+/** Deletes a mini-task; its completions (and their coin) go with it. */
+export async function deleteMiniTask(id: number): Promise<void> {
+  await getDb().delete(miniTasks).where(eq(miniTasks.id, id));
+}
+
+/**
+ * Sets exactly who has completed a mini-task. Players already ticked keep
+ * their original time and actor; newly ticked ones are recorded as `actor`,
+ * now. Players outside the mini-task's season are rejected by the foreign
+ * key. One transaction.
+ */
+export async function setMiniTaskCompletions(
+  task: Pick<MiniTaskRecord, "id" | "seasonId">,
+  playerIds: readonly string[],
+  actor: AdminUser,
+): Promise<void> {
+  const db = getDb();
+  const ofTask = eq(miniTaskCompletions.miniTaskId, task.id);
+  const remove = db
+    .delete(miniTaskCompletions)
+    .where(
+      playerIds.length === 0
+        ? ofTask
+        : and(ofTask, notInArray(miniTaskCompletions.playerId, [...playerIds])),
+    );
+  if (playerIds.length === 0) {
+    await remove;
+    return;
+  }
+  await db.batch([
+    remove,
+    db
+      .insert(miniTaskCompletions)
+      .values(
+        playerIds.map((playerId) => ({
+          miniTaskId: task.id,
+          playerId,
+          seasonId: task.seasonId,
+          ...actorFields(actor),
+        })),
+      )
+      .onConflictDoNothing(),
+  ]);
+}
 
 export { violatedConstraint } from "./db-errors";
 

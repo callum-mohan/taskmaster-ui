@@ -163,5 +163,7 @@ export function rowsForSeason(
     wishRows: forPlayers(rows.wishRows),
     skillPathRows: forPlayers(rows.skillPathRows),
     skillUnlockRows: forPlayers(rows.skillUnlockRows),
+    miniTaskRows: inSeason(rows.miniTaskRows),
+    miniTaskCompletionRows: inSeason(rows.miniTaskCompletionRows),
   };
 }

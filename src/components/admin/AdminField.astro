@@ -8,7 +8,14 @@ interface Props {
   value?: string | number | null;
   error?: string;
   hint?: string;
-  type?: "text" | "number" | "url" | "datetime-local" | "email" | "password";
+  type?:
+    | "text"
+    | "number"
+    | "url"
+    | "date"
+    | "datetime-local"
+    | "email"
+    | "password";
   /** Renders a `<textarea>` with this many rows instead of an `<input>`. */
   rows?: number;
   required?: boolean;

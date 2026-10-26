@@ -1,0 +1,149 @@
+---
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../components/TerminalWindow.astro";
+import Pagination from "../../components/Pagination.astro";
+import ActivityLog from "../../components/admin/ActivityLog.astro";
+import {
+  btnGhost,
+  inputClass,
+  labelClass,
+} from "../../components/admin/styles";
+import { listScoreAuditForWeeks } from "../../data/admin";
+import {
+  ACTIVITY_KINDS,
+  isActivityKind,
+  type ActivityFilter,
+} from "../../data/activity-queries";
+import { selectedSeason, SEASON_PARAM } from "../../lib/admin-season";
+import { pageHref, paginate, parsePage } from "../../lib/pagination";
+import { withBase } from "../../lib/url";
+import type { ActivityKind } from "../../types";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const ACTIVITY_PAGE_SIZE = 25;
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+const queries = await Astro.locals.getQueries(season?.id);
+const audit = season
+  ? await listScoreAuditForWeeks(queries.tasks.map((t) => t.id))
+  : [];
+
+const params = Astro.url.searchParams;
+const kindParam = params.get("kind") ?? "";
+const whoParam = params.get("who") ?? "";
+const subjects = [
+  ...queries.players.map((p) => ({ id: p.id, name: p.name, squad: false })),
+  ...queries.teams.map((t) => ({ id: t.id, name: t.name, squad: true })),
+];
+const filter: ActivityFilter = {
+  ...(isActivityKind(kindParam) && { kind: kindParam }),
+  ...(subjects.some((s) => s.id === whoParam) && { subjectId: whoParam }),
+};
+const entries = queries.getActivityLog(audit, filter);
+const page = paginate(
+  entries,
+  parsePage(params.get("page")),
+  ACTIVITY_PAGE_SIZE,
+);
+const hrefFor = (n: number) => pageHref(Astro.url, "page", n, { hash: "log" });
+const filtered = filter.kind !== undefined || filter.subjectId !== undefined;
+const clearHref = withBase(
+  `/admin/activity${
+    params.has(SEASON_PARAM)
+      ? `?${new URLSearchParams({ [SEASON_PARAM]: params.get(SEASON_PARAM)! })}`
+      : ""
+  }`,
+);
+const kinds = Object.entries(ACTIVITY_KINDS) as [ActivityKind, string][];
+---
+
+<AdminLayout title="Activity log">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> tail -f ~/activity.log
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Everything that moved points or Clim Coin this season, newest first: score
+    and bonus changes, coin grants, gifts, purchases, crates, power-ups, skills,
+    wishes and mini-tasks. Filter by player to settle a dispute.
+  </p>
+
+  <form method="get" class="mt-6 flex flex-wrap items-end gap-3">
+    {
+      params.has(SEASON_PARAM) && (
+        <input
+          type="hidden"
+          name={SEASON_PARAM}
+          value={params.get(SEASON_PARAM)!}
+        />
+      )
+    }
+    <div class="space-y-1.5">
+      <label for="activity-kind" class={labelClass}>what</label>
+      <select
+        id="activity-kind"
+        name="kind"
+        class:list={[inputClass(false), "w-auto"]}
+      >
+        <option value="">everything</option>
+        {
+          kinds.map(([value, label]) => (
+            <option value={value} selected={filter.kind === value}>
+              {label}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+    <div class="space-y-1.5">
+      <label for="activity-who" class={labelClass}>who</label>
+      <select
+        id="activity-who"
+        name="who"
+        class:list={[inputClass(false), "w-auto"]}
+      >
+        <option value="">everyone</option>
+        {
+          subjects.map((s) => (
+            <option value={s.id} selected={filter.subjectId === s.id}>
+              {s.squad ? `${s.name} (squad)` : s.name}
+            </option>
+          ))
+        }
+      </select>
+    </div>
+    <button type="submit" class={btnGhost}>filter</button>
+    {
+      filtered && (
+        <a href={clearHref} class="py-2 text-xs text-cyan hover:underline">
+          clear filters
+        </a>
+      )
+    }
+  </form>
+
+  <section id="log" class="mt-6 scroll-mt-24" aria-labelledby="log-heading">
+    <h2
+      id="log-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      {entries.length}
+      {entries.length === 1 ? "entry" : "entries"}
+      {filtered && " matching"}
+    </h2>
+    <TerminalWindow
+      title={`~/seasons/${season?.id ?? "none"}/activity.log`}
+      bodyClass="p-0 sm:p-0"
+    >
+      <ActivityLog entries={page.items} />
+    </TerminalWindow>
+    <Pagination
+      info={page}
+      href={hrefFor}
+      label="Activity log pages"
+      itemLabel="entries"
+      class="mt-3"
+    />
+  </section>
+</AdminLayout>

@@ -4,10 +4,13 @@ import {
   createSubmission,
   deleteOwnSubmission,
   loadTaskSubmissions,
+  updateOwnSubmissionText,
 } from "../../../data/submissions";
 import { deleteObjects, putObject } from "../../../lib/storage";
 import {
   MAX_SUBMISSION_REQUEST_BYTES,
+  UPLOAD_PROGRESS_HEADER,
+  parseEntryEdit,
   parsePhotoEntry,
   parseSubmissionId,
   parseSubmissionIntent,
@@ -22,7 +25,10 @@ import { queriesForTask } from "../../../lib/season-scope";
 // (with a changed temporary password); Astro's origin check rejects
 // cross-site posts. Photos are small enough (≤ 15 MB) to pass through the
 // Worker, so this is a plain multipart form that works without JS. Every
-// outcome goes back to the task page (post/redirect/get).
+// outcome goes back to the task page (post/redirect/get). The upload script
+// posts with `UPLOAD_PROGRESS_HEADER` to track progress, and gets the page to
+// go back to as JSON instead of following the redirect (which would render
+// the task page twice).
 
 const backToTask = (taskId: string, outcome?: SubmissionOutcome) =>
   withBase(
@@ -45,8 +51,11 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
     await queriesForTask(locals, params.taskId);
   const task = getTaskById(params.taskId ?? "");
   if (!task) return redirect(withBase("/tasks"));
+  const wantsJson = request.headers.has(UPLOAD_PROGRESS_HEADER);
   const reply = (outcome: SubmissionOutcome) =>
-    redirect(backToTask(task.id, outcome), 303);
+    wantsJson
+      ? Response.json({ location: backToTask(task.id, outcome) })
+      : redirect(backToTask(task.id, outcome), 303);
 
   // Refuse oversized uploads before reading the body.
   const declared = Number(request.headers.get("content-length"));
@@ -76,6 +85,22 @@ export const POST: APIRoute = async ({ params, locals, request, redirect }) => {
     if (!removed) return reply("invalid");
     if (removed.objectKey) await deleteObjects([removed.objectKey]);
     return reply("deleted");
+  }
+
+  if (intent === "edit") {
+    const id = parseSubmissionId(form);
+    if (!panel.canEdit || !owner) return reply("closed");
+    const entry = panel.entries.find((e) => e.id === id);
+    if (!id || !entry) return reply("invalid");
+    const text = parseEntryEdit(form, entry.kind);
+    if (!text.ok) return reply(text.outcome);
+    const updated = await updateOwnSubmissionText(
+      id,
+      task.id,
+      owner,
+      text.data,
+    );
+    return reply(updated ? "edited" : "invalid");
   }
 
   if (!panel.canSubmit || !owner) {

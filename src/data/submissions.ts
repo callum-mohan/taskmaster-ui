@@ -141,3 +141,27 @@ export async function deleteOwnSubmission(
     .returning();
   return row && mapSubmission(row);
 }
+
+/**
+ * Rewrites one of the owner's entries: a text entry's body or a photo's
+ * caption. Returns whether a row was changed (false if it isn't theirs).
+ */
+export async function updateOwnSubmissionText(
+  id: number,
+  taskId: string,
+  owner: SubmissionOwnerRef,
+  text: string | null,
+): Promise<boolean> {
+  const rows = await getDb()
+    .update(taskSubmissions)
+    .set({ text })
+    .where(
+      and(
+        eq(taskSubmissions.id, id),
+        eq(taskSubmissions.taskId, taskId),
+        ownedBy(owner),
+      ),
+    )
+    .returning({ id: taskSubmissions.id });
+  return rows.length > 0;
+}

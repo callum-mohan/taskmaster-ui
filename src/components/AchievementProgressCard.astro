@@ -1,0 +1,101 @@
+---
+import type { AchievementProgress } from "../types";
+
+interface Props {
+  progress: AchievementProgress;
+  class?: string;
+}
+
+const { progress, class: className = "" } = Astro.props;
+const { achievement, current, target, unlocked, percent } = progress;
+
+const accentClass: Record<
+  AchievementProgress["achievement"]["accent"],
+  { card: string; text: string; bar: string }
+> = {
+  acid: {
+    card: "border-acid-dim bg-acid/5",
+    text: "text-acid",
+    bar: "bg-acid",
+  },
+  magenta: {
+    card: "border-magenta/40 bg-magenta/5",
+    text: "text-magenta",
+    bar: "bg-magenta",
+  },
+  cyan: { card: "border-cyan/40 bg-cyan/5", text: "text-cyan", bar: "bg-cyan" },
+  amber: {
+    card: "border-amber/40 bg-amber/5",
+    text: "text-amber",
+    bar: "bg-amber",
+  },
+};
+const accent = accentClass[achievement.accent];
+const labelId = `achievement-${achievement.id}`;
+---
+
+<article
+  class:list={[
+    "flex flex-col gap-3 rounded-lg border p-4 transition-colors",
+    unlocked ? accent.card : "border-grid bg-term-panel/40",
+    className,
+  ]}
+  aria-labelledby={labelId}
+>
+  <div class="flex items-start gap-3">
+    <span
+      class:list={[
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-xl leading-none",
+        unlocked ? "border-current/30" : "border-grid opacity-40 grayscale",
+        unlocked && accent.text,
+      ]}
+      aria-hidden="true"
+    >
+      {achievement.icon}
+    </span>
+    <div class="min-w-0 flex-1">
+      <h3
+        id={labelId}
+        class:list={[
+          "text-sm font-bold tracking-wide",
+          unlocked ? "text-ink" : "text-ink-dim",
+        ]}
+      >
+        {achievement.label}
+      </h3>
+      <p class="mt-0.5 text-xs text-ink-faint">{achievement.detail}</p>
+    </div>
+    <span
+      class:list={[
+        "shrink-0 text-[10px] font-bold tracking-widest",
+        unlocked ? accent.text : "text-ink-faint",
+      ]}
+    >
+      {unlocked ? "✓ UNLOCKED" : "LOCKED"}
+    </span>
+  </div>
+  <div>
+    <div
+      class="h-1.5 overflow-hidden rounded-full bg-term-bg"
+      role="progressbar"
+      aria-labelledby={labelId}
+      aria-valuemin="0"
+      aria-valuemax={target}
+      aria-valuenow={current}
+      aria-valuetext={`${current} of ${target}`}
+    >
+      <span
+        class:list={[
+          "block h-full rounded-full",
+          unlocked ? accent.bar : "bg-ink-faint",
+        ]}
+        style={`width: ${percent}%`}></span>
+    </div>
+    <p
+      class="mt-1.5 flex justify-between text-[11px] tabular-nums text-ink-faint"
+    >
+      <span>{current} / {target}</span>
+      <span>{percent}%</span>
+    </p>
+  </div>
+</article>

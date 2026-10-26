@@ -415,6 +415,7 @@ export function mapWishes(rows: WishRow[]): Wish[] {
       ...(row.decidedAt !== null && {
         decidedAt: timestamptzToIso(row.decidedAt),
       }),
+      ...(row.deciderName !== null && { deciderName: row.deciderName }),
       at: timestamptzToIso(row.createdAt),
     }));
 }
@@ -618,6 +619,19 @@ export function deriveEarnings(
       label: `${weekLabel(task.weekNumber)}: called a winner`,
       at: task.deadline,
       taskId: task.id,
+    });
+  }
+
+  const miniTasks = new Map(data.coins.miniTasks.map((t) => [t.id, t]));
+  for (const done of data.coins.miniTaskCompletions) {
+    if (done.playerId !== playerId) continue;
+    const miniTask = miniTasks.get(done.miniTaskId);
+    if (!miniTask) continue;
+    entries.push({
+      kind: "mini-task",
+      amount: miniTask.reward,
+      label: `Mini-task: ${miniTask.title}`,
+      at: done.at,
     });
   }
 

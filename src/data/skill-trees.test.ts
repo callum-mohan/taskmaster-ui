@@ -499,6 +499,8 @@ describe("skill queries", () => {
           shop_eggs: true,
           storm_mode: false,
           skill_trees: options.flag ?? true,
+          mini_tasks: false,
+          achievements: false,
         },
         coins: coinData({
           items: [

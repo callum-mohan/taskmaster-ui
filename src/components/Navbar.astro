@@ -16,9 +16,17 @@ interface Props {
   coinBalance?: number;
   /** The skill trees feature flag: links `/skills` when on. */
   skillTrees?: boolean;
+  /** The achievements feature flag: links players' achievements when on. */
+  achievements?: boolean;
 }
 
-const { viewer, notifications, coinBalance, skillTrees = false } = Astro.props;
+const {
+  viewer,
+  notifications,
+  coinBalance,
+  skillTrees = false,
+  achievements = false,
+} = Astro.props;
 
 interface NavItem {
   href: string;
@@ -85,6 +93,9 @@ const isMoreActive = moreGroups.some((group) =>
 const accountLinks: NavItem[] = viewer
   ? [
       ...(viewer.playerId ? [{ href: "/account", label: "profile" }] : []),
+      ...(viewer.playerId && achievements
+        ? [{ href: "/account/achievements", label: "achievements" }]
+        : []),
       ...(viewer.isAdmin ? [{ href: "/admin", label: "admin" }] : []),
     ]
   : [{ href: "/login", label: "login" }];

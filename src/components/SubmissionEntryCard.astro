@@ -1,5 +1,6 @@
 ---
 import type { SubmissionEntry } from "../types";
+import { formatDeadlineOffset } from "../lib/time";
 
 interface Props {
   entry: SubmissionEntry;
@@ -9,6 +10,16 @@ interface Props {
   showSubmitter?: boolean;
   /** Flag entries an admin hid from the public gallery. */
   showHidden?: boolean;
+  /** Labels the viewer's own entry, e.g. "your entry" / "your squad". */
+  ownLabel?: string;
+  /** Show how long before the deadline it came in. */
+  showTiming?: boolean;
+  /**
+   * Opens photos in the `PhotoLightbox` viewer; entries sharing a group are
+   * paged through together. Without it (or without JS) the photo links to
+   * the full-size image.
+   */
+  lightboxGroup?: string;
   class?: string;
 }
 
@@ -17,32 +28,58 @@ const {
   formatStamp,
   showSubmitter = false,
   showHidden = false,
+  ownLabel,
+  showTiming = false,
+  lightboxGroup,
   class: className = "",
 } = Astro.props;
 
 const alt = entry.text
   ? `Photo by ${entry.submitterName}: ${entry.text}`
   : `Photo entry by ${entry.submitterName}`;
+const early = entry.msBeforeDeadline > 0;
 ---
 
 <article
   class:list={[
     "flex min-w-0 flex-col overflow-hidden rounded-lg border bg-term-bg/60",
-    showHidden && entry.hidden ? "border-danger/40" : "border-grid",
+    showHidden && entry.hidden
+      ? "border-danger/40"
+      : ownLabel
+        ? "border-acid/40"
+        : "border-grid",
     className,
   ]}
 >
   {
     entry.kind === "photo" && entry.mediaUrl ? (
-      <img
-        src={entry.mediaUrl}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        width="800"
-        height="600"
-        class="aspect-[4/3] w-full bg-term-bg object-contain"
-      />
+      <a
+        href={entry.mediaUrl}
+        target="_blank"
+        rel="noopener"
+        class="group relative block"
+        data-lightbox-item={lightboxGroup}
+        data-lightbox-caption={entry.text}
+        data-lightbox-credit={entry.submitterName}
+      >
+        <img
+          src={entry.mediaUrl}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          width="800"
+          height="600"
+          class="skeleton aspect-[4/3] w-full bg-term-bg object-contain"
+          data-skeleton
+        />
+        <span
+          class="pointer-events-none absolute right-2 bottom-2 rounded border border-grid bg-term-bg/80 px-1.5 py-0.5 text-[10px] font-bold tracking-widest text-ink-dim uppercase opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden="true"
+        >
+          ⤢ view
+        </span>
+        <span class="sr-only">(view full size)</span>
+      </a>
     ) : (
       <div class="flex-1 border-l-2 border-cyan px-4 py-3">
         <p class="whitespace-pre-line break-words text-sm leading-relaxed text-ink">
@@ -58,6 +95,13 @@ const alt = entry.text
       {entry.kind}
     </span>
     {
+      ownLabel && (
+        <span class="rounded border border-acid/40 bg-acid/10 px-1.5 font-bold tracking-widest text-acid uppercase">
+          {ownLabel}
+        </span>
+      )
+    }
+    {
       showSubmitter && (
         <span>
           by <span class="text-ink-dim">{entry.submitterName}</span>
@@ -65,6 +109,14 @@ const alt = entry.text
       )
     }
     <time datetime={entry.createdAt}>{formatStamp(entry.createdAt)}</time>
+    {
+      showTiming && (
+        <span class:list={[early ? "text-ink-dim" : "text-amber"]}>
+          {!early && <span aria-hidden="true">! </span>}
+          {formatDeadlineOffset(entry.msBeforeDeadline)}
+        </span>
+      )
+    }
     {
       showHidden && entry.hidden && (
         <span class="font-bold tracking-widest text-danger uppercase">
@@ -81,4 +133,19 @@ const alt = entry.text
       </p>
     )
   }
+  <slot name="footer" />
 </article>
+
+<script>
+  // Drops the loading shimmer once each photo has loaded (or failed).
+  document
+    .querySelectorAll<HTMLImageElement>("img[data-skeleton]")
+    .forEach((img) => {
+      const done = () => img.removeAttribute("data-skeleton");
+      if (img.complete) done();
+      else {
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      }
+    });
+</script>

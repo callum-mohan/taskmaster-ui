@@ -336,6 +336,28 @@ export function createNotificationQueries(
         ]
       : [];
 
+    // Mini-tasks an admin ticked off for the player, with what they paid.
+    const miniTasks = new Map(data.coins.miniTasks.map((t) => [t.id, t]));
+    const miniTaskDone: FeedEvent[] = playerId
+      ? data.coins.miniTaskCompletions.flatMap((done): FeedEvent[] => {
+          const miniTask = miniTasks.get(done.miniTaskId);
+          if (done.playerId !== playerId || !miniTask) return [];
+          const time = new Date(done.at).getTime();
+          if (Number.isNaN(time) || time > now) return [];
+          return [
+            {
+              id: `mini-task:${done.miniTaskId}`,
+              kind: "mini-task",
+              title: `Mini-task done: +${miniTask.reward} Clim Coin`,
+              detail: miniTask.title,
+              href: withBase("/account#mini-tasks"),
+              at: done.at,
+              time,
+            },
+          ];
+        })
+      : [];
+
     // The Taskmaster's answer to a wish (private to the player).
     const wishes: FeedEvent[] = playerId
       ? data.coins.wishes.flatMap((wish): FeedEvent[] => {
@@ -389,6 +411,7 @@ export function createNotificationQueries(
       ...defended,
       ...gifts,
       ...adminGifts,
+      ...miniTaskDone,
       ...wishes,
       ...opened,
     ];

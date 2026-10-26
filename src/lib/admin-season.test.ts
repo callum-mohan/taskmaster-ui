@@ -56,6 +56,14 @@ describe("adminSeasonOf", () => {
         seasons,
       )?.id,
     ).toBe("cohort-2026");
+    expect(
+      adminSeasonOf(
+        "/admin/activity",
+        {},
+        url("/admin/activity?season=cohort-2026&kind=score"),
+        seasons,
+      )?.id,
+    ).toBe("cohort-2026");
   });
 
   it("ignores screens that aren't about a season", () => {

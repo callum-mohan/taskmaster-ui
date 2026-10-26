@@ -1073,3 +1073,64 @@ export const skillUnlocks = pgTable(
     check("skill_unlocks_price_positive", sql`${t.price} >= 0`),
   ],
 );
+
+// ── Mini-tasks ────────────────────────────────────────────────────────
+
+/**
+ * A small daily or bonus challenge between the weekly tasks, worth a little
+ * Clim Coin. It runs from `startsOn` to `endsOn` (UK dates, inclusive); an
+ * admin ticks off who completed it, and the reward is derived from those
+ * completions (see `deriveEarnings`), never stored as a balance.
+ */
+export const miniTasks = pgTable(
+  "mini_tasks",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: seasonId(),
+    title: text().notNull(),
+    description: text().notNull().default(""),
+    reward: integer().notNull(),
+    startsOn: date({ mode: "string" }).notNull(),
+    endsOn: date({ mode: "string" }).notNull(),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    unique("mini_tasks_id_season_id_unique").on(t.id, t.seasonId),
+    check("mini_tasks_reward_range", sql`${t.reward} between 1 and 5`),
+    check("mini_tasks_ends_after_start", sql`${t.endsOn} >= ${t.startsOn}`),
+    index("mini_tasks_season_id_starts_on_idx").on(t.seasonId, t.startsOn),
+  ],
+);
+
+/**
+ * A player an admin marked as having completed a mini-task. The composite
+ * keys keep the player in the mini-task's season. The actor's name is copied
+ * in, like `coin_adjustments`.
+ */
+export const miniTaskCompletions = pgTable(
+  "mini_task_completions",
+  {
+    miniTaskId: integer().notNull(),
+    playerId: text().notNull(),
+    seasonId: seasonId(),
+    actorId: text().notNull(),
+    actorName: text().notNull(),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.miniTaskId, t.playerId] }),
+    foreignKey({
+      name: "mini_task_completions_task_season_fk",
+      columns: [t.miniTaskId, t.seasonId],
+      foreignColumns: [miniTasks.id, miniTasks.seasonId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "mini_task_completions_player_season_fk",
+      columns: [t.playerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+    index("mini_task_completions_player_id_idx").on(t.playerId),
+  ],
+);

@@ -218,6 +218,13 @@
       "when": 1793014247894,
       "tag": "0030_marketplace",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793017026525,
+      "tag": "0031_egg_gifts",
+      "breakpoints": true
     }
   ]
 }

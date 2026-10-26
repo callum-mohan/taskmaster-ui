@@ -3,6 +3,7 @@ import type {
   CompetitionData,
   CratePull,
   CrateView,
+  EggGiftView,
   GiftPanel,
   GiftableItemGroup,
   InventoryItem,
@@ -22,6 +23,7 @@ import type {
   ShopSection,
   SkillPerks,
   Task,
+  UnopenedEgg,
   Wallet,
   WishPanel,
 } from "../types";
@@ -671,6 +673,49 @@ export function createCoinQueries(data: CompetitionData) {
     };
   }
 
+  /** Eggs admins gifted a player, newest first, with what each hatched. */
+  function getEggGifts(playerId: string): EggGiftView[] {
+    const opens = new Map(coins.crateOpens.map((o) => [o.id, o]));
+    return [...coins.eggGifts].reverse().flatMap((gift): EggGiftView[] => {
+      const crate = getCrate(gift.crateId);
+      if (gift.playerId !== playerId || !crate) return [];
+      const open =
+        gift.crateOpenId !== undefined
+          ? opens.get(gift.crateOpenId)
+          : undefined;
+      const hatched = open && itemById.get(open.itemId);
+      return [{ gift, crate, ...(hatched && { hatched }) }];
+    });
+  }
+
+  /**
+   * A player's gifted eggs still waiting to be cracked, oldest first, with
+   * their personal odds (like `getCrateViews`, but free and whether or not
+   * the egg is on sale). None while the mystery eggs flag is off.
+   */
+  function getUnopenedEggs(
+    playerId: string,
+    now: number = Date.now(),
+  ): UnopenedEgg[] {
+    if (!eggsOn || !playerById.has(playerId)) return [];
+    const waiting = coins.eggGifts.filter(
+      (g) => g.playerId === playerId && g.crateOpenId === undefined,
+    );
+    if (waiting.length === 0) return [];
+    const owned = everOwnedItemIds(playerId);
+    const effects = boughtEffects(playerId);
+    const perks = getSkillPerks(playerId);
+    return waiting.flatMap((gift): UnopenedEgg[] => {
+      const base = getCrate(gift.crateId);
+      if (!base) return [];
+      const crate = luckyCrate(base, perks.eggLuck);
+      const tiers = crateOdds(crate, coins.items, owned, now, effects);
+      return [
+        { gift, crate, tiers, ...(tiers.length === 0 && { blocked: "empty" }) },
+      ];
+    });
+  }
+
   /** The season's newest crate openings, newest first (public). */
   function getRecentPulls(limit = 10): CratePull[] {
     if (!eggsOn) return [];
@@ -694,6 +739,8 @@ export function createCoinQueries(data: CompetitionData) {
     getCrateViews,
     getRecentPulls,
     getCratePull,
+    getEggGifts,
+    getUnopenedEggs,
     getShopItemById,
     getWallet,
     getSkillPerks,

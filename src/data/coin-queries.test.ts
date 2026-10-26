@@ -803,3 +803,83 @@ describe("mystery eggs feature flag", () => {
     expect(setup({ eggs: false }).getCrateViews({})).toEqual([]);
   });
 });
+
+describe("gifted eggs", () => {
+  const eggsFlag = (shop_eggs: boolean) => ({
+    shop_eggs,
+    storm_mode: false,
+    skill_trees: false,
+    mini_tasks: false,
+    achievements: false,
+    marketplace: false,
+  });
+  const gift = (id: number, crateId: string, crateOpenId?: number) => ({
+    id,
+    playerId: "ann",
+    crateId,
+    reason: "Well played",
+    actorName: "Taskmaster",
+    ...(crateOpenId !== undefined && { crateOpenId }),
+    at: "2026-01-13T00:00:00.000Z",
+  });
+  const queries = (eggs = true) =>
+    createCoinQueries(
+      competitionData({
+        features: eggsFlag(eggs),
+        players: [player("ann", "Ann"), player("bob")],
+        coins: coinData({
+          items: [duck, robot],
+          purchases: [bought("ann", duck)],
+          crateOpens: [
+            {
+              id: 7,
+              purchaseId: 1,
+              playerId: "ann",
+              crateId: "mystery-egg",
+              price: 0,
+              itemId: "duck",
+              rarity: "rare",
+              at: "2026-01-14T00:00:00.000Z",
+            },
+          ],
+          eggGifts: [
+            gift(1, "mystery-egg", 7),
+            gift(2, "mystery-egg"),
+            gift(3, "faberge-egg"),
+            gift(4, "no-such-egg"),
+          ],
+        }),
+      }),
+    );
+
+  it("lists unopened eggs with the player's own odds, free to open", () => {
+    const [mystery, faberge, ...rest] = queries().getUnopenedEggs("ann");
+    expect(rest).toEqual([]);
+    expect(mystery.gift.id).toBe(2);
+    // Ann owns the duck, so only the robot is left in the Mystery Egg.
+    expect(
+      mystery.tiers.map((t) => [t.rarity, t.drops.map((d) => d.item.id)]),
+    ).toEqual([["common", ["robot"]]]);
+    expect(mystery.blocked).toBeUndefined();
+    // Nothing rare or better is left, so the Fabergé egg can't hatch.
+    expect(faberge.gift.id).toBe(3);
+    expect(faberge.blocked).toBe("empty");
+    expect(queries().getUnopenedEggs("bob")).toEqual([]);
+  });
+
+  it("hides unopened eggs while mystery eggs are off", () => {
+    expect(queries(false).getUnopenedEggs("ann")).toEqual([]);
+  });
+
+  it("lists every gifted egg for admins, newest first, with what hatched", () => {
+    expect(
+      queries(false)
+        .getEggGifts("ann")
+        .map((g) => [g.gift.id, g.crate.id, g.hatched?.id]),
+    ).toEqual([
+      [3, "faberge-egg", undefined],
+      [2, "mystery-egg", undefined],
+      [1, "mystery-egg", "duck"],
+    ]);
+  });
+});

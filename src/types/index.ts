@@ -1836,6 +1836,38 @@ export interface ItemGift {
   at: string;
 }
 
+/** A mystery egg an admin gifted a player, to crack from their inventory. */
+export interface EggGift {
+  id: number;
+  playerId: string;
+  /** The crate (egg) given, by id (see `coin-rules.ts`). */
+  crateId: string;
+  reason: string;
+  actorName: string;
+  /** The opening it hatched into, once cracked. */
+  crateOpenId?: number;
+  /** ISO 8601. */
+  at: string;
+}
+
+/** A gifted egg as the admin player page lists it. */
+export interface EggGiftView {
+  gift: EggGift;
+  crate: Crate;
+  /** What it hatched, once cracked (it can't be taken back then). */
+  hatched?: ShopItem;
+}
+
+/** A gifted egg still waiting in a player's inventory, with their odds. */
+export interface UnopenedEgg {
+  gift: EggGift;
+  /** The egg with the player's skill tree luck applied. */
+  crate: Crate;
+  tiers: CrateTier[];
+  /** Set when there's nothing left in it they don't own. */
+  blocked?: "empty";
+}
+
 /** A wish a player made with the One Wish Willow (private to them and admins). */
 export interface Wish {
   id: number;
@@ -1875,6 +1907,8 @@ export interface ClimCoinData {
   gifts: CoinGift[];
   /** Items admins gifted this season's players, oldest first. */
   itemGifts: ItemGift[];
+  /** Eggs admins gifted this season's players, oldest first. */
+  eggGifts: EggGift[];
   /** Wishes this season's players made, oldest first. */
   wishes: Wish[];
   /** Taskmaster's Hints by task id; only shown to players who used Hint. */

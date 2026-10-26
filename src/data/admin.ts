@@ -18,6 +18,7 @@ import {
   coinAdjustments,
   coinPurchases,
   crateOpens,
+  eggGifts,
   equippedItems,
   featureFlags,
   itemGifts,
@@ -72,6 +73,7 @@ import type {
   BonusInput,
   ChangelogInput,
   CoinAdjustmentInput,
+  EggGiftInput,
   ItemGiftInput,
   MiniTaskInput,
   WishDecisionInput,
@@ -221,7 +223,7 @@ export async function getPlayerDeleteImpact(
   id: string,
 ): Promise<DeleteImpact[]> {
   const db = getDb();
-  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o], [i], [k]] =
+  const [[s], [b], [m], [a], [e], [p], [v], [r], [c], [g], [o], [i], [x], [k]] =
     await db.batch([
       db
         .select({ n: count() })
@@ -270,6 +272,7 @@ export async function getPlayerDeleteImpact(
         .select({ n: count() })
         .from(itemGifts)
         .where(eq(itemGifts.playerId, id)),
+      db.select({ n: count() }).from(eggGifts).where(eq(eggGifts.playerId, id)),
       db
         .select({ n: count() })
         .from(skillUnlocks)
@@ -288,6 +291,7 @@ export async function getPlayerDeleteImpact(
     { label: "Clim Coin grant / deduction", count: g.n },
     { label: "mystery egg cracked", count: o.n },
     { label: "gifted item", count: i.n },
+    { label: "gifted egg", count: x.n },
     { label: "skill tree unlock", count: k.n },
   ];
 }
@@ -1627,6 +1631,49 @@ export async function revokeItemGift(
           )`,
       ),
     ),
+  ]);
+  return revoked.rows.length > 0;
+}
+
+/**
+ * Gifts a player a mystery egg (`crateId`, any egg, on sale or not) to
+ * crack from their inventory, free. Returns whether it was gifted (the
+ * player still exists).
+ */
+export async function giftEgg(
+  playerId: string,
+  input: EggGiftInput,
+  actor: AdminUser,
+): Promise<boolean> {
+  const { actorId, actorName } = actorFields(actor);
+  const result = await getDb().execute(sql`
+    insert into ${eggGifts}
+      (player_id, crate_id, reason, actor_id, actor_name)
+    select player.id, ${input.crateId}, ${input.reason}, ${actorId},
+      ${actorName}
+    from ${players} player
+    where player.id = ${playerId}
+    returning id`);
+  return result.rows.length > 0;
+}
+
+/**
+ * Takes back a gifted egg the player hasn't cracked yet. Returns whether it
+ * was taken back (a cracked one stays: what it hatched is theirs).
+ */
+export async function revokeEggGift(
+  playerId: string,
+  giftId: number,
+): Promise<boolean> {
+  const db = getDb();
+  const [, revoked] = await db.batch([
+    db.execute(lockWallet(playerId)),
+    db.execute(sql`
+      delete from ${eggGifts}
+      where id = ${giftId}
+        and player_id = ${playerId}
+        and crate_open_id is null
+      returning id`),
   ]);
   return revoked.rows.length > 0;
 }

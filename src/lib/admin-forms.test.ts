@@ -11,6 +11,7 @@ import {
   parseBonusForm,
   parseChangelogForm,
   parseCoinAdjustmentForm,
+  parseEggGiftForm,
   parseItemGiftForm,
   parseMiniTaskCompletionsForm,
   parseMiniTaskForm,
@@ -1619,6 +1620,26 @@ describe("parseItemGiftForm", () => {
       parseItemGiftForm(formData({ itemId: "", giftReason: " " })),
     );
     expect(errors.itemId).toBe("Pick an item to gift.");
+    expect(errors.reason).toBe("Required.");
+  });
+});
+
+describe("parseEggGiftForm", () => {
+  it("parses a known egg and the note posted as eggReason", () => {
+    expect(
+      dataOf(
+        parseEggGiftForm(
+          formData({ crateId: " faberge-egg ", eggReason: " Star player " }),
+        ),
+      ),
+    ).toEqual({ crateId: "faberge-egg", reason: "Star player" });
+  });
+
+  it("requires a real egg and a reason", () => {
+    const errors = errorsOf(
+      parseEggGiftForm(formData({ crateId: "golden-egg", eggReason: "" })),
+    );
+    expect(errors.crateId).toBe("Pick an egg to gift.");
     expect(errors.reason).toBe("Required.");
   });
 });

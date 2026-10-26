@@ -141,6 +141,7 @@ describe("rowsForSeason", () => {
     coinGiftRows: [],
     featureFlagRows: [],
     itemGiftRows: [],
+    eggGiftRows: [],
     wishRows: [],
     skillPathRows: [],
     skillUnlockRows: [],

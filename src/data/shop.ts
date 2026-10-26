@@ -12,6 +12,7 @@ import {
   coinGifts,
   coinPurchases,
   crateOpens,
+  eggGifts,
   equippedItems,
   marketListings,
   marketOffers,
@@ -202,6 +203,67 @@ export async function openCrate(
         ${rarity}, won.id
       from won
       returning id`),
+  ]);
+  const id = (opened.rows[0] as { id?: number } | undefined)?.id;
+  return typeof id === "number" ? id : undefined;
+}
+
+/**
+ * Cracks an egg an admin gifted the player (`giftId`), giving them `itemId`
+ * (rolled by the caller from their personal odds). Like `openCrate`, but
+ * free: the item is owned through a zero-price purchase, a zero-price
+ * `crate_opens` row records it and the gift is marked opened, in one
+ * statement under the wallet lock. Returns the opening's id, or `undefined`
+ * if the gift isn't theirs, is already open, or they already own the item
+ * (or its power-up effect), so the caller can roll again.
+ */
+export async function openGiftedEgg(
+  playerId: string,
+  giftId: number,
+  itemId: string,
+  rarity: CrateTierKind,
+): Promise<number | undefined> {
+  const db = getDb();
+  const [, opened] = await db.batch([
+    db.execute(lockWallet(playerId)),
+    db.execute(sql`
+      with gift as (
+        select id, crate_id from ${eggGifts}
+        where id = ${giftId}
+          and player_id = ${playerId}
+          and crate_open_id is null
+      ),
+      won as (
+        insert into ${coinPurchases} (player_id, item_id, price)
+        select ${playerId}, item.id, 0
+        from ${shopItems} item
+        where item.id = ${itemId}
+          and exists (select 1 from gift)
+          and item.available
+          and not item.skill_only
+          and ${onSaleNow("item")}
+          and not exists (
+            select 1 from ${coinPurchases} owned
+            join ${shopItems} owned_item on owned_item.id = owned.item_id
+            where owned.player_id = ${playerId}
+              and (
+                owned.item_id = item.id
+                or owned_item.power_up = item.power_up
+              )
+          )
+        returning id, item_id
+      ),
+      hatched as (
+        insert into ${crateOpens}
+          (player_id, crate_id, price, item_id, rarity, purchase_id)
+        select ${playerId}, gift.crate_id, 0, won.item_id, ${rarity}, won.id
+        from won cross join gift
+        returning id
+      )
+      update ${eggGifts} set crate_open_id = hatched.id
+      from hatched
+      where ${eggGifts}.id = ${giftId}
+      returning hatched.id`),
   ]);
   const id = (opened.rows[0] as { id?: number } | undefined)?.id;
   return typeof id === "number" ? id : undefined;

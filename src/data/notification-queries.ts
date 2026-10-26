@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import { withBase } from "../lib/url";
 import { ukDateFormat } from "../lib/time";
-import { SABOTAGE_POINTS } from "./coin-rules";
+import { SABOTAGE_POINTS, getCrate } from "./coin-rules";
 import { listingExpiry, listingStatus } from "./market-mappers";
 
 const weekLabel = (weekNumber: number) =>
@@ -298,7 +298,7 @@ export function createNotificationQueries(
         })
       : [];
 
-    // Coins and items an admin gave the player (deductions aren't gifts).
+    // Coins, items and eggs an admin gave the player (deductions aren't gifts).
     const itemNames = new Map(data.coins.items.map((i) => [i.id, i.name]));
     const adminGifts: FeedEvent[] = playerId
       ? [
@@ -334,6 +334,25 @@ export function createNotificationQueries(
               },
             ];
           }),
+          // Gifted eggs wait in the inventory, so only while eggs are on.
+          ...(data.features.shop_eggs ? data.coins.eggGifts : []).flatMap(
+            (gift): FeedEvent[] => {
+              if (gift.playerId !== playerId) return [];
+              const time = new Date(gift.at).getTime();
+              if (Number.isNaN(time) || time > now) return [];
+              return [
+                {
+                  id: `egg-gift:${gift.id}`,
+                  kind: "gift-received",
+                  title: `You were gifted a ${getCrate(gift.crateId)?.name ?? "mystery egg"}`,
+                  detail: gift.reason,
+                  href: withBase("/account#inventory"),
+                  at: gift.at,
+                  time,
+                },
+              ];
+            },
+          ),
         ]
       : [];
 

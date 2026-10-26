@@ -241,6 +241,7 @@ export function coinData(overrides: Partial<ClimCoinData> = {}): ClimCoinData {
     crateOpens: [],
     gifts: [],
     itemGifts: [],
+    eggGifts: [],
     wishes: [],
     hints: {},
     skillPaths: [],

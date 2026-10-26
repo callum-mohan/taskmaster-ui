@@ -20,8 +20,10 @@ import {
   describeWriteError,
   getPlayer,
   getPlayerDeleteImpact,
+  giftEgg,
   giftItem,
   listCoinAdjustments,
+  revokeEggGift,
   revokeItemGift,
   updatePlayer,
 } from "../../../data/admin";
@@ -38,6 +40,7 @@ import {
 import { resetUserPassword, temporaryPassword } from "../../../lib/auth";
 import {
   parseCoinAdjustmentForm,
+  parseEggGiftForm,
   parseItemGiftForm,
   parsePlayerEmailForm,
   parsePlayerForm,
@@ -47,6 +50,7 @@ import {
 } from "../../../lib/admin-forms";
 import { withBase } from "../../../lib/url";
 import { CATEGORY_INFO, POWER_UP_INFO } from "../../../data/coins";
+import { CRATES } from "../../../data/coin-rules";
 import type { ShopItem } from "../../../types";
 import { withSeason } from "../../../lib/admin-season";
 
@@ -85,6 +89,8 @@ let itemErrors: FieldErrors = {};
 let itemError: string | undefined;
 const itemsDone = (done: string) =>
   Astro.redirect(withBase(`/admin/players/${id}?done=${done}#items`));
+let eggValues: FormValues = {};
+let eggErrors: FieldErrors = {};
 
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
@@ -131,6 +137,24 @@ if (Astro.request.method === "POST") {
       itemError = `${gift.item.name} has already been used or sold on the marketplace, so it can't be taken back. Revoke a use in that week's judge tab first.`;
     } else {
       return itemsDone("item-revoked");
+    }
+  } else if (intent === "egg-gift") {
+    const parsed = parseEggGiftForm(form);
+    eggValues = parsed.values;
+    if (!parsed.ok) {
+      eggErrors = parsed.errors;
+    } else if (await giftEgg(id, parsed.data, admin)) {
+      return itemsDone("egg-gifted");
+    } else {
+      eggErrors = { crateId: "That player no longer exists." };
+    }
+  } else if (intent === "egg-revoke") {
+    const rowId = parseRowId(form);
+    if (rowId !== undefined && !(await revokeEggGift(id, rowId))) {
+      itemError =
+        "That egg has already been cracked, so what it hatched is theirs to keep.";
+    } else {
+      return itemsDone("egg-revoked");
     }
   } else if (intent === "reset-password") {
     if (!account?.userId) {
@@ -197,7 +221,15 @@ if (Astro.request.method === "POST") {
 const [
   impact,
   adjustments,
-  { getWallet, getInventory, getGiftableItems, getItemGifts, getSkillLog },
+  {
+    features,
+    getWallet,
+    getInventory,
+    getGiftableItems,
+    getItemGifts,
+    getEggGifts,
+    getSkillLog,
+  },
 ] = await Promise.all([
   getPlayerDeleteImpact(id),
   listCoinAdjustments(id),
@@ -207,6 +239,8 @@ const wallet = getWallet(id);
 const inventory = getInventory(id);
 const giftable = getGiftableItems(id);
 const itemGifts = getItemGifts(id);
+const eggGifts = getEggGifts(id);
+const unopenedEggs = eggGifts.filter((egg) => !egg.hatched).length;
 const skillLog = getSkillLog(id);
 const skillDateFmt = ukDateFormat({ day: "numeric", month: "short" });
 /** Extra context for an item in the gift picker. */
@@ -220,6 +254,8 @@ const itemTags = (item: ShopItem) =>
 const itemNotice = {
   "item-gifted": "Item gifted. The player has been notified.",
   "item-revoked": "Gifted item taken back.",
+  "egg-gifted": "Egg gifted. The player has been notified.",
+  "egg-revoked": "Gifted egg taken back.",
 }[Astro.url.searchParams.get("done") ?? ""];
 const coinNotice = {
   coins: "Clim Coin adjustment saved.",
@@ -532,7 +568,7 @@ const statusHelp: Record<typeof status, string> = {
       id="items-heading"
       class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
     >
-      gift items &amp; power-ups
+      gift items, eggs &amp; power-ups
     </h2>
     <TerminalWindow title={`~/players/${player.id}/inventory`}>
       {
@@ -553,7 +589,7 @@ const statusHelp: Record<typeof status, string> = {
         <span class="text-acid" aria-hidden="true">$</span> ls ./inventory
       </p>
       {
-        inventory.length === 0 ? (
+        inventory.length === 0 && unopenedEggs === 0 ? (
           <p class="mt-2 text-sm text-ink-dim">
             {player.name} doesn't own anything yet.
           </p>
@@ -569,6 +605,14 @@ const statusHelp: Record<typeof status, string> = {
                 </span>
               </li>
             ))}
+            {eggGifts
+              .filter((egg) => !egg.hatched)
+              .map(({ crate }) => (
+                <li class="rounded-md border border-amber/40 bg-term-bg px-2 py-1 text-ink-dim">
+                  <span class="text-ink">{crate.name}</span>{" "}
+                  <span class="text-ink-faint">· egg · unopened</span>
+                </li>
+              ))}
           </ul>
         )
       }
@@ -671,6 +715,104 @@ const statusHelp: Record<typeof status, string> = {
                   <ConfirmDelete
                     subject={`the gifted ${item.name} from ${player.name}'s inventory`}
                     intent="item-revoke"
+                    fields={{ rowId: gift.id }}
+                    label="take back"
+                  />
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      }
+      <form
+        method="post"
+        class="mt-8 grid gap-4 border-t border-grid/60 pt-6 sm:grid-cols-[minmax(0,16rem)_1fr_auto] sm:items-start"
+        novalidate
+      >
+        <input type="hidden" name="intent" value="egg-gift" />
+        <div class="space-y-1.5">
+          <label for="field-crateId" class={labelClass}>
+            egg
+            <span class="text-acid" aria-hidden="true">
+              {" "}
+              *
+            </span>
+          </label>
+          <select
+            id="field-crateId"
+            name="crateId"
+            required
+            aria-invalid={eggErrors.crateId ? "true" : undefined}
+            aria-describedby={eggErrors.crateId
+              ? "field-crateId-error"
+              : "field-crateId-hint"}
+            class={inputClass(Boolean(eggErrors.crateId))}
+          >
+            <option value="" selected={!eggValues.crateId}>
+              choose an egg
+            </option>
+            {
+              CRATES.map((crate) => (
+                <option
+                  value={crate.id}
+                  selected={eggValues.crateId === crate.id}
+                >
+                  {crate.name} ({crate.price}c{crate.exclusive && ", seasonal"})
+                </option>
+              ))
+            }
+          </select>
+          {
+            eggErrors.crateId ? (
+              <p id="field-crateId-error" class="text-xs text-danger">
+                {eggErrors.crateId}
+              </p>
+            ) : (
+              <p id="field-crateId-hint" class="text-xs text-ink-faint">
+                Lands unopened in their inventory for them to crack, free, with
+                their own odds.
+                {!features.shop_eggs &&
+                  " Mystery eggs are switched off, so it waits hidden until they're back on."}
+              </p>
+            )
+          }
+        </div>
+        <AdminField
+          label="reason"
+          name="eggReason"
+          value={eggValues.eggReason}
+          error={eggErrors.reason}
+          required
+          hint="Shown in the player's notification and wallet history."
+        />
+        <button type="submit" class:list={[btnPrimary, "sm:mt-6"]}>
+          gift egg
+        </button>
+      </form>
+      {
+        eggGifts.length > 0 && (
+          <ul class="mt-5 divide-y divide-grid/60 rounded-md border border-grid text-sm">
+            {eggGifts.map(({ gift, crate, hatched }) => (
+              <li class="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                <span class="min-w-0 text-ink-dim">
+                  <span class="text-ink">{crate.name}</span>
+                  <span class="text-ink-faint">
+                    {" "}
+                    · {hatched ? `hatched ${hatched.name}` : "unopened"}
+                  </span>
+                  <span class="block">{gift.reason}</span>
+                  <span class="block text-[11px] text-ink-faint">
+                    by {gift.actorName}
+                  </span>
+                </span>
+                {hatched ? (
+                  <span class="text-[11px] font-bold uppercase tracking-widest text-ink-faint">
+                    cracked
+                  </span>
+                ) : (
+                  <ConfirmDelete
+                    subject={`the gifted ${crate.name} from ${player.name}'s inventory`}
+                    intent="egg-revoke"
                     fields={{ rowId: gift.id }}
                     label="take back"
                   />

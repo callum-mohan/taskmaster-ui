@@ -7,6 +7,7 @@ import PlayerAvatar from "../../components/PlayerAvatar.astro";
 import WalletSection from "../../components/WalletSection.astro";
 import MiniTaskList from "../../components/MiniTaskList.astro";
 import CoinAmount from "../../components/CoinAmount.astro";
+import CrateReveal from "../../components/CrateReveal.astro";
 import { btnPrimary, btnGhost } from "../../components/admin/styles";
 import { updateOwnProfile } from "../../data/accounts";
 import { runWalletAction } from "../../data/wallet-actions";
@@ -61,6 +62,10 @@ if (Astro.request.method === "POST") {
   }
 }
 
+const coinOutcome = parseCoinOutcome(Astro.url.searchParams.get("coins"));
+// Just cracked a gifted egg: reveal what hatched.
+const pullId = Number(Astro.url.searchParams.get("pull"));
+
 const walletView = season
   ? await Astro.locals.getQueries(season.id).then((q) => {
       const wallet = q.getWallet(player.playerId);
@@ -73,6 +78,7 @@ const walletView = season
         market: q.marketEnabled,
         wish: q.getWishPanel(player.playerId),
         inventory: q.getInventory(player.playerId),
+        eggs: q.getUnopenedEggs(player.playerId),
         hint: panel.task
           ? q.getUnlockedHint(panel.task.id, player.playerId)
           : undefined,
@@ -85,6 +91,10 @@ const walletView = season
     })
   : undefined;
 const seasonQueries = await Astro.locals.getQueries(season?.id);
+const pull =
+  season && coinOutcome === "opened" && Number.isInteger(pullId)
+    ? seasonQueries.getCratePull(pullId, player.playerId)
+    : undefined;
 const miniTasks = seasonQueries.features.mini_tasks
   ? seasonQueries.getMiniTaskBoard(player.playerId)
   : undefined;
@@ -92,10 +102,10 @@ const achievementsOn = seasonQueries.features.achievements;
 const ledgerHref = (page: number) =>
   pageHref(Astro.url, "history", page, {
     hash: "history",
-    drop: ["coins", "done"],
+    drop: ["coins", "done", "pull"],
   });
-const coinOutcome = parseCoinOutcome(Astro.url.searchParams.get("coins"));
-const coinNotice = coinOutcome ? COIN_OUTCOME_NOTICE[coinOutcome] : undefined;
+const coinNotice =
+  coinOutcome && !pull ? COIN_OUTCOME_NOTICE[coinOutcome] : undefined;
 
 const done = Astro.url.searchParams.get("done");
 const notices: Record<string, string> = {
@@ -220,6 +230,8 @@ const avatarPreview = {
         </section>
       )
     }
+
+    {pull && <CrateReveal pull={pull} class="mt-12" />}
 
     {
       walletView && season && (

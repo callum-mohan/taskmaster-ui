@@ -1036,6 +1036,34 @@ export const crateOpens = pgTable(
 );
 
 /**
+ * A mystery egg (a crate from `coin-rules.ts`, by `crateId`) an admin gifted
+ * a player. It sits unopened in their inventory until they crack it, which
+ * writes a free `crate_opens` row and links it here (`crateOpenId`), in one
+ * statement under the wallet lock. The actor's name is copied in, like
+ * `item_gifts`.
+ */
+export const eggGifts = pgTable(
+  "egg_gifts",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    crateId: text().notNull(),
+    reason: text().notNull(),
+    actorId: text().notNull(),
+    actorName: text().notNull(),
+    crateOpenId: integer()
+      .unique("egg_gifts_crate_open_id_unique")
+      .references(() => crateOpens.id, { onDelete: "cascade" }),
+    createdAt: timestamp({ withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("egg_gifts_player_id_idx").on(t.playerId)],
+);
+
+/**
  * A player-to-player marketplace listing: one owned copy (`purchaseId`, the
  * seller's `coin_purchases` row) for sale at a fixed price. Open listings
  * also expire by age (`MARKET_LISTING_DAYS` in `coin-rules.ts`), derived

@@ -520,8 +520,8 @@ reads too. Wallets are per season: they belong to the season's player rows.
 **Stored facts:** `shop_items` (the site-wide catalogue, edited in
 `/admin/site#shop`), `coin_purchases` (price copied at purchase),
 `power_up_uses`, `equipped_items`, `coin_gifts`, `coin_adjustments` (admin
-grants and deductions, on the player's admin page) and `item_gifts` (see
-below). A purchase or gift checks
+grants and deductions, on the player's admin page), `item_gifts` and
+`egg_gifts` (see below). A purchase or gift checks
 the balance against fresh (uncached) rows, then re-checks it in the insert
 under a per-player advisory lock, so concurrent spends can't overspend. A
 balance can go negative if a result is corrected after spending; buying is
@@ -542,6 +542,17 @@ already own, and power-ups whose effect they've had this season, can't be
 gifted. A gift can be taken back unless it's a power-up charge that's been
 spent (revoke the use in the week's judge tab first); that also unequips it.
 The player is notified and the gift shows in their wallet history.
+
+**Gifted eggs:** an admin can also gift a mystery egg (any crate in
+`coin-rules.ts`, on sale or not) from the same page. It's an `egg_gifts` row
+(reason and admin's name) that waits unopened in the player's inventory
+(`/account#inventory`); the player gets a notification. Cracking it
+(`POST /account/eggs/[giftId]`) rolls from their personal odds like a bought
+egg, then writes a zero-price `crate_opens` row (and its free purchase) and
+links it to the gift in one statement under the wallet lock, so an egg opens
+once. The reveal plays on the account page. An unopened egg can be taken
+back; a cracked one can't. Gifted eggs are hidden, and can't be opened,
+while the `shop_eggs` flag is off.
 
 **Limited-time stock:** `shop_items.available_from` / `available_until` (UK
 wall-clock, like task dates) set a sale window. Items with an end date sit on

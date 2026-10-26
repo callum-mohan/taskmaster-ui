@@ -1240,6 +1240,33 @@ export function parseItemGiftForm(form: FormData): ParseResult<ItemGiftInput> {
   );
 }
 
+const eggGiftSchema = z.object({
+  crateId: z
+    .string()
+    .trim()
+    .refine(
+      (id) => CRATES.some((crate) => crate.id === id),
+      "Pick an egg to gift.",
+    ),
+  reason: requiredText(200),
+});
+
+export type EggGiftInput = z.output<typeof eggGiftSchema>;
+
+/**
+ * An admin gifting a player a mystery egg to crack from their inventory.
+ * The note is posted as `eggReason`, so its field id doesn't clash with the
+ * other gift forms on the same page.
+ */
+export function parseEggGiftForm(form: FormData): ParseResult<EggGiftInput> {
+  const values = formValues(form);
+  return parseWith(
+    eggGiftSchema,
+    { crateId: values.crateId ?? "", reason: values.eggReason ?? "" },
+    values,
+  );
+}
+
 const wishDecisionSchema = z.object({
   rowId: z.coerce.number().int().positive(),
   decision: z.enum(["granted", "declined"]),

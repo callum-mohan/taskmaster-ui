@@ -657,5 +657,37 @@ describe("getNotifications", () => {
         unread: true,
       });
     });
+
+    it("tells a player about an egg an admin gifted them, while eggs are on", () => {
+      const eggGift = {
+        id: 8,
+        playerId: "ann",
+        crateId: "faberge-egg",
+        reason: "Star of the week",
+        actorName: "Taskmaster",
+        at: "2026-06-30T13:00:00.000Z",
+      };
+      const feed = (shop_eggs: boolean) =>
+        feedFor(
+          {
+            features: {
+              ...competitionData().features,
+              shop_eggs,
+            },
+            coins: { ...competitionData().coins, eggGifts: [eggGift] },
+          },
+          { playerId: "ann" },
+        ).items;
+      expect(byId(feed(true), "egg-gift:8")).toEqual({
+        id: "egg-gift:8",
+        kind: "gift-received",
+        title: "You were gifted a Fabergé Egg",
+        detail: "Star of the week",
+        href: "/account#inventory",
+        at: "2026-06-30T13:00:00.000Z",
+        unread: true,
+      });
+      expect(byId(feed(false), "egg-gift:8")).toBeUndefined();
+    });
   });
 });

@@ -11,6 +11,7 @@ import type {
   CrateTier,
   CrateTierKind,
   CosmeticKind,
+  EggGift,
   EntryActivity,
   EquippedItem,
   ItemGift,
@@ -32,6 +33,7 @@ import type {
   coinGifts as coinGiftsTable,
   coinPurchases as coinPurchasesTable,
   crateOpens as crateOpensTable,
+  eggGifts as eggGiftsTable,
   equippedItems as equippedItemsTable,
   itemGifts as itemGiftsTable,
   powerUpUses as powerUpUsesTable,
@@ -271,6 +273,7 @@ type AdjustmentRow = typeof coinAdjustmentsTable.$inferSelect;
 type CrateOpenRow = typeof crateOpensTable.$inferSelect;
 type GiftRow = typeof coinGiftsTable.$inferSelect;
 type ItemGiftRow = typeof itemGiftsTable.$inferSelect;
+type EggGiftRow = typeof eggGiftsTable.$inferSelect;
 type WishRow = typeof wishesTable.$inferSelect;
 type TaskRow = typeof tasksTable.$inferSelect;
 type SkillPathRow = typeof skillPathsTable.$inferSelect;
@@ -399,6 +402,20 @@ export function mapItemGifts(rows: ItemGiftRow[]): ItemGift[] {
       itemId: row.itemId,
       reason: row.reason,
       actorName: row.actorName,
+      at: timestamptzToIso(row.createdAt),
+    }));
+}
+
+export function mapEggGifts(rows: EggGiftRow[]): EggGift[] {
+  return [...rows]
+    .sort((a, b) => a.id - b.id)
+    .map((row) => ({
+      id: row.id,
+      playerId: row.playerId,
+      crateId: row.crateId,
+      reason: row.reason,
+      actorName: row.actorName,
+      ...(row.crateOpenId !== null && { crateOpenId: row.crateOpenId }),
       at: timestamptzToIso(row.createdAt),
     }));
 }
@@ -820,6 +837,14 @@ export function deriveWallet(
       label: `Gifted ${itemNames.get(g.itemId) ?? g.itemId}: ${g.reason}`,
       at: g.at,
     }));
+  const eggGifts: CoinLedgerEntry[] = data.coins.eggGifts
+    .filter((g) => g.playerId === playerId)
+    .map((g) => ({
+      kind: "item-gift",
+      amount: 0,
+      label: `Gifted ${getCrate(g.crateId)?.name ?? "an egg"}: ${g.reason}`,
+      at: g.at,
+    }));
   const sum = (list: CoinLedgerEntry[]) =>
     list.reduce((total, e) => total + e.amount, 0);
   const earned = sum(earnings);
@@ -845,6 +870,7 @@ export function deriveWallet(
       ...gifts,
       ...trades,
       ...itemGifts,
+      ...eggGifts,
     ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
   };
 }

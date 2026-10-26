@@ -78,6 +78,7 @@ export const PURCHASE_BLOCK_LABEL: Record<PurchaseBlock, string> = {
   "skill-only": "skill tree reward",
   unaffordable: "not enough coins",
   unavailable: "retired",
+  "sold-out": "sold out",
   "season-closed": "season closed",
 };
 
@@ -110,6 +111,10 @@ export const COIN_OUTCOME_NOTICE: Record<
     message: "You don't have enough Clim Coin for that.",
   },
   unavailable: { tone: "error", message: "That item isn't for sale." },
+  "sold-out": {
+    tone: "error",
+    message: "Sold out: the shop's stock of that is gone for this season.",
+  },
   "season-closed": {
     tone: "error",
     message: "This season is closed, so its wallets are frozen.",

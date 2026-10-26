@@ -1675,6 +1675,11 @@ export interface ShopItem {
   /** Limited-time stock: on sale from / until these instants (ISO 8601). */
   availableFrom?: string;
   availableUntil?: string;
+  /**
+   * Limited stock: how many the shop sells each season (direct purchases
+   * only; egg drops, gifts and resales don't count). Unset = unlimited.
+   */
+  stock?: number;
   sortOrder: number;
 }
 
@@ -2231,6 +2236,8 @@ export type PurchaseBlock =
   | "skill-only"
   | "unaffordable"
   | "unavailable"
+  /** Limited stock: this season's run has all been bought. */
+  | "sold-out"
   | "season-closed";
 
 /** A catalogue item as one viewer sees it in the shop. */
@@ -2242,6 +2249,8 @@ export interface ShopListing {
   owned: boolean;
   /** Power-ups: unused charges held. */
   charges: number;
+  /** Limited stock: how many the shop has left this season. */
+  remaining?: number;
   /** Why it can't be bought; unset when it can. */
   blocked?: PurchaseBlock;
 }
@@ -2329,6 +2338,7 @@ export type CoinOutcome =
   | "owned"
   | "unaffordable"
   | "unavailable"
+  | "sold-out"
   | "season-closed"
   | "equipped"
   | "unequipped"

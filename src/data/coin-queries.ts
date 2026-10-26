@@ -94,6 +94,27 @@ export function createCoinQueries(data: CompetitionData) {
   const sold = soldPurchaseIds(coins.market);
   const heldPurchases = coins.purchases.filter((p) => !sold.has(p.id));
   const liveListings = liveListingsByPurchase(coins.market, Date.now());
+  // Limited stock counts only copies bought from the shop this season: the
+  // zero-price copies eggs, gifts, skill nodes and resales give don't.
+  const grantedPurchaseIds = new Set([
+    ...coins.crateOpens.map((o) => o.purchaseId),
+    ...coins.itemGifts.map((g) => g.purchaseId),
+    ...coins.skillUnlocks.flatMap((u) =>
+      u.purchaseId === undefined ? [] : [u.purchaseId],
+    ),
+    ...coins.market.sales.map((s) => s.buyerPurchaseId),
+  ]);
+  const shopSales = new Map<string, number>();
+  for (const p of coins.purchases) {
+    if (grantedPurchaseIds.has(p.id)) continue;
+    shopSales.set(p.itemId, (shopSales.get(p.itemId) ?? 0) + 1);
+  }
+
+  /** How many of a limited-stock item the shop has left this season. */
+  function getStockLeft(item: ShopItem): number | undefined {
+    if (item.stock === undefined) return undefined;
+    return Math.max(item.stock - (shopSales.get(item.id) ?? 0), 0);
+  }
 
   /** Purchase ids of a player's power-up charges that are used up. */
   function spentChargeIds(playerId: string): Set<number> {
@@ -332,6 +353,7 @@ export function createCoinQueries(data: CompetitionData) {
     if (item.skillOnly) return "skill-only";
     if (!isOnSale(item, now)) return "unavailable";
     if (item.crateOnly) return "crate-only";
+    if (getStockLeft(item) === 0) return "sold-out";
     if (
       getWallet(viewer.playerId, now).balance <
       getItemPrice(item, viewer.playerId)
@@ -372,11 +394,13 @@ export function createCoinQueries(data: CompetitionData) {
     const charges = playerId ? chargesByItem(playerId) : new Map();
     return items.map((item) => {
       const blocked = getPurchaseBlock(item, { playerId }, now);
+      const remaining = item.crateOnly ? undefined : getStockLeft(item);
       return {
         item,
         price: getItemPrice(item, playerId),
         owned: item.powerUp ? effects.has(item.powerUp) : owned.has(item.id),
         charges: charges.get(item.id) ?? 0,
+        ...(remaining !== undefined && { remaining }),
         ...(blocked && { blocked }),
       };
     });
@@ -754,6 +778,7 @@ export function createCoinQueries(data: CompetitionData) {
     getPlayerFlairs,
     getEquippedAvatarUrl,
     getPurchaseBlock,
+    getStockLeft,
     getShopSections,
     getLimitedListings,
     getPowerUpFeed,

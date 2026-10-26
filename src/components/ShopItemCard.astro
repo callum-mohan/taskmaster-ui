@@ -1,7 +1,7 @@
 ---
 // One shop listing: the item, its price and, for the viewer, a buy button
 // (a plain POST to `/account/shop/<id>`) or why they can't buy it.
-// Limited-time stock says when it leaves.
+// Limited-time stock says when it leaves; limited stock, how many are left.
 import type { ShopListing } from "../types";
 import ShopItemArt from "./ShopItemArt.astro";
 import CoinPrice from "./CoinPrice.astro";
@@ -19,7 +19,7 @@ interface Props {
 }
 
 const { listing, class: className } = Astro.props;
-const { item, price, owned, charges, blocked } = listing;
+const { item, price, owned, charges, remaining, blocked } = listing;
 const action = withBase(`/account/shop/${encodeURIComponent(item.id)}`);
 const loginHref = withBase(
   `/login?${new URLSearchParams({ next: `/account/shop/${item.id}` })}`,
@@ -103,6 +103,19 @@ const status =
           </time>{" "}
           · {timeLeftLabel(item.availableUntil)}
         </span>
+      </p>
+    )
+  }
+  {
+    remaining !== undefined && (
+      <p
+        class:list={[
+          "text-[11px] font-bold uppercase tracking-[0.15em]",
+          remaining === 0 ? "text-ink-faint" : "text-cyan",
+        ]}
+      >
+        <span aria-hidden="true">▣ </span>
+        {remaining === 0 ? "sold out this season" : `${remaining} left`}
       </p>
     )
   }

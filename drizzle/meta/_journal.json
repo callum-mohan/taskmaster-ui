@@ -225,6 +225,13 @@
       "when": 1793017026525,
       "tag": "0031_egg_gifts",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793027446186,
+      "tag": "0032_shop_item_stock",
+      "breakpoints": true
     }
   ]
 }

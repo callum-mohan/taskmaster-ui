@@ -586,6 +586,11 @@ const fmt = (iso: string) => stamp.format(new Date(iso));
                           ` · until ${item.availableUntil.slice(0, 16)}`}
                       </span>
                     )}
+                    {item.stock !== null && (
+                      <span class="ml-2 text-[10px] font-bold uppercase tracking-widest text-cyan">
+                        stock {item.stock}/season
+                      </span>
+                    )}
                   </td>
                   <td
                     class:list={[

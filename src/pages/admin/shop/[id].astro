@@ -47,6 +47,7 @@ let values: FormValues = {
   availableUntil: item.availableUntil
     ? toDateTimeLocal(item.availableUntil)
     : "",
+  stock: item.stock === null ? "" : String(item.stock),
   sortOrder: String(item.sortOrder),
 };
 let errors: FieldErrors = {};

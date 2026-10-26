@@ -167,6 +167,89 @@ describe("purchase blocks", () => {
   });
 });
 
+describe("limited stock", () => {
+  const gem = shopItem({ id: "gem", name: "Gem", price: 5, stock: 2 });
+  function stocked(coins: Parameters<typeof coinData>[0]) {
+    return createCoinQueries(
+      competitionData({
+        players: [player("ann"), player("bob"), player("cat")],
+        coins: coinData({
+          items: [gem, duck],
+          adjustments: ["ann", "bob", "cat"].map((playerId, i) => ({
+            id: i + 1,
+            playerId,
+            amount: 20,
+            reason: "Starter coins",
+            actorName: "Taskmaster",
+            at: "2026-01-10T00:00:00.000Z",
+          })),
+          ...coins,
+        }),
+      }),
+    );
+  }
+  const listingOf = (q: ReturnType<typeof stocked>, playerId?: string) =>
+    q
+      .getShopSections({ playerId })
+      .flatMap((s) => s.listings)
+      .find((l) => l.item.id === "gem");
+
+  it("counts down shop sales and sells out", () => {
+    const first = bought("ann", gem);
+    const one = stocked({ purchases: [first] });
+    expect(one.getStockLeft(gem)).toBe(1);
+    expect(one.getStockLeft(duck)).toBeUndefined();
+    expect(listingOf(one, "bob")).toMatchObject({ remaining: 1 });
+    expect(listingOf(one, "bob")?.blocked).toBeUndefined();
+
+    const gone = stocked({ purchases: [first, bought("bob", gem)] });
+    expect(gone.getStockLeft(gem)).toBe(0);
+    expect(gone.getPurchaseBlock(gem, { playerId: "cat" })).toBe("sold-out");
+    // Owners still see it as theirs.
+    expect(gone.getPurchaseBlock(gem, { playerId: "ann" })).toBe("owned");
+    expect(listingOf(gone)).toMatchObject({ remaining: 0 });
+  });
+
+  it("doesn't count egg drops, gifts or marketplace resales", () => {
+    const sale = bought("ann", gem);
+    const hatched = { ...bought("bob", gem), price: 0 };
+    const resold = { ...bought("cat", gem), price: 0 };
+    const q = stocked({
+      purchases: [sale, hatched, resold],
+      crateOpens: [
+        {
+          id: 1,
+          purchaseId: hatched.id,
+          playerId: "bob",
+          crateId: "basic",
+          price: 5,
+          itemId: "gem",
+          rarity: "common",
+          at: "2026-01-13T00:00:00.000Z",
+        },
+      ],
+      market: {
+        listings: [],
+        offers: [],
+        sales: [
+          {
+            id: 1,
+            listingId: 1,
+            sellerId: "ann",
+            buyerId: "cat",
+            itemId: "gem",
+            price: 9,
+            sourcePurchaseId: sale.id,
+            buyerPurchaseId: resold.id,
+            at: "2026-01-14T00:00:00.000Z",
+          },
+        ],
+      },
+    });
+    expect(q.getStockLeft(gem)).toBe(1);
+  });
+});
+
 describe("loadout and inventory", () => {
   it("only wears items the player still owns, in their slot", () => {
     const q = setup({ purchases: [bought("ann", duck), bought("ann", amber)] });

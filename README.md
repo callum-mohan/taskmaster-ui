@@ -559,6 +559,13 @@ wall-clock, like task dates) set a sale window. Items with an end date sit on
 the shop's "limited time" shelf with a countdown; outside the window they
 can't be bought or hatched.
 
+**Limited stock:** `shop_items.stock` (blank = unlimited) caps how many the
+shop sells each season, first come first served; the card shows how many are
+left. Only direct shop purchases count: egg drops, admin gifts, skill rewards
+and marketplace resales don't use it up, and a sold-out item can still hatch.
+`buyItem` re-counts the season's sales under a per-item advisory lock, so two
+players can't both buy the last one.
+
 **Power-ups** are single use: a player can buy each one once a season
 (checked by effect, and enforced by a unique `power_up_uses (player_id,
 effect)` constraint) and use it from the wallet on the live week, one power-up

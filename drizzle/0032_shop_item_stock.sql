@@ -1,0 +1,2 @@
+ALTER TABLE "shop_items" ADD COLUMN "stock" integer;--> statement-breakpoint
+ALTER TABLE "shop_items" ADD CONSTRAINT "shop_items_stock_range" CHECK ("shop_items"."stock" is null or "shop_items"."stock" between 0 and 10000);

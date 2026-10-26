@@ -986,6 +986,20 @@ const optionalLocalDateTime = z
   .refine((v) => v === "" || DATE_TIME_LOCAL.test(v), "Enter a date and time.")
   .transform((v) => (v === "" ? null : toWallClockTimestamp(v)));
 
+/** A shop item's stock per season: blank means unlimited. */
+const optionalStock = z
+  .string()
+  .trim()
+  .transform((v) => (v === "" ? null : Number(v)))
+  .pipe(
+    z
+      .number({ error: "Enter a whole number." })
+      .int("Enter a whole number.")
+      .min(0, "Must be 0 or more.")
+      .max(10000, "Keep it to 10000 or less.")
+      .nullable(),
+  );
+
 const shopItemSchema = z
   .object({
     id: slug,
@@ -1013,6 +1027,7 @@ const shopItemSchema = z
     crateId: blankToNull,
     availableFrom: optionalLocalDateTime,
     availableUntil: optionalLocalDateTime,
+    stock: optionalStock,
     sortOrder: optionalOrder,
   })
   .superRefine((item, ctx) => {
@@ -1020,6 +1035,9 @@ const shopItemSchema = z
       ctx.addIssue({ code: "custom", path: [path], message });
     if (item.crateOnly && item.category === "power_up") {
       issue("crateOnly", "Power-ups can't be egg exclusives.");
+    }
+    if (item.crateOnly && item.stock !== null) {
+      issue("stock", "Egg exclusives aren't sold in the shop: leave it blank.");
     }
     if (item.crateId !== null) {
       if (!CRATES.some((c) => c.exclusive && c.id === item.crateId)) {
@@ -1106,6 +1124,7 @@ export function parseShopItemForm(form: FormData): ParseResult<ShopItemInput> {
       crateId: values.crateId ?? "",
       availableFrom: values.availableFrom ?? "",
       availableUntil: values.availableUntil ?? "",
+      stock: values.stock ?? "",
       sortOrder: values.sortOrder ?? "",
     },
     {

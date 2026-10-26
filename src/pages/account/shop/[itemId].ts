@@ -19,6 +19,7 @@ const BLOCK_OUTCOME: Record<PurchaseBlock, CoinOutcome> = {
   "skill-only": "unavailable",
   unaffordable: "unaffordable",
   unavailable: "unavailable",
+  "sold-out": "sold-out",
   "season-closed": "season-closed",
 };
 
@@ -55,5 +56,11 @@ export const POST: APIRoute = async ({ params, locals, redirect }) => {
     getWallet(player.playerId).earned,
     item.price - getItemPrice(item, player.playerId),
   );
-  return reply(bought ? "bought" : "unaffordable");
+  if (bought) return reply("bought");
+  // Someone else may have bought the last one since the check above.
+  const fresh = await loadFreshPlayerCompetition(player.playerId);
+  const recheck = fresh && createQueries(fresh);
+  const freshItem = recheck?.getShopItemById(itemId);
+  const soldOut = freshItem && recheck?.getStockLeft(freshItem) === 0;
+  return reply(soldOut ? "sold-out" : "unaffordable");
 };

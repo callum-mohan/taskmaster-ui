@@ -241,6 +241,7 @@ describe("rowsForSeason", () => {
         skillOnly: false,
         availableFrom: null,
         availableUntil: null,
+        stock: null,
         sortOrder: 0,
         createdAt: "2026-01-01 00:00:00+00",
         updatedAt: "2026-01-01 00:00:00+00",

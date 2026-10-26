@@ -284,7 +284,7 @@ const select = (name: string) => ({
 
   <fieldset class="rounded-md border border-grid p-4">
     <legend class:list={[labelClass, "px-1"]}
-      >limited time & seasonal eggs</legend
+      >limited time, stock & seasonal eggs</legend
     >
     <div class="grid gap-5 sm:grid-cols-2">
       <AdminField
@@ -302,6 +302,16 @@ const select = (name: string) => ({
         value={values.availableUntil}
         error={errors.availableUntil}
         hint="UK time. Blank: no end. With an end it shows on the shop's limited-time shelf."
+      />
+      <AdminField
+        label="stock per season"
+        name="stock"
+        type="number"
+        min={0}
+        max={10000}
+        value={values.stock}
+        error={errors.stock}
+        hint="How many the shop sells each season. Blank: unlimited. Only shop purchases count: eggs can still hatch it once it's sold out, and gifts and marketplace resales don't use it up."
       />
     </div>
     <div class="mt-5 space-y-1.5">

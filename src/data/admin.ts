@@ -1496,6 +1496,7 @@ export async function updateShopItem(
       crateId: input.crateId,
       availableFrom: input.availableFrom,
       availableUntil: input.availableUntil,
+      stock: input.stock,
       ...(input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
     })
     .where(eq(shopItems.id, id));

@@ -304,6 +304,7 @@ export function mapShopItems(rows: ShopItemRow[]): ShopItem[] {
       ...(row.availableUntil !== null && {
         availableUntil: wallClockToIso(row.availableUntil),
       }),
+      ...(row.stock !== null && { stock: row.stock }),
       sortOrder: row.sortOrder,
     }));
 }

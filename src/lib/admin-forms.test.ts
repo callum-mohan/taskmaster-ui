@@ -1479,8 +1479,21 @@ describe("parseShopItemForm", () => {
       crateId: null,
       availableFrom: null,
       availableUntil: null,
+      stock: null,
       sortOrder: undefined,
     });
+  });
+
+  it("parses stock per season, blank meaning unlimited", () => {
+    expect(dataOf(parse({ stock: "5" })).stock).toBe(5);
+    expect(dataOf(parse({ stock: "0" })).stock).toBe(0);
+    expect(errorsOf(parse({ stock: "-1" })).stock).toBe("Must be 0 or more.");
+    expect(errorsOf(parse({ stock: "2.5" })).stock).toBe(
+      "Enter a whole number.",
+    );
+    expect(errorsOf(parse({ stock: "3", crateOnly: "on" })).stock).toMatch(
+      /aren't sold in the shop/,
+    );
   });
 
   it("parses a sale window as UK wall-clock times", () => {

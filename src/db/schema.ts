@@ -707,11 +707,19 @@ export const shopItems = pgTable(
     // wall-clock times (Europe/London, no zone, like task dates). Unset = open.
     availableFrom: timestamp({ mode: "string" }),
     availableUntil: timestamp({ mode: "string" }),
+    // Limited stock: how many can be bought from the shop each season.
+    // Only direct purchases count (not egg drops, gifts or marketplace
+    // resales). Unset = unlimited.
+    stock: integer(),
     sortOrder: integer().notNull().default(0),
     ...recordedTimestamps(),
   },
   (t) => [
     check("shop_items_price_range", sql`${t.price} between 0 and 10000`),
+    check(
+      "shop_items_stock_range",
+      sql`${t.stock} is null or ${t.stock} between 0 and 10000`,
+    ),
     check(
       "shop_items_crate_id_crate_only",
       sql`${t.crateId} is null or ${t.crateOnly}`,

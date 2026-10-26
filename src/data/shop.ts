@@ -14,6 +14,7 @@ import {
   crateOpens,
   eggGifts,
   equippedItems,
+  itemGifts,
   marketListings,
   marketOffers,
   marketSales,
@@ -111,6 +112,33 @@ export const lockWallet = (playerId: string) =>
   sql`select pg_advisory_xact_lock(hashtext(${`clim-coin:${playerId}`}))`;
 
 /**
+ * Serialises shop purchases of one item, so two players can't both buy its
+ * last copy. Always taken after the buyer's wallet lock.
+ */
+const lockStock = (itemId: string) =>
+  sql`select pg_advisory_xact_lock(hashtext(${`shop-stock:${itemId}`}))`;
+
+/**
+ * How many copies of `item` (a `shop_items` alias) the shop has sold in
+ * `playerId`'s season. Zero-price copies from eggs, admin gifts, skill nodes
+ * and marketplace resales aren't shop sales, so they don't use up stock.
+ */
+const shopSoldThisSeason = (playerId: string) => sql`(
+  select count(*) from ${coinPurchases} sale
+  join ${players} buyer on buyer.id = sale.player_id
+  where sale.item_id = item.id
+    and buyer.season_id = (
+      select season_id from ${players} where id = ${playerId})
+    and not exists (select 1 from ${crateOpens} c
+      where c.purchase_id = sale.id)
+    and not exists (select 1 from ${itemGifts} g
+      where g.purchase_id = sale.id)
+    and not exists (select 1 from ${skillUnlocks} s
+      where s.purchase_id = sale.id)
+    and not exists (select 1 from ${marketSales} m
+      where m.buyer_purchase_id = sale.id))`;
+
+/**
  * Buys `itemId` at its current price, less `discount` (the player's skill
  * tree discount, worked out by the caller from fresh rows), if the player
  * can afford it and hasn't bought it before. Skill tree rewards are never
@@ -119,7 +147,8 @@ export const lockWallet = (playerId: string) =>
  * can't get round it. `earned` is the player's
  * derived earnings, worked out from fresh rows. Spending and grants are
  * summed in the same transaction, under a per-player lock, so two buys at
- * once can't both spend the same coins.
+ * once can't both spend the same coins. A limited-stock item is re-counted
+ * under a per-item lock too, so it can't oversell.
  */
 export async function buyItem(
   playerId: string,
@@ -129,8 +158,9 @@ export async function buyItem(
 ): Promise<boolean> {
   const db = getDb();
   const price = sql`greatest(item.price - ${discount}::integer, 0)`;
-  const [, inserted] = await db.batch([
+  const [, , inserted] = await db.batch([
     db.execute(lockWallet(playerId)),
+    db.execute(lockStock(itemId)),
     db.execute(sql`
       insert into ${coinPurchases} (player_id, item_id, price)
       select ${playerId}, item.id, ${price}
@@ -150,6 +180,7 @@ export async function buyItem(
             )
         )
         and (${budget(playerId, earned)}) >= ${price}
+        and (item.stock is null or item.stock > ${shopSoldThisSeason(playerId)})
       returning id`),
   ]);
   return inserted.rows.length > 0;

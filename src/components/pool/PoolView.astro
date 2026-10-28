@@ -1,0 +1,499 @@
+---
+import TerminalWindow from "../TerminalWindow.astro";
+import PoolBracket from "../PoolBracket.astro";
+import PixelCrown from "../PixelCrown.astro";
+import Notice from "../admin/Notice.astro";
+import { btnGhost } from "../admin/styles";
+import {
+  poolTeamOf,
+  type PoolBracketRecord,
+  type PoolTeamRecord,
+} from "../../data/pool";
+import { buildBracket } from "../../lib/pool-bracket";
+import {
+  POOL_POINTS,
+  currentMatchFor,
+  matchAgreement,
+  poolStandings,
+} from "../../lib/pool-scoring";
+import { withBase } from "../../lib/url";
+import { ukDateFormat } from "../../lib/time";
+
+interface Props {
+  teams: PoolTeamRecord[];
+  /** Latest week first. */
+  brackets: PoolBracketRecord[];
+  playerName: (playerId: string) => string;
+  viewerPlayerId?: string;
+  /** Outcome of the last report (`?reported=`). */
+  reported?: string | null;
+  now?: Date;
+}
+
+const {
+  teams,
+  brackets,
+  playerName,
+  viewerPlayerId,
+  reported,
+  now = new Date(),
+} = Astro.props;
+
+const myTeam = poolTeamOf(teams, viewerPlayerId);
+const labels = Object.fromEntries(
+  teams.map((t) => [
+    t.id,
+    { name: t.name, members: t.memberIds.map(playerName).join(" & ") },
+  ]),
+);
+const nameOf = (id: string) => labels[id]?.name ?? id;
+const weeks = brackets.map((b) => ({
+  ...b,
+  view: buildBracket(b.entries, b.results),
+  revealed: new Date(b.revealAt) <= now,
+}));
+const previous = weeks.slice(1).filter((w) => w.view.championId !== undefined);
+const standings = poolStandings(
+  teams.map((t) => t.id),
+  weeks.map((w) => w.view),
+);
+const revealFormat = ukDateFormat({
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const revealTime = (iso: string) => revealFormat.format(new Date(iso));
+
+// The viewer's own match, from the latest bracket only, once it's revealed.
+const latest = weeks[0];
+const firstMatch =
+  myTeam && latest?.revealed
+    ? latest.view.rounds[0].find((m) => m.teams.includes(myTeam.id))
+    : undefined;
+const firstOpponent = firstMatch?.teams.find(
+  (t) => t !== undefined && t !== myTeam?.id,
+);
+const myMatch =
+  myTeam && latest?.revealed
+    ? currentMatchFor(latest.view, myTeam.id)
+    : undefined;
+const myAgreement = myMatch && matchAgreement(myMatch, latest.reports);
+const opponent = myMatch?.teams.find((t) => t !== myTeam?.id);
+const myClaim =
+  myMatch &&
+  latest.reports.find(
+    (r) =>
+      r.round === myMatch.round &&
+      r.matchIndex === myMatch.index &&
+      r.teamId === myTeam?.id,
+  );
+
+const REPORTED_NOTICE: Record<
+  string,
+  { tone: "success" | "error"; text: string }
+> = {
+  waiting: {
+    tone: "success",
+    text: "Result sent. Waiting for the other team to agree.",
+  },
+  agreed: { tone: "success", text: "Both teams agree. The result is in." },
+  disputed: {
+    tone: "error",
+    text: "The teams disagree. An admin will decide.",
+  },
+  refused: { tone: "error", text: "That result can't be reported." },
+};
+const notice = reported ? REPORTED_NOTICE[reported] : undefined;
+---
+
+<div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+  <header>
+    <p class="prompt text-xs font-bold tracking-[0.3em] text-ink-dim uppercase">
+      ls ~/pool
+    </p>
+    <h1
+      class="mt-3 text-4xl font-extrabold tracking-tight text-ink sm:text-6xl"
+    >
+      POOL <span class="text-acid text-glow">MASTER</span>
+    </h1>
+    <p class="mt-3 max-w-xl text-sm leading-relaxed text-ink-dim sm:text-base">
+      <span class="text-acid">// </span>
+      {teams.length} duos, a fresh random draw every week, one winner.
+    </p>
+    <nav aria-label="On this page" class="mt-4 flex flex-wrap gap-3">
+      {
+        latest && (
+          <a href="#bracket" class={btnGhost}>
+            bracket ↓
+          </a>
+        )
+      }
+      <a href="#leaderboard" class={btnGhost}>leaderboard ↓</a>
+      {
+        previous.length > 0 && (
+          <a href="#history" class={btnGhost}>
+            past winners ↓
+          </a>
+        )
+      }
+    </nav>
+  </header>
+
+  {
+    notice && (
+      <Notice tone={notice.tone} class="mt-6">
+        {notice.text}
+      </Notice>
+    )
+  }
+
+  <section
+    id="your-match"
+    class="mt-8 scroll-mt-24"
+    aria-labelledby="your-match-heading"
+  >
+    <h2
+      id="your-match-heading"
+      class="prompt mb-3 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+    >
+      pool --my-match
+    </h2>
+    <TerminalWindow title="~/pool/me">
+      {
+        !viewerPlayerId ? (
+          <p class="text-sm text-ink-dim">
+            <a href={withBase("/login")} class="text-cyan hover:underline">
+              Sign in
+            </a>{" "}
+            to report your team's results.
+          </p>
+        ) : !myTeam ? (
+          <p class="text-sm text-ink-dim">
+            You're not on a pool team yet. Ask an admin to pair you up.
+          </p>
+        ) : !latest ? (
+          <p class="text-sm text-ink-dim">
+            Playing as <span class="font-bold text-ink">{myTeam.name}</span>. No
+            draw yet.
+          </p>
+        ) : !latest.revealed ? (
+          <div class="space-y-2 text-sm">
+            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-amber">
+              week {latest.weekNumber} · draw sealed
+            </p>
+            <p class="text-ink-dim">
+              <span class="font-bold text-ink">{myTeam.name}</span>'s first
+              match is revealed{" "}
+              <span class="font-bold text-ink">
+                {revealTime(latest.revealAt)}
+              </span>
+              .
+            </p>
+          </div>
+        ) : (
+          <div class="space-y-3 text-sm">
+            <p class="text-[11px] font-bold uppercase tracking-[0.2em] text-acid">
+              week {latest.weekNumber} · first match revealed
+            </p>
+            <p class="pool-reveal text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">
+              {myTeam.name}
+              {firstOpponent ? (
+                <>
+                  <span class="mx-2 text-acid">vs</span>
+                  {nameOf(firstOpponent)}
+                </>
+              ) : (
+                <span class="text-ink-dim"> has a bye into round 2</span>
+              )}
+            </p>
+            {myMatch && opponent ? (
+              <>
+                {myMatch !== firstMatch && (
+                  <p class="text-ink-dim">
+                    Up next:{" "}
+                    <span class="font-bold text-ink">{nameOf(opponent)}</span>
+                  </p>
+                )}
+                {myAgreement?.state === "disputed" ? (
+                  <p class="text-danger">
+                    The teams disagree on this one. An admin will decide.
+                  </p>
+                ) : (
+                  myClaim && (
+                    <p class="text-ink-faint">
+                      You said {nameOf(myClaim.winnerTeamId)} won. Waiting for{" "}
+                      {nameOf(opponent)} to agree.
+                    </p>
+                  )
+                )}
+                <a
+                  href={`#week-${latest.weekNumber}`}
+                  class="inline-block text-cyan hover:underline"
+                >
+                  Pick the winner on your match in the bracket ↓
+                </a>
+                <p class="text-[11px] text-ink-faint">
+                  Both teams report; the result counts once you agree.
+                </p>
+              </>
+            ) : (
+              <p class="text-ink-faint">No match to report right now.</p>
+            )}
+          </div>
+        )
+      }
+    </TerminalWindow>
+  </section>
+
+  {
+    latest ? (
+      <section
+        id="bracket"
+        class="mt-10 scroll-mt-24"
+        aria-labelledby="bracket-heading"
+      >
+        <h2
+          id="bracket-heading"
+          class="prompt mb-3 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+        >
+          pool --brackets
+        </h2>
+        {/* Reversed: the current week opens on the right; scroll left for older weeks. */}
+        <ol class="flex flex-row-reverse snap-x snap-mandatory gap-4 overflow-x-auto pb-3">
+          {weeks.map((week, i) => (
+            <li
+              id={`week-${week.weekNumber}`}
+              class="w-full shrink-0 snap-start scroll-mt-24"
+            >
+              <TerminalWindow
+                title={`~/pool/week-${week.weekNumber}`}
+                meta={
+                  !week.revealed
+                    ? "sealed"
+                    : week.view.championId
+                      ? `winner: ${nameOf(week.view.championId)}`
+                      : "in progress"
+                }
+              >
+                <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <p class="flex flex-wrap items-center gap-2 text-sm text-ink-dim">
+                    <span class="font-bold text-ink">
+                      Week {week.weekNumber}
+                      {i === 0 && " (this week)"}
+                    </span>
+                    {week.view.championId && (
+                      <>
+                        <PixelCrown class="h-6 w-auto" />
+                        <span class="font-bold text-acid">
+                          {nameOf(week.view.championId)}
+                        </span>
+                        <span>won</span>
+                        {week.view.runnerUpId && (
+                          <>
+                            <span>· runner-up</span>
+                            <span class="text-acid">
+                              {nameOf(week.view.runnerUpId)}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </p>
+                  <span class="flex gap-3 text-xs">
+                    {i < weeks.length - 1 && (
+                      <a
+                        href={`#week-${weeks[i + 1].weekNumber}`}
+                        class="text-cyan hover:underline"
+                      >
+                        ← older
+                      </a>
+                    )}
+                    {i > 0 && (
+                      <a
+                        href={`#week-${weeks[i - 1].weekNumber}`}
+                        class="text-cyan hover:underline"
+                      >
+                        newer →
+                      </a>
+                    )}
+                  </span>
+                </div>
+                {week.revealed ? (
+                  <PoolBracket
+                    view={week.view}
+                    teams={labels}
+                    pick={
+                      i === 0 && myTeam
+                        ? {
+                            teamId: myTeam.id,
+                            weekNumber: week.weekNumber,
+                            reports: week.reports,
+                          }
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <p class="rounded-md border border-dashed border-grid px-4 py-10 text-center text-sm text-ink-dim">
+                    The week {week.weekNumber} draw is sealed until{" "}
+                    <span class="font-bold text-ink">
+                      {revealTime(week.revealAt)}
+                    </span>
+                    .
+                  </p>
+                )}
+              </TerminalWindow>
+            </li>
+          ))}
+        </ol>
+        {weeks.length > 1 && (
+          <p class="text-[11px] text-ink-faint">
+            Scroll left for earlier weeks' brackets.
+          </p>
+        )}
+      </section>
+    ) : (
+      <p class="mt-10 text-sm text-ink-faint">No bracket has been drawn yet.</p>
+    )
+  }
+
+  <section
+    id="leaderboard"
+    class="mt-10 scroll-mt-24"
+    aria-labelledby="table-heading"
+  >
+    <h2
+      id="table-heading"
+      class="prompt mb-3 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+    >
+      pool --leaderboard
+    </h2>
+    <TerminalWindow title="~/pool/leaderboard" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr
+              class="text-left text-[10px] uppercase tracking-[0.2em] text-ink-faint"
+            >
+              <th scope="col" class="px-3 py-2">#</th>
+              <th scope="col" class="px-3 py-2">team</th>
+              <th scope="col" class="px-3 py-2 text-right">weeks</th>
+              <th scope="col" class="px-3 py-2 text-right">match wins</th>
+              <th scope="col" class="px-3 py-2 text-right">titles</th>
+              <th scope="col" class="px-3 py-2 text-right">runner-up</th>
+              <th scope="col" class="px-3 py-2 text-right">pts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              standings.map((row) => (
+                <tr
+                  class:list={[
+                    "border-t border-grid/60",
+                    row.teamId === myTeam?.id && "bg-acid/5",
+                  ]}
+                >
+                  <td class="px-3 py-2 tabular-nums text-ink-faint">
+                    {row.rank}
+                  </td>
+                  <td class="px-3 py-2">
+                    <span class="flex items-center gap-2 text-ink">
+                      {nameOf(row.teamId)}
+                      {row.rank === 1 && row.points > 0 && (
+                        <PixelCrown
+                          class="h-4 w-auto"
+                          label="top of the table"
+                        />
+                      )}
+                    </span>
+                    <span class="block text-[11px] text-ink-faint">
+                      {labels[row.teamId]?.members}
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums text-ink-dim">
+                    {row.weeks}
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums text-ink-dim">
+                    {row.matchWins}
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums text-ink-dim">
+                    {row.titles}
+                  </td>
+                  <td class="px-3 py-2 text-right tabular-nums text-ink-dim">
+                    {row.runnerUps}
+                  </td>
+                  <td class="px-3 py-2 text-right font-extrabold tabular-nums text-acid">
+                    {row.points}
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </TerminalWindow>
+    <p class="mt-2 text-[11px] text-ink-faint">
+      Winner {POOL_POINTS.champion} pts · runner-up {POOL_POINTS.runnerUp} · semi-final
+      {POOL_POINTS.semiFinalist} · knocked out earlier {POOL_POINTS.knockedOut}.
+      A week's points count once its final is agreed.
+    </p>
+  </section>
+
+  {
+    previous.length > 0 && (
+      <footer
+        id="history"
+        class="mt-12 scroll-mt-24"
+      >
+        <h2
+          id="previous-heading"
+          class="prompt mb-3 text-xs font-bold tracking-[0.3em] text-ink-dim uppercase"
+        >
+          pool --history
+        </h2>
+        <ol class="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3">
+          {previous.map((week) => (
+            <li class="w-56 shrink-0 snap-start">
+              <a
+                href={`#week-${week.weekNumber}`}
+                class="block h-full rounded-md border border-grid bg-term-panel p-3 transition-colors hover:border-acid"
+              >
+                <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+                  week {week.weekNumber}
+                </span>
+                <span class="mt-2 flex items-center gap-2 text-sm font-bold text-acid">
+                  <PixelCrown class="h-4 w-auto shrink-0" />
+                  <span class="truncate">{nameOf(week.view.championId!)}</span>
+                </span>
+                {week.view.runnerUpId && (
+                  <span class="mt-1 block truncate text-xs text-ink-dim">
+                    runner-up {nameOf(week.view.runnerUpId)}
+                  </span>
+                )}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </footer>
+    )
+  }
+</div>
+
+<style>
+  .pool-reveal {
+    animation: pool-reveal 0.7s ease-out both;
+  }
+  @keyframes pool-reveal {
+    from {
+      opacity: 0;
+      letter-spacing: 0.3em;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pool-reveal {
+      animation: none;
+    }
+  }
+</style>

@@ -225,6 +225,7 @@ export function competitionData(
       mini_tasks: false,
       achievements: false,
       marketplace: false,
+      pool_bracket: false,
     },
     ...overrides,
   };

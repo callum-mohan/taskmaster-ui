@@ -1,0 +1,50 @@
+---
+interface Props {
+  class?: string;
+  /** Accessible name; omit to hide the crown from screen readers. */
+  label?: string;
+}
+
+const { class: className = "h-5 w-auto", label } = Astro.props;
+
+// A gold crown topped with an 8-ball, its jewels pool balls.
+const ART = [
+  ".....KKK.....",
+  "....KKWKK....",
+  ".....KKK.....",
+  "Y.....Y.....Y",
+  "YY...YYY...YY",
+  "YYY.YYYYY.YYY",
+  "YYYYYYYYYYYYY",
+  "YRRYYUUUYYOOY",
+  "YYYYYYYYYYYYY",
+  "DDDDDDDDDDDDD",
+];
+const COLOURS: Record<string, string> = {
+  K: "#16161a",
+  W: "#ffffff",
+  Y: "#f5c542",
+  D: "#b8860b",
+  R: "#e53935",
+  U: "#1e63d6",
+  O: "#f57c00",
+};
+const pixels = ART.flatMap((row, y) =>
+  [...row].flatMap((c, x) => (COLOURS[c] ? [{ x, y, fill: COLOURS[c] }] : [])),
+);
+---
+
+<svg
+  viewBox={`0 0 ${ART[0].length} ${ART.length}`}
+  shape-rendering="crispEdges"
+  class={className}
+  role="img"
+  aria-hidden={label ? undefined : "true"}
+>
+  <title>{label ?? "crown"}</title>
+  {
+    pixels.map((p) => (
+      <rect x={p.x} y={p.y} width="1" height="1" fill={p.fill} />
+    ))
+  }
+</svg>

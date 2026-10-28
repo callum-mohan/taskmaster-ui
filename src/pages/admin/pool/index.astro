@@ -1,0 +1,363 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import {
+  btnPrimary,
+  inputClass,
+  labelClass,
+  tableCell,
+  tableHead,
+} from "../../../components/admin/styles";
+import { listPlayers } from "../../../data/admin";
+import { getAccountStatuses } from "../../../data/accounts";
+import { violatedConstraint } from "../../../data/db-errors";
+import {
+  createPoolBracket,
+  createPoolTeam,
+  deletePoolTeam,
+  listPoolBrackets,
+  listPoolTeams,
+  nextPoolWeek,
+} from "../../../data/pool";
+import { formValues } from "../../../lib/admin-forms";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
+import {
+  MAX_POOL_TEAMS,
+  MIN_POOL_TEAMS,
+  buildBracket,
+  drawBracket,
+} from "../../../lib/pool-bracket";
+import { parsePoolTeamForm, parsePoolWeek } from "../../../lib/pool-forms";
+import { withBase } from "../../../lib/url";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+const here = (query = "", hash = "") =>
+  withBase(withSeason(`/admin/pool${query}${hash}`, season));
+
+let teamErrors: Record<string, string> = {};
+let teamValues: Record<string, string> = {};
+let drawError: string | undefined;
+
+if (season && Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = formValues(form).intent;
+
+  if (intent === "team") {
+    const parsed = parsePoolTeamForm(form);
+    teamValues = parsed.values;
+    if (!parsed.ok) {
+      teamErrors = parsed.errors;
+    } else {
+      try {
+        await createPoolTeam(season.id, parsed.data);
+        return Astro.redirect(
+          here(`?done=saved&name=${encodeURIComponent(parsed.data.name)}`),
+          303,
+        );
+      } catch (error) {
+        const constraint = violatedConstraint(error);
+        if (constraint === "pool_teams_pkey") {
+          teamErrors = { name: "A pool team with that name already exists." };
+        } else if (constraint === "pool_team_members_player_id_unique") {
+          teamErrors = { memberIds: "One of those players is already paired." };
+        } else {
+          throw error;
+        }
+      }
+    }
+  } else if (intent === "delete-team") {
+    const id = formValues(form).teamId ?? "";
+    const deleted = await deletePoolTeam(season.id, id);
+    return Astro.redirect(
+      here(`?done=${deleted ? "deleted" : "in-use"}`, "#teams"),
+      303,
+    );
+  } else if (intent === "draw") {
+    const week = parsePoolWeek(formValues(form).weekNumber);
+    const teams = await listPoolTeams(season.id);
+    if (week === undefined) {
+      drawError = "Enter a week number from 1 to 99.";
+    } else if (teams.length < MIN_POOL_TEAMS || teams.length > MAX_POOL_TEAMS) {
+      drawError = `A draw needs ${MIN_POOL_TEAMS}–${MAX_POOL_TEAMS} pool teams; there are ${teams.length}.`;
+    } else {
+      try {
+        await createPoolBracket(
+          season.id,
+          week,
+          drawBracket(teams.map((t) => t.id)),
+        );
+        return Astro.redirect(
+          withBase(withSeason(`/admin/pool/${week}`, season)),
+          303,
+        );
+      } catch (error) {
+        if (
+          violatedConstraint(error) !==
+          "pool_brackets_season_id_week_number_unique"
+        ) {
+          throw error;
+        }
+        drawError = `Week ${week} already has a bracket.`;
+      }
+    }
+  }
+}
+
+const [players, teams, brackets, nextWeek, accounts] = season
+  ? await Promise.all([
+      listPlayers(season.id),
+      listPoolTeams(season.id),
+      listPoolBrackets(season.id),
+      nextPoolWeek(season.id),
+      getAccountStatuses(),
+    ])
+  : [[], [], [], 1, {} as Record<string, string>];
+// Players report their own results, so each needs an active sign-in account.
+const noAccount = (playerId: string) => accounts[playerId] !== "active";
+const playerName = new Map(players.map((p) => [p.id, p.name]));
+const paired = new Set(teams.flatMap((t) => t.memberIds));
+const unpaired = players.filter((p) => !paired.has(p.id));
+const teamName = new Map(teams.map((t) => [t.id, t.name]));
+const done = Astro.url.searchParams.get("done");
+const subject = Astro.url.searchParams.get("name");
+---
+
+<AdminLayout title="Pool bracket">
+  <h1 class="text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> ls ~/pool
+  </h1>
+  <p class="mt-1 max-w-prose text-sm text-ink-dim">
+    Pair players into pool teams, then draw a random knockout bracket each week
+    and record who wins each match. The public page is behind the "Pool bracket"
+    feature flag.
+  </p>
+
+  {
+    done && (
+      <Notice tone={done === "in-use" ? "error" : "success"} class="mt-6">
+        {done === "deleted"
+          ? "Deleted the pool team."
+          : done === "in-use"
+            ? "That team has played in a bracket, so it can't be deleted."
+            : `Saved ${subject ?? "the pool team"}.`}
+      </Notice>
+    )
+  }
+
+  {
+    !season && (
+      <Notice tone="error" class="mt-6">
+        Create a season first.
+      </Notice>
+    )
+  }
+
+  <section id="teams" aria-labelledby="teams-heading" class="mt-8 scroll-mt-24">
+    <h2
+      id="teams-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      pool teams ({teams.length} / {MAX_POOL_TEAMS})
+    </h2>
+    <TerminalWindow title="~/pool/teams" bodyClass="p-0 sm:p-0">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" class={tableHead}>team</th>
+              <th scope="col" class={tableHead}>players</th>
+              <th scope="col" class={tableHead}
+                ><span class="sr-only">actions</span></th
+              >
+            </tr>
+          </thead>
+          <tbody>
+            {
+              teams.length === 0 && (
+                <tr>
+                  <td colspan="3" class:list={[tableCell, "text-ink-faint"]}>
+                    No pool teams yet.
+                  </td>
+                </tr>
+              )
+            }
+            {
+              teams.map((team) => (
+                <tr>
+                  <td class:list={[tableCell, "text-ink"]}>{team.name}</td>
+                  <td class:list={[tableCell, "text-ink-dim"]}>
+                    {team.memberIds.map((id, i) => (
+                      <>
+                        {i > 0 && " & "}
+                        {playerName.get(id) ?? id}
+                        {noAccount(id) && (
+                          <span class="text-[11px] text-amber">
+                            {" "}
+                            (no account)
+                          </span>
+                        )}
+                      </>
+                    ))}
+                  </td>
+                  <td class:list={[tableCell, "text-right"]}>
+                    <ConfirmDelete
+                      subject={`pool team "${team.name}"`}
+                      intent="delete-team"
+                      fields={{ teamId: team.id }}
+                    />
+                  </td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </TerminalWindow>
+
+    {
+      season && teams.length < MAX_POOL_TEAMS && (
+        <form method="post" class="mt-4 grid gap-3 sm:grid-cols-4 sm:items-end">
+          <input type="hidden" name="intent" value="team" />
+          <label class="block">
+            <span class={labelClass}>team name</span>
+            <input
+              name="name"
+              required
+              maxlength="80"
+              value={teamValues.name ?? ""}
+              class:list={["mt-1", inputClass(!!teamErrors.name)]}
+            />
+          </label>
+          {(["playerOne", "playerTwo"] as const).map((field, i) => (
+            <label class="block">
+              <span class={labelClass}>player {i + 1}</span>
+              <select
+                name={field}
+                required
+                class:list={["mt-1", inputClass(!!teamErrors.memberIds)]}
+              >
+                <option value="">choose…</option>
+                {unpaired.map((p) => (
+                  <option value={p.id} selected={teamValues[field] === p.id}>
+                    {p.name}
+                    {noAccount(p.id) ? " (no account)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button type="submit" class={btnPrimary}>
+            + add team
+          </button>
+          {(teamErrors.name ?? teamErrors.memberIds ?? teamErrors.id) && (
+            <p class="text-xs text-danger sm:col-span-4">
+              {teamErrors.name ?? teamErrors.memberIds ?? teamErrors.id}
+            </p>
+          )}
+        </form>
+      )
+    }
+  </section>
+
+  <section
+    id="brackets"
+    aria-labelledby="brackets-heading"
+    class="mt-10 scroll-mt-24"
+  >
+    <h2
+      id="brackets-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      weekly brackets ({brackets.length})
+    </h2>
+
+    {
+      season && (
+        <form method="post" class="mb-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="intent" value="draw" />
+          <label class="block">
+            <span class={labelClass}>week</span>
+            <input
+              name="weekNumber"
+              type="number"
+              min="1"
+              max="99"
+              required
+              value={nextWeek}
+              class:list={["mt-1 w-24", inputClass(!!drawError)]}
+            />
+          </label>
+          <button type="submit" class={btnPrimary}>
+            draw bracket ({teams.length} teams)
+          </button>
+          <p class="w-full text-xs text-ink-faint">
+            The draw stays sealed until the next Monday 09:00, when each duo
+            sees its first match.
+          </p>
+          {drawError && <p class="w-full text-xs text-danger">{drawError}</p>}
+        </form>
+      )
+    }
+
+    <TerminalWindow title="~/pool/brackets" bodyClass="p-0 sm:p-0">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th scope="col" class={tableHead}>week</th>
+            <th scope="col" class={tableHead}>teams</th>
+            <th scope="col" class={tableHead}>winner</th>
+            <th scope="col" class={tableHead}>runner-up</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            brackets.length === 0 && (
+              <tr>
+                <td colspan="4" class:list={[tableCell, "text-ink-faint"]}>
+                  No brackets drawn yet.
+                </td>
+              </tr>
+            )
+          }
+          {
+            brackets.map((bracket) => {
+              const view = buildBracket(bracket.entries, bracket.results);
+              return (
+                <tr>
+                  <td class={tableCell}>
+                    <a
+                      href={withBase(
+                        withSeason(`/admin/pool/${bracket.weekNumber}`, season),
+                      )}
+                      class="text-cyan hover:underline"
+                    >
+                      week {bracket.weekNumber}
+                    </a>
+                  </td>
+                  <td class:list={[tableCell, "tabular-nums text-ink-dim"]}>
+                    {bracket.entries.length}
+                  </td>
+                  <td class:list={[tableCell, "text-acid"]}>
+                    {view.championId
+                      ? (teamName.get(view.championId) ?? view.championId)
+                      : "in progress"}
+                  </td>
+                  <td class:list={[tableCell, "text-ink-dim"]}>
+                    {view.runnerUpId
+                      ? (teamName.get(view.runnerUpId) ?? view.runnerUpId)
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })
+          }
+        </tbody>
+      </table>
+    </TerminalWindow>
+  </section>
+</AdminLayout>

@@ -1,0 +1,178 @@
+---
+import type { PoolBracketView, PoolMatch } from "../lib/pool-bracket";
+import { roundLabel } from "../lib/pool-bracket";
+import { matchAgreement, type PoolReport } from "../lib/pool-scoring";
+import PixelCrown from "./PixelCrown.astro";
+
+interface Props {
+  view: PoolBracketView;
+  /** Each pool team's name and its players' names. */
+  teams: Record<string, { name: string; members: string }>;
+  /** Lets the viewer's team pick the winner of its own undecided match. */
+  pick?: { teamId: string; weekNumber: number; reports: readonly PoolReport[] };
+  class?: string;
+}
+
+const { view, teams, pick, class: className } = Astro.props;
+const roundCount = view.rounds.length;
+const nameOf = (id: string) => teams[id]?.name ?? id;
+
+const canPick = (match: PoolMatch) =>
+  !!pick &&
+  !match.bye &&
+  match.winnerId === undefined &&
+  match.teams.every((t) => t !== undefined) &&
+  match.teams.includes(pick.teamId);
+
+function pickStatus(match: PoolMatch): string {
+  const agreement = matchAgreement(match, pick?.reports ?? []);
+  if (agreement.state === "disputed") {
+    return "Disputed: an admin will decide. You can still change your pick.";
+  }
+  if (agreement.state === "waiting") {
+    return agreement.teamId === pick?.teamId
+      ? `You picked ${nameOf(agreement.winnerTeamId)}. Waiting for the other team.`
+      : `They say ${nameOf(agreement.winnerTeamId)} won. Pick the same to confirm.`;
+  }
+  return "Your match: pick the winner.";
+}
+---
+
+<div class:list={["overflow-x-auto", className]}>
+  <ol
+    class="grid min-w-max gap-4"
+    style={`grid-template-columns: repeat(${roundCount}, minmax(12rem, 1fr));`}
+  >
+    {
+      view.rounds.map((matches, round) => (
+        <li class="flex flex-col">
+          <h3 class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+            {roundLabel(round, roundCount)}
+          </h3>
+          <ol class="flex flex-1 flex-col justify-around gap-3">
+            {matches.map((match) => {
+              const pickable = canPick(match);
+              const pending = pickable
+                ? matchAgreement(match, pick?.reports ?? [])
+                : undefined;
+              const claimedId =
+                pending?.state === "waiting" ? pending.winnerTeamId : undefined;
+              return (
+                <li
+                  class:list={[
+                    "overflow-hidden rounded-md border bg-term-panel",
+                    pickable ? "border-cyan" : "border-grid",
+                  ]}
+                >
+                  {match.teams.map((teamId, side) => {
+                    const won =
+                      teamId !== undefined && teamId === match.winnerId;
+                    const lost =
+                      teamId !== undefined &&
+                      match.winnerId !== undefined &&
+                      !won;
+                    const crowned = won && match.round === roundCount - 1;
+                    const Row = pickable ? "form" : "div";
+                    const Inner = pickable ? "button" : "span";
+                    return (
+                      <Row
+                        {...(pickable && { method: "post" })}
+                        class:list={[
+                          "px-3 py-2 text-sm",
+                          side === 1 && "border-t border-grid/60",
+                          won &&
+                            "bg-acid/10 text-acid ring-1 ring-inset ring-acid",
+                          lost && "text-ink-faint line-through",
+                          pickable && "hover:bg-acid/10",
+                        ]}
+                      >
+                        {pickable && pick && teamId && (
+                          <>
+                            <input
+                              type="hidden"
+                              name="weekNumber"
+                              value={pick.weekNumber}
+                            />
+                            <input
+                              type="hidden"
+                              name="round"
+                              value={match.round}
+                            />
+                            <input
+                              type="hidden"
+                              name="matchIndex"
+                              value={match.index}
+                            />
+                            <input
+                              type="hidden"
+                              name="winnerTeamId"
+                              value={teamId}
+                            />
+                          </>
+                        )}
+                        <Inner
+                          {...(pickable && {
+                            type: "submit",
+                            "aria-label": `${teamId && nameOf(teamId)} won`,
+                          })}
+                          class:list={[
+                            "flex w-full items-center justify-between gap-2 text-left",
+                            pickable && "cursor-pointer",
+                          ]}
+                        >
+                          {teamId === undefined ? (
+                            <span class="text-ink-faint">
+                              {match.bye ? "bye" : "tbd"}
+                            </span>
+                          ) : (
+                            <span class="min-w-0">
+                              <span
+                                class:list={[
+                                  "block truncate",
+                                  won
+                                    ? "font-bold text-acid"
+                                    : !lost && "text-ink",
+                                ]}
+                              >
+                                {teams[teamId]?.name ?? teamId}
+                              </span>
+                              <span class="block truncate text-[11px] text-ink-faint">
+                                {teams[teamId]?.members}
+                              </span>
+                            </span>
+                          )}
+                          {crowned ? (
+                            <PixelCrown
+                              class="h-5 w-auto shrink-0"
+                              label="weekly winner"
+                            />
+                          ) : won ? (
+                            <span class="text-xs">
+                              <span aria-hidden="true">✓</span>
+                              <span class="sr-only">winner</span>
+                            </span>
+                          ) : (
+                            pickable && (
+                              <span class="shrink-0 text-[10px] font-bold uppercase tracking-widest text-cyan">
+                                {teamId === claimedId ? "claimed" : "pick"}
+                              </span>
+                            )
+                          )}
+                        </Inner>
+                      </Row>
+                    );
+                  })}
+                  {pickable && (
+                    <p class="border-t border-grid/60 px-3 py-1.5 text-[11px] text-cyan">
+                      {pickStatus(match)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </li>
+      ))
+    }
+  </ol>
+</div>

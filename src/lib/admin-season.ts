@@ -20,7 +20,7 @@ const RECORD_ROUTES: [
 ];
 
 const SEASON_ROUTES =
-  /^\/admin\/(?:weeks|roster|activity|weeks\/new|players\/new|teams\/new)\/?$/;
+  /^\/admin\/(?:weeks|roster|activity|weeks\/new|players\/new|teams\/new|pool|pool\/\[week\])\/?$/;
 
 /** Whether the screen works on a whole season picked with `?season=`. */
 export const isSeasonScopedRoute = (route: string) => SEASON_ROUTES.test(route);

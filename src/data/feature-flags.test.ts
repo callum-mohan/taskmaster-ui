@@ -18,6 +18,7 @@ describe("mapFeatureFlags", () => {
       mini_tasks: false,
       achievements: false,
       marketplace: false,
+      pool_bracket: false,
     });
   });
 
@@ -31,6 +32,7 @@ describe("mapFeatureFlags", () => {
       mini_tasks: false,
       achievements: false,
       marketplace: false,
+      pool_bracket: false,
     });
     expect(
       mapFeatureFlags([row("shop_eggs", false), row("storm_mode", true)]),
@@ -41,6 +43,7 @@ describe("mapFeatureFlags", () => {
       mini_tasks: false,
       achievements: false,
       marketplace: false,
+      pool_bracket: false,
     });
   });
 });
@@ -54,6 +57,7 @@ describe("featureFlagViews", () => {
       expect.objectContaining({ key: "mini_tasks", enabled: false }),
       expect.objectContaining({ key: "achievements", enabled: false }),
       expect.objectContaining({ key: "marketplace", enabled: false }),
+      expect.objectContaining({ key: "pool_bracket", enabled: false }),
     ]);
     expect(featureFlagViews([])[0].changedBy).toBeUndefined();
     expect(featureFlagViews([row("shop_eggs", true)])[0]).toMatchObject({

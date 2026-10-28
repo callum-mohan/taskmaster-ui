@@ -1610,7 +1610,8 @@ export type FeatureFlagKey =
   | "skill_trees"
   | "mini_tasks"
   | "achievements"
-  | "marketplace";
+  | "marketplace"
+  | "pool_bracket";
 
 /** Whether each feature is on. */
 export type FeatureFlags = Record<FeatureFlagKey, boolean>;

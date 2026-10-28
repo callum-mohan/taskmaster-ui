@@ -1320,3 +1320,151 @@ export const miniTaskCompletions = pgTable(
     index("mini_task_completions_player_id_idx").on(t.playerId),
   ],
 );
+
+// ── Pool bracket ──────────────────────────────────────────────────────
+// A weekly single-elimination pool tournament between pairs of players.
+// Only the draw and recorded match winners are stored; byes, later-round
+// matchups and the week's winner and runner-up are derived in
+// `src/lib/pool-bracket.ts`.
+
+/** A pool pair. Separate from squads (`teams`), which can be any size. */
+export const poolTeams = pgTable(
+  "pool_teams",
+  {
+    id: text().primaryKey(),
+    seasonId: seasonId(),
+    name: text().notNull(),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    index("pool_teams_season_id_idx").on(t.seasonId),
+    unique("pool_teams_id_season_id_unique").on(t.id, t.seasonId),
+  ],
+);
+
+/** A pool team's players (two; checked by the form). One team per player. */
+export const poolTeamMembers = pgTable(
+  "pool_team_members",
+  {
+    teamId: text().notNull(),
+    playerId: text().notNull().unique("pool_team_members_player_id_unique"),
+    seasonId: seasonId(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.teamId, t.playerId] }),
+    foreignKey({
+      name: "pool_team_members_team_season_fk",
+      columns: [t.teamId, t.seasonId],
+      foreignColumns: [poolTeams.id, poolTeams.seasonId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "pool_team_members_player_season_fk",
+      columns: [t.playerId, t.seasonId],
+      foreignColumns: [players.id, players.seasonId],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** One week's bracket. */
+export const poolBrackets = pgTable(
+  "pool_brackets",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    seasonId: seasonId(),
+    weekNumber: integer().notNull(),
+    // UK wall-clock time (like tasks) the draw goes public: Monday 09:00.
+    revealAt: timestamp({ mode: "string" }).notNull(),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    unique("pool_brackets_season_id_week_number_unique").on(
+      t.seasonId,
+      t.weekNumber,
+    ),
+    check("pool_brackets_week_number_positive", sql`${t.weekNumber} >= 1`),
+  ],
+);
+
+/**
+ * The random first-round draw: slots `2m` and `2m + 1` meet in match `m`.
+ * An empty slot is a bye. A team that played can't be deleted.
+ */
+export const poolBracketEntries = pgTable(
+  "pool_bracket_entries",
+  {
+    bracketId: integer()
+      .notNull()
+      .references(() => poolBrackets.id, { onDelete: "cascade" }),
+    slot: integer().notNull(),
+    teamId: text()
+      .notNull()
+      .references(() => poolTeams.id, { onDelete: "restrict" }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bracketId, t.slot] }),
+    unique("pool_bracket_entries_bracket_id_team_id_unique").on(
+      t.bracketId,
+      t.teamId,
+    ),
+    check("pool_bracket_entries_slot_range", sql`${t.slot} between 0 and 15`),
+    index("pool_bracket_entries_team_id_idx").on(t.teamId),
+  ],
+);
+
+/** Who won a match; the winner must be drawn in the same bracket. */
+export const poolMatchResults = pgTable(
+  "pool_match_results",
+  {
+    bracketId: integer().notNull(),
+    round: integer().notNull(),
+    matchIndex: integer().notNull(),
+    winnerTeamId: text().notNull(),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bracketId, t.round, t.matchIndex] }),
+    foreignKey({
+      name: "pool_match_results_entry_fk",
+      columns: [t.bracketId, t.winnerTeamId],
+      foreignColumns: [poolBracketEntries.bracketId, poolBracketEntries.teamId],
+    }).onDelete("cascade"),
+    check(
+      "pool_match_results_position_range",
+      sql`${t.round} >= 0 and ${t.matchIndex} >= 0`,
+    ),
+  ],
+);
+
+/**
+ * A competing team's claim of who won a match, made by one of its players.
+ * When both teams' claims agree the result is written to
+ * `pool_match_results`; a dispute waits for an admin.
+ */
+export const poolMatchReports = pgTable(
+  "pool_match_reports",
+  {
+    bracketId: integer().notNull(),
+    round: integer().notNull(),
+    matchIndex: integer().notNull(),
+    teamId: text().notNull(),
+    winnerTeamId: text().notNull(),
+    playerId: text()
+      .notNull()
+      .references(() => players.id, { onDelete: "cascade" }),
+    ...recordedTimestamps(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.bracketId, t.round, t.matchIndex, t.teamId] }),
+    foreignKey({
+      name: "pool_match_reports_team_entry_fk",
+      columns: [t.bracketId, t.teamId],
+      foreignColumns: [poolBracketEntries.bracketId, poolBracketEntries.teamId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "pool_match_reports_winner_entry_fk",
+      columns: [t.bracketId, t.winnerTeamId],
+      foreignColumns: [poolBracketEntries.bracketId, poolBracketEntries.teamId],
+    }).onDelete("cascade"),
+    index("pool_match_reports_player_id_idx").on(t.playerId),
+  ],
+);

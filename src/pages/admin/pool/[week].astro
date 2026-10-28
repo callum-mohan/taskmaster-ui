@@ -1,0 +1,234 @@
+---
+import AdminLayout from "../../../layouts/AdminLayout.astro";
+import TerminalWindow from "../../../components/TerminalWindow.astro";
+import PoolBracket from "../../../components/PoolBracket.astro";
+import Notice from "../../../components/admin/Notice.astro";
+import ConfirmDelete from "../../../components/admin/ConfirmDelete.astro";
+import { btnGhost, btnPrimary } from "../../../components/admin/styles";
+import { listPlayers } from "../../../data/admin";
+import {
+  clearPoolResults,
+  deletePoolBracket,
+  getPoolBracket,
+  listPoolTeams,
+  recordPoolResult,
+  revealPoolBracketNow,
+} from "../../../data/pool";
+import { formValues } from "../../../lib/admin-forms";
+import { selectedSeason, withSeason } from "../../../lib/admin-season";
+import {
+  buildBracket,
+  canRecordResult,
+  matchPath,
+  roundLabel,
+} from "../../../lib/pool-bracket";
+import { matchAgreement } from "../../../lib/pool-scoring";
+import { parsePoolResultForm, parsePoolWeek } from "../../../lib/pool-forms";
+import { withBase } from "../../../lib/url";
+import { ukDateFormat } from "../../../lib/time";
+
+// Fail closed if the middleware guard is ever bypassed.
+if (!Astro.locals.admin) return Astro.redirect(withBase("/login"));
+
+const season = selectedSeason(Astro.url, await Astro.locals.getSeasons());
+const week = parsePoolWeek(Astro.params.week);
+const bracket =
+  season && week !== undefined
+    ? await getPoolBracket(season.id, week)
+    : undefined;
+if (!season || !bracket) return Astro.rewrite("/404");
+
+const here = withBase(withSeason(`/admin/pool/${bracket.weekNumber}`, season));
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = formValues(form).intent;
+  const view = buildBracket(bracket.entries, bracket.results);
+  if (intent === "delete") {
+    await deletePoolBracket(bracket.id);
+    return Astro.redirect(
+      withBase(withSeason("/admin/pool#brackets", season)),
+      303,
+    );
+  }
+  if (intent === "reveal") {
+    await revealPoolBracketNow(bracket.id);
+    return Astro.redirect(here, 303);
+  }
+  const result = parsePoolResultForm(form);
+  if (result && intent === "win") {
+    if (
+      canRecordResult(
+        view,
+        result.round,
+        result.matchIndex,
+        result.winnerTeamId,
+      )
+    ) {
+      await recordPoolResult(bracket.id, result);
+    }
+  } else if (result && intent === "undo") {
+    const match = view.rounds[result.round]?.[result.matchIndex];
+    if (match && !match.bye) {
+      await clearPoolResults(
+        bracket.id,
+        matchPath(view, result.round, result.matchIndex),
+      );
+    }
+  }
+  return Astro.redirect(here, 303);
+}
+
+const [teams, players] = await Promise.all([
+  listPoolTeams(season.id),
+  listPlayers(season.id),
+]);
+const playerName = new Map(players.map((p) => [p.id, p.name]));
+const labels = Object.fromEntries(
+  teams.map((t) => [
+    t.id,
+    {
+      name: t.name,
+      members: t.memberIds.map((id) => playerName.get(id) ?? id).join(" & "),
+    },
+  ]),
+);
+const view = buildBracket(bracket.entries, bracket.results);
+const roundCount = view.rounds.length;
+const nameOf = (id: string) => labels[id]?.name ?? id;
+const matches = view.rounds.flat().filter((m) => !m.bye);
+const sealed = new Date(bracket.revealAt) > new Date();
+const revealTime = ukDateFormat({
+  weekday: "long",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+}).format(new Date(bracket.revealAt));
+---
+
+<AdminLayout title={`Pool week ${bracket.weekNumber}`}>
+  <a
+    href={withBase(withSeason("/admin/pool#brackets", season))}
+    class="text-xs text-cyan hover:underline">← all brackets</a
+  >
+  <h1 class="mt-2 text-2xl font-extrabold tracking-tight text-ink">
+    <span class="text-acid">$</span> pool --week {bracket.weekNumber}
+  </h1>
+  <div class="mt-2 flex flex-wrap items-center gap-3 text-sm text-ink-dim">
+    <span>
+      {sealed ? "Sealed until" : "Revealed"}
+      <span class="text-ink">{revealTime}</span>
+      {sealed && " (players see their first match then)"}
+    </span>
+    {
+      sealed && (
+        <form method="post">
+          <input type="hidden" name="intent" value="reveal" />
+          <button type="submit" class={btnGhost}>
+            reveal now
+          </button>
+        </form>
+      )
+    }
+  </div>
+
+  {
+    view.championId && (
+      <Notice tone="success" class="mt-6">
+        Winner: {nameOf(view.championId)}
+        {view.runnerUpId && <> · runner-up: {nameOf(view.runnerUpId)}</>}
+      </Notice>
+    )
+  }
+
+  <TerminalWindow title="~/pool/bracket" class="mt-6">
+    <PoolBracket view={view} teams={labels} />
+  </TerminalWindow>
+
+  <section aria-labelledby="results-heading" class="mt-10">
+    <h2
+      id="results-heading"
+      class="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint"
+    >
+      record results
+    </h2>
+    <ul class="divide-y divide-grid/60">
+      {
+        matches.map((match) => {
+          const [a, b] = match.teams;
+          const ready = a !== undefined && b !== undefined;
+          return (
+            <li class="flex flex-wrap items-center gap-3 py-3">
+              <span class="w-32 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-faint">
+                {roundLabel(match.round, roundCount)} {match.index + 1}
+              </span>
+              {!ready ? (
+                <span class="text-sm text-ink-faint">
+                  waiting for earlier matches
+                </span>
+              ) : match.winnerId ? (
+                <form method="post" class="flex items-center gap-3">
+                  <span class="text-sm text-acid">
+                    {nameOf(match.winnerId)} won
+                  </span>
+                  <input type="hidden" name="intent" value="undo" />
+                  <input type="hidden" name="round" value={match.round} />
+                  <input type="hidden" name="matchIndex" value={match.index} />
+                  <input
+                    type="hidden"
+                    name="winnerTeamId"
+                    value={match.winnerId}
+                  />
+                  <button type="submit" class={btnGhost}>
+                    undo
+                  </button>
+                </form>
+              ) : (
+                <>
+                  {[a, b].map((teamId) => (
+                    <form method="post">
+                      <input type="hidden" name="intent" value="win" />
+                      <input type="hidden" name="round" value={match.round} />
+                      <input
+                        type="hidden"
+                        name="matchIndex"
+                        value={match.index}
+                      />
+                      <input type="hidden" name="winnerTeamId" value={teamId} />
+                      <button type="submit" class={btnPrimary}>
+                        {nameOf(teamId)} won
+                      </button>
+                    </form>
+                  ))}
+                  <span class="text-xs text-ink-faint">
+                    {(() => {
+                      const agreement = matchAgreement(match, bracket.reports);
+                      if (agreement.state === "disputed")
+                        return "teams disagree: your call";
+                      if (agreement.state === "waiting") {
+                        return `${nameOf(agreement.teamId)} says ${nameOf(agreement.winnerTeamId)} won`;
+                      }
+                      return "no reports yet";
+                    })()}
+                  </span>
+                </>
+              )}
+            </li>
+          );
+        })
+      }
+    </ul>
+    <p class="mt-2 text-xs text-ink-faint">
+      Undoing a result also clears every later result it led to.
+    </p>
+  </section>
+
+  <ConfirmDelete
+    subject={`week ${bracket.weekNumber}'s bracket`}
+    impact={[{ label: "recorded result", count: bracket.results.length }]}
+    label={`delete week ${bracket.weekNumber} bracket`}
+    class="mt-10"
+  />
+</AdminLayout>

@@ -40,6 +40,11 @@ export const FEATURE_FLAGS: Record<
     description:
       "Opens /market: players list pets, avatars, cosmetics, egg exclusives and unused power-ups (not Shield, Mirror or Insurance) for Clim Coin, buy each other's listings and make offers. Listings expire after 7 days. Off: the market, its links and the wallet's sell buttons are hidden and nobody can list, buy or offer; open listings and offers stay put (offered coins stay held) until they expire or it's back on.",
   },
+  pool_bracket: {
+    label: "Pool bracket",
+    description:
+      "Shows the weekly pool bracket at /pool. Off: the public pages 404; admins can still set up teams and draws.",
+  },
 };
 
 export const FEATURE_FLAG_KEYS = Object.keys(FEATURE_FLAGS) as FeatureFlagKey[];

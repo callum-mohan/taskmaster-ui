@@ -1,0 +1,78 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import PoolView from "../../components/pool/PoolView.astro";
+import {
+  listPoolBrackets,
+  listPoolTeams,
+  poolTeamOf,
+  reportPoolResult,
+} from "../../data/pool";
+import { formValues } from "../../lib/admin-forms";
+import { buildBracket, canRecordResult } from "../../lib/pool-bracket";
+import { parsePoolResultForm, parsePoolWeek } from "../../lib/pool-forms";
+import { withBase } from "../../lib/url";
+
+const [{ season, features, getPlayerById }, viewer] = await Promise.all([
+  Astro.locals.getQueries(),
+  Astro.locals.getViewer(),
+]);
+if (!features.pool_bracket) return Astro.rewrite("/404");
+
+const [brackets, teams] = await Promise.all([
+  listPoolBrackets(season.id),
+  listPoolTeams(season.id),
+]);
+const myTeam = poolTeamOf(teams, viewer?.playerId);
+
+// Only a player on one of the two competing teams can report a result.
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const week = parsePoolWeek(formValues(form).weekNumber);
+  const report = parsePoolResultForm(form);
+  const target = brackets.find((b) => b.weekNumber === week);
+  let outcome = "refused";
+  if (
+    myTeam &&
+    viewer?.playerId &&
+    target &&
+    report &&
+    new Date(target.revealAt) <= new Date()
+  ) {
+    const view = buildBracket(target.entries, target.results);
+    const match = view.rounds[report.round]?.[report.matchIndex];
+    if (
+      match?.teams.includes(myTeam.id) &&
+      canRecordResult(
+        view,
+        report.round,
+        report.matchIndex,
+        report.winnerTeamId,
+      )
+    ) {
+      const agreement = await reportPoolResult(
+        target.id,
+        match,
+        { ...report, teamId: myTeam.id },
+        viewer.playerId,
+      );
+      outcome = agreement.state;
+    }
+  }
+  const query = new URLSearchParams({ reported: outcome });
+  const hash = week === undefined ? "your-match" : `week-${week}`;
+  return Astro.redirect(withBase(`/pool?${query}#${hash}`), 303);
+}
+---
+
+<Layout
+  title="Pool Master"
+  description="The weekly EAYL Taskmaster pool knockout bracket and season table."
+>
+  <PoolView
+    teams={teams}
+    brackets={brackets}
+    playerName={(id) => getPlayerById(id)?.name ?? id}
+    viewerPlayerId={viewer?.playerId}
+    reported={Astro.url.searchParams.get("reported")}
+  />
+</Layout>

@@ -87,6 +87,7 @@ function setup({
         mini_tasks: false,
         achievements: false,
         marketplace: false,
+        pool_bracket: false,
       },
       players: [player("ann", "Ann"), player("bob", "Bob"), player("cat")],
       tasks: [done, live],
@@ -446,6 +447,7 @@ describe("crates", () => {
           mini_tasks: false,
           achievements: false,
           marketplace: false,
+          pool_bracket: false,
         },
         players: [player("ann", "Ann"), player("bob")],
         coins: coinData({
@@ -584,6 +586,7 @@ describe("limited-time stock", () => {
         mini_tasks: false,
         achievements: false,
         marketplace: false,
+        pool_bracket: false,
       },
       players: [player("ann")],
       coins: coinData({
@@ -895,6 +898,7 @@ describe("gifted eggs", () => {
     mini_tasks: false,
     achievements: false,
     marketplace: false,
+    pool_bracket: false,
   });
   const gift = (id: number, crateId: string, crateOpenId?: number) => ({
     id,
